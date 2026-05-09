@@ -1,0 +1,183 @@
+SimpleRTS 项目架构与协作指南
+1. 项目简介
+本游戏是一个 2D 即时战略游戏（类红警/帝国时代），使用 C++ 和 SDL3 构建。目前实现了地图渲染、单位选择、基于流场的群体移动、编队排列和简单的障碍避让。
+
+2. 技术栈与构建
+语言：C++17
+
+图形/输入：SDL3（含 SDL_image、SDL_ttf、SDL_mixer）
+
+数学：自实现 Vector2、CollisionBox
+
+构建工具：Visual Studio 2022（解决方案 SimpleRTS.sln）
+
+版本控制：Git，托管于 GitHub
+
+构建前需将 SDL3 开发库路径配置到 VC++ 目录中。
+
+3. 代码结构（按目录）
+text
+SimpleRTS/
+├── core/                    # 引擎基础设施
+│   ├── game_object.h/cpp    # ECS 实体
+│   ├── components.h         # 所有组件定义（Movable, Selectable, Health 等）
+│   ├── vector2.h            # 二维向量
+│   ├── collision_box.h/cpp  # 碰撞盒
+│   ├── camera.h/cpp         # 摄像机
+│   ├── camera_controller.h/cpp # 键盘控制摄像机移动
+│   ├── quad_tree.h/cpp      # 空间四叉树（格子坐标）
+│   ├── world_entity_mgr.h/cpp # 实体管理器（持有所有实体、四叉树、查询）
+│   └── timer.h              # 简单计时器
+├── rendering/               # 渲染相关
+│   ├── render_def.h         # 渲染层级枚举、RenderCmd 结构体
+│   ├── render_mgr.h/cpp     # 渲染管理器（排序、相机变换、绘制矩形/线条/纹理）
+│   ├── render_system.h/cpp  # 遍历实体并提交 Renderable 组件
+│   ├── render_texture.h/cpp # 离屏纹理（用于地图烘焙）
+│   └── selection_box.h/cpp  # 鼠标框选框
+├── scene/                   # 场景管理
+│   ├── scene_mgr.h/cpp      # 场景切换
+│   └── game_scene.h/cpp     # 主游戏场景（输入、更新、渲染）
+├── systems/                 # 逻辑系统
+│   ├── move_system.h/cpp    # 移动系统（流场寻路、分离、墙壁斥力）
+│   ├── move_feedback_system.h/cpp # 移动反馈线
+│   └── selection_mgr.h/cpp  # 选择管理器（框选/点选/模式）
+├── game_map/                # 地图
+│   └── game_map.h/cpp       # 地图格网、流场生成（全局/局部）
+├── factories/               # 实体工厂
+│   └── factories.h/cpp      # ObjectFactory::create_unit
+└── main.cpp                 # 入口，游戏循环
+4. 核心概念
+4.1 ECS 组件
+所有数据继承自 Component，存储在 GameObject 的 unordered_map<type_index, unique_ptr<Component>> 中。
+常用组件（components.h）：
+
+Movable：speed, target, flow_target, velocity, move_mode
+
+Renderable：texture, color, layer
+
+Selectable：is_selected
+
+UnitType：category (Melee/Ranged/...)
+
+Structure / Harvestable：标记建筑/资源（用于障碍）
+
+Health：生命值
+
+通过模板方法获取：obj->get_component<Movable>()，返回可修改指针；添加组件用 obj->add_component<T>(args...)。
+
+4.2 地图 (GameMap)
+基于格子网格，cell_size = 10 像素，默认 200×200 格。
+
+地形类型（TerrainType）：Mud（可通行）、Water（不可通行）、Wood, Rock, Gold（将来对应资源实体）。
+
+存储：grid[y][x]，提供 is_cell_passable(x,y) 检查。
+
+流场生成：
+
+generate_goal_flow_field(world_goal) → 全图 Dijkstra 距离场 + 方向场。
+
+generate_local_flow_field(world_goal, max_dist_cells) → 限制扩散步数的局部方向场（用于近距离精确导航）。
+
+方向采样：sample_flow_from_box(flow, collision_box) → 按碰撞盒覆盖面积加权平均。
+
+4.3 实体管理 (WorldEntityMgr)
+持有所有 GameObject*（unordered_set）和四叉树 QuadTree（基于格子坐标）。
+
+插入/移除时自动更新四叉树。
+
+每帧调用 on_update() 处理脏实体重插入。
+
+区域查询：query_area(area, outVector) 返回与给定 CollisionBox 相交的实体列表。
+
+4.4 移动系统 (MoveSystem)
+核心流程 (on_update)：
+
+correct_unwalkable_targets()：将落在水中的 flow_target 修正到最近陆地。
+
+update_global_flow_cache()：按 flow_target 收集活跃目标，为每个新目标生成全图流场（缓存复用）。
+
+update_local_flow_cache()：当单位距离个人目标 < LOCAL_FLOW_RADIUS_CELLS 时，为每个精确目标生成局部流场（缓存复用）。
+
+move_units(delta)：
+
+计算 dist_to_target（到个人偏移点距离），< 5 像素则停止。
+
+调用 get_flow_direction() 获取流场方向（优先局部流场，回退全局）。
+
+结合 compute_wall_repulsion（射线障碍斥力）和 compute_separation（单位间分离力）。
+
+归一化后乘以速度，更新位置。
+
+push_idle_units()：对已停止的单位，仅用分离力和墙壁斥力做微调，允许后来者推挤。
+
+流场方向获取 (get_flow_direction)：
+
+如果 dist_to_target < LOCAL_FLOW_RADIUS_CELLS * cell_size，尝试使用局部流场（键 = vec_to_key(target)）。若局部流场未缓存则调用 GameMap::generate_local_flow_field 生成。
+
+若局部流场返回零向量或不在范围内，回退到全局流场（键 = vec_to_key(flow_target)）。
+
+4.5 渲染管线 (RenderMgr)
+begin_frame() → 提交 RenderCmd（通过 push_main_cmd 等）→ end_frame(renderer) 排序绘制。
+
+RenderCmd：支持纹理矩形、纯色矩形、线条（is_line=true）、边框。
+
+渲染层级顺序：Map → Ground → Unit → Building → Projectile → SelectBox → FeedbackLine → UI。
+
+相机变换在 render_main 中统一进行（非 UI 层）。
+
+4.6 输入与场景 (GameScene)
+左键点击空地：计算命令中心（cmd_center），调用 compute_formation_targets 按类别排列单位，为每个单位设置 target（精确偏移点）和 flow_target（命令中心），同时添加反馈线。
+
+右键拖拽：移动摄像机。
+
+S 键：停止选中单位。
+
+小地图点击：跳转视角。
+
+5. 当前任务与扩展方向
+5.1 立即可做（简单，适合新成员上手）
+资源/人口 UI
+
+创建 ResourceMgr 管理木材/食物/黄金等数值。
+
+在 game_scene.cpp 的渲染部分提交 UI 文字或矩形（可先用彩色矩形模拟）。
+
+涉及文件：新建 resource_mgr.h/cpp，少量修改 game_scene.cpp。
+
+选中单位高亮效果
+
+在单位脚下绘制一个闪烁的圆环，可通过 MoveFeedbackSystem 的线条思路提交多条短线段。
+
+涉及文件：selection_mgr、类似 move_feedback_system 的渲染命令。
+
+5.2 中等难度（逻辑类）
+建筑物放置
+
+按 B 键进入建造模式，显示半透明预览，点击确认后创建建筑实体（挂载 Structure 组件）。
+
+扣减资源，更新四叉树和流场。
+
+涉及文件：新建 building_placer.h/cpp，扩展 ObjectFactory，修改 GameScene::on_input。
+
+基础战斗系统
+
+添加 Attack 组件，CombatSystem 在 on_update 中检测攻击范围内的敌人、造成伤害、销毁实体。
+
+涉及文件：新建 combat_system.h/cpp，修改 components.h，注册到 GameScene。
+
+5.3 高级（深入核心）
+动态障碍更新
+
+当建筑被摧毁或资源被采集后，自动清理对应流场缓存，让移动系统重新寻路。
+
+地形/地图编辑器
+
+实现地图文件的读写（之前讨论过的 JSON + 二进制格式），并提供一个简单的编辑界面。
+
+6. 协作建议
+所有新功能请创建独立的分支（如 feature/building-system），通过 Pull Request 合并到 dev 分支。
+
+修改现有核心类（如 move_system）前，先与主程沟通，避免冲突。
+
+新增模块尽量放在独立文件中，保持低耦合。
+
