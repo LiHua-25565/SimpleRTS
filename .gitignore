@@ -1,0 +1,40 @@
+# Visual Studio 2022 编译输出
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Visual Studio 配置文件
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.ide
+*.ide-shm
+*.ide-wal
+
+# NuGet 包
+packages/
+*.nupkg
+
+# 测试与日志
+TestResults/
+*.log
+*.tmp
+*.cache
+
+# 可执行文件与调试文件
+*.exe
+*.dll
+*.pdb
+*.lib
+*.exp
+*.resources
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json

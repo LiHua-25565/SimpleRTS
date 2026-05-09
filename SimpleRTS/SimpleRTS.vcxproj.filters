@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="头文件\Content">
+      <UniqueIdentifier>{03c66a80-5d4c-4231-910d-1daacf667bdb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Factories">
+      <UniqueIdentifier>{d12f4784-71fa-46cc-8244-16bd8d8b1ea5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Camera">
+      <UniqueIdentifier>{4c0f8776-0468-4b9a-b765-5e3f7e843b81}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Cursor">
+      <UniqueIdentifier>{eebf58ae-3636-4919-ae64-8a06374ac8c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Objects">
+      <UniqueIdentifier>{b14e6659-95de-4322-a70b-538f9e6859ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Render">
+      <UniqueIdentifier>{69260817-7a3a-4426-b543-42a015d20754}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Resources">
+      <UniqueIdentifier>{db9f483d-f242-4708-913a-3e687be318be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Scenes">
+      <UniqueIdentifier>{c3f2f811-4a8b-4235-9dba-626db75db8f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Selection">
+      <UniqueIdentifier>{15b9cf88-1c2a-4012-a1b9-1508c7083606}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems">
+      <UniqueIdentifier>{e2e24bfb-9447-4d60-87ac-794e6304b57b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Map, World And Trees">
+      <UniqueIdentifier>{a782f91b-8bfc-4394-a5bc-bdd69940ec36}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="scene_mgr.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="scene_definitions.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="game_scene.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="selection_mgr.cpp">
+      <Filter>头文件\Content\Selection</Filter>
+    </ClCompile>
+    <ClCompile Include="selection_box.cpp">
+      <Filter>头文件\Content\Selection</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor_mgr.cpp">
+      <Filter>头文件\Content\Cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="render_mgr.cpp">
+      <Filter>头文件\Content\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>头文件\Content\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="camera_controller.cpp">
+      <Filter>头文件\Content\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="quad_tree.cpp">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClCompile>
+    <ClCompile Include="world_entitiy_mgr.cpp">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClCompile>
+    <ClCompile Include="factories.cpp">
+      <Filter>头文件\Content\Factories</Filter>
+    </ClCompile>
+    <ClCompile Include="render_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="render_texture.cpp">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClCompile>
+    <ClCompile Include="move_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="game_map.cpp">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClCompile>
+    <ClCompile Include="move_feedback_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="timer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="vector2.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="scene_mgr.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="game_object.h">
+      <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="game_scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="menu_scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="selector_scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="selection_mgr.h">
+      <Filter>头文件\Content\Selection</Filter>
+    </ClInclude>
+    <ClInclude Include="selection_box.h">
+      <Filter>头文件\Content\Selection</Filter>
+    </ClInclude>
+    <ClInclude Include="collision_box.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="resources.h">
+      <Filter>头文件\Content\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="cursor_mgr.h">
+      <Filter>头文件\Content\Cursor</Filter>
+    </ClInclude>
+    <ClInclude Include="render_mgr.h">
+      <Filter>头文件\Content\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="render_def.h">
+      <Filter>头文件\Content\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="camera.h">
+      <Filter>头文件\Content\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="camera_controller.h">
+      <Filter>头文件\Content\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="quad_tree.h">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClInclude>
+    <ClInclude Include="world_entity_mgr.h">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClInclude>
+    <ClInclude Include="game_map.h">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClInclude>
+    <ClInclude Include="factories.h">
+      <Filter>头文件\Content\Factories</Filter>
+    </ClInclude>
+    <ClInclude Include="components.h">
+      <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="render_system.h">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="render_texture.h">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClInclude>
+    <ClInclude Include="move_system.h">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="color.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="move_feedback_system.h">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
