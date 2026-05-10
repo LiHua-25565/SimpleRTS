@@ -144,12 +144,6 @@ S 键：停止选中单位。
 
 涉及文件：新建 resource_mgr.h/cpp，少量修改 game_scene.cpp。
 
-选中单位高亮效果
-
-在单位脚下绘制一个闪烁的圆环，可通过 MoveFeedbackSystem 的线条思路提交多条短线段。
-
-涉及文件：selection_mgr、类似 move_feedback_system 的渲染命令。
-
 5.2 中等难度（逻辑类）
 建筑物放置
 
