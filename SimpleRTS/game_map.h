@@ -37,6 +37,14 @@ public:
                 grid[y + 25 * (x%2)][x * 10+2] = TerrainType::Water;
             }
         }
+
+        for (int y = 0;y < 40;y++)
+        {
+            for (int x = 0;x < 20;x++)
+            {
+                grid[y + 100][x + 300] = TerrainType::Water;
+            }
+        }
     }
 
 
@@ -45,6 +53,10 @@ public:
 
     // 为目标点生成方向场
     std::vector<std::vector<Vector2>> generate_goal_flow_field(const Vector2& world_goal) const;
+
+    // 新增：计算从 world_goal 出发的可达距离场（只返回距离二维数组）
+    // 返回值：height × width 的float矩阵，-1.0f 表示障碍，INF 表示不可达（被隔开）
+    std::vector<std::vector<float>> compute_distance_field(const Vector2& world_goal) const;
 
     // 生成局部流场：只计算以 world_goal 为中心、半径 radius_cells 格子范围内的方向
     // 范围外的格子在返回的流场中保持 (0,0)

@@ -39,4 +39,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     const Vector2& command_center,
     const GameMap* map);
 
+// 利用距离场修正一个目标点：若点在不可达区域，返回最近的可达格子中心
+Vector2 make_target_reachable(const Vector2& ideal, const std::vector<std::vector<float>>& dist_field, const GameMap* map);
+
 #endif // !_MOVE_SYSTEM_H_

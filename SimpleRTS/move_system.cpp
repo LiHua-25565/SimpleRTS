@@ -7,23 +7,39 @@
 #include <cmath>
 #include <queue>
 
-// 全局流场缓存（因为多个子步骤需要共享）
+// 全局流场缓存
 static std::unordered_map<uint64_t, std::vector<std::vector<Vector2>>> goal_flow_cache;
 
-// 局部流场缓存（键：个人目标坐标键）
+// 局部流场缓存
 static std::unordered_map<uint64_t, std::vector<std::vector<Vector2>>> local_flow_cache;
 
-// 工具函数 
-static uint64_t vec_to_key(const Vector2& vec)
-{
+// 工具函数
+static uint64_t vec_to_key(const Vector2& vec) {
     return (static_cast<uint64_t>(static_cast<int>(vec.x * 100.f)) << 32
         | static_cast<uint64_t>(static_cast<int>(vec.y * 100.f)));
 }
 
-// 射线与 AABB 矩形的交点距离
+// 最大列数计算
+static int calc_max_cols(int N) {
+    int max_cols = 5;
+    int rows = 0, prev_rows = 0;
+    do {
+        prev_rows = rows;
+        rows = (N + max_cols - 1) / max_cols;
+        if (rows <= 4) {
+            max_cols = 5;
+        }
+        else {
+            int extra = (rows - 4 + 1) / 2;
+            max_cols = 5 + 3 * extra;
+        }
+    } while (rows != prev_rows);
+    return max_cols;
+}
+
+// 射线与AABB矩形交点
 static float ray_intersect_rect(const Vector2& origin, const Vector2& dir,
-    float left, float top, float right, float bottom)
-{
+    float left, float top, float right, float bottom) {
     float t1 = (left - origin.x) / dir.x;
     float t2 = (right - origin.x) / dir.x;
     if (dir.x == 0) { t1 = -1e30f; t2 = 1e30f; }
@@ -41,7 +57,87 @@ static float ray_intersect_rect(const Vector2& origin, const Vector2& dir,
     return -1.0f;
 }
 
-// 为同一目标的编队设置不同真实目标点
+// 检测编队矩形是否全部可通行（狭窄地形检查）
+static bool can_formation_fit(const GameMap* map,
+    const Vector2& center,
+    const Vector2& forward,
+    const Vector2& right,
+    int cols, int rows, float spacing) {
+    float half_width = (cols - 1) * spacing * 0.5f;
+    float half_depth = (rows - 1) * spacing * 0.5f;
+
+    Vector2 corners[4] = {
+        center + forward * half_depth + right * half_width,
+        center + forward * half_depth - right * half_width,
+        center - forward * half_depth + right * half_width,
+        center - forward * half_depth - right * half_width
+    };
+
+    float min_x = corners[0].x, max_x = corners[0].x;
+    float min_y = corners[0].y, max_y = corners[0].y;
+    for (int i = 1; i < 4; ++i) {
+        min_x = std::min(min_x, corners[i].x);
+        max_x = std::max(max_x, corners[i].x);
+        min_y = std::min(min_y, corners[i].y);
+        max_y = std::max(max_y, corners[i].y);
+    }
+
+    int cell_size = map->get_cell_size();
+    int gx_min = std::max(0, (int)(min_x / cell_size));
+    int gx_max = std::min(map->get_width() - 1, (int)(max_x / cell_size));
+    int gy_min = std::max(0, (int)(min_y / cell_size));
+    int gy_max = std::min(map->get_height() - 1, (int)(max_y / cell_size));
+
+    for (int y = gy_min; y <= gy_max; ++y)
+        for (int x = gx_min; x <= gx_max; ++x)
+            if (!map->is_cell_passable(x, y))
+                return false;
+    return true;
+}
+
+// 可达性修正：如果理想点在不可达区域，返回最近的可达格子中心
+static Vector2 make_target_reachable(const Vector2& ideal, const std::vector<std::vector<float>>& dist_field, const GameMap* map) {
+    int cell_size = map->get_cell_size();
+    int w = map->get_width();
+    int h = map->get_height();
+
+    // 距离场为空则返回原坐标（安全保护）
+    if (dist_field.empty() || dist_field[0].empty()) return ideal;
+
+    int gx = (int)(ideal.x / cell_size);
+    int gy = (int)(ideal.y / cell_size);
+    gx = std::clamp(gx, 0, w - 1);
+    gy = std::clamp(gy, 0, h - 1);
+
+    // 如果本就可达（距离 < INF/2），直接返回原坐标
+    if (dist_field[gy][gx] < 1e19f)
+        return ideal;
+
+    // BFS搜索最近可达格子
+    std::vector<std::vector<bool>> visited(h, std::vector<bool>(w, false));
+    std::queue<std::pair<int, int>> q;
+    q.push({ gx, gy });
+    visited[gy][gx] = true;
+
+    const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
+    while (!q.empty()) {
+        auto [x, y] = q.front(); q.pop();
+        if (dist_field[y][x] < 1e19f) {
+            return { x * cell_size + cell_size * 0.5f, y * cell_size + cell_size * 0.5f };
+        }
+        for (auto d : dirs) {
+            int nx = x + d[0], ny = y + d[1];
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (!visited[ny][nx]) {
+                visited[ny][nx] = true;
+                q.push({ nx, ny });
+            }
+        }
+    }
+    return ideal; // 没找到，保持原值
+}
+
+// 编队目标计算（主函数）
 std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     const std::vector<GameObject*>& selected_units,
     const Vector2& command_center,
@@ -50,56 +146,119 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     std::unordered_map<GameObject*, Vector2> targets;
     if (selected_units.empty()) return targets;
 
-    // 1. 按类别分组
+    // 1. 生成距离场（可达性修正用）
+    auto dist_field = map->compute_distance_field(command_center);
+
+    // 2. 按类别分组
     std::map<UnitCategory, std::vector<GameObject*>> groups;
     for (auto* unit : selected_units) {
         auto* type = unit->get_component<UnitType>();
-        UnitCategory cat = type ? type->category : UnitCategory::Melee; // 默认近战
+        UnitCategory cat = type ? type->category : UnitCategory::Melee;
         groups[cat].push_back(unit);
     }
 
-    const float spacing = map->get_cell_size() * 2.5f;  // 单位间距（2.5格）
-    const int MAX_COLS = 8;                            // 最大列数
-    float row_offset_y = 0.0f;                         // 不同类别之间的纵向偏移
+    const float spacing = map->get_cell_size() * 2.5f;  // 单位间距
 
+    // 3. 计算整体前进方向（从所有单位中心指向命令中心）
+    Vector2 forward(1.0f, 0.0f);
+    Vector2 overall_center(0.0f, 0.0f);
+    for (auto* unit : selected_units) {
+        overall_center += unit->get_collision_box().get_center_position();
+    }
+    overall_center.x /= selected_units.size();
+    overall_center.y /= selected_units.size();
+
+    Vector2 to_target = command_center - overall_center;
+    if (to_target.length() > 10.0f) {
+        forward = to_target.normalize();
+    }
+    Vector2 right(forward.y, -forward.x);   // 侧向方向
+
+    float row_offset_forward = 0.0f;        // 不同类别沿前进方向的偏移
+
+    // 4. 为每个类别生成编队
     for (auto& [cat, units] : groups) {
         int N = (int)units.size();
-        int cols = std::min(N, MAX_COLS);
-        int rows = (N + cols - 1) / cols;                 // 向上取整
+        int max_cols = calc_max_cols(N);
+        int cols = std::min(N, max_cols);
+        int rows = (N + cols - 1) / cols;
 
-        float formation_width = (cols - 1) * spacing;
-        float formation_height = (rows - 1) * spacing;
+        // 该类别在前进方向上的实际中心
+        Vector2 cat_cmd_center = command_center + forward * row_offset_forward;
 
-        // 左上角（世界坐标），之后整体居中于命令中心，并加上类别纵向偏移
-        Vector2 top_left = command_center
-            + Vector2(0.0f, row_offset_y)
-            - Vector2(formation_width * 0.5f, formation_height * 0.5f);
-
-        for (int r = 0; r < rows; ++r) {
-            int row_count = (r == rows - 1) ? (N - r * cols) : cols;
-            float row_width = (row_count - 1) * spacing;
-            float row_start_x = top_left.x + (formation_width - row_width) * 0.5f;
-
-            for (int c = 0; c < row_count; ++c) {
-                GameObject* unit = units[r * cols + c];
-                Vector2 ideal = { row_start_x + c * spacing,
-                                  top_left.y + r * spacing };
-                // 如果理想点不可通行（如水中），就近修正
-                Vector2 final = map->find_nearest_passable(ideal);
-                targets[unit] = final;
+        // 狭窄地形适应：缩小列数直到矩形可通行
+        if (!can_formation_fit(map, cat_cmd_center, forward, right, cols, rows, spacing)) {
+            while (cols > 1) {
+                --cols;
+                rows = (N + cols - 1) / cols;
+                if (can_formation_fit(map, cat_cmd_center, forward, right, cols, rows, spacing))
+                    break;
             }
         }
-        // 为下一类别增加纵向偏移，避免重叠
-        row_offset_y += (rows + 1) * spacing;
+
+        // 计算当前类别单位中心（用于相对偏移排序）
+        Vector2 cat_center(0.0f, 0.0f);
+        for (auto* u : units) {
+            cat_center += u->get_collision_box().get_center_position();
+        }
+        cat_center.x /= N;
+        cat_center.y /= N;
+
+        // 记录每个单位的相对偏移并排序（保持原始空间关系）
+        struct UnitOffset { GameObject* unit; Vector2 offset; };
+        std::vector<UnitOffset> off_list;
+        for (auto* u : units) {
+            Vector2 pos = u->get_collision_box().get_center_position();
+            off_list.push_back({ u, pos - cat_center });
+        }
+        std::sort(off_list.begin(), off_list.end(), [](const UnitOffset& a, const UnitOffset& b) {
+            if (std::abs(a.offset.y - b.offset.y) > 0.1f)
+                return a.offset.y < b.offset.y;   // 越靠前的（y小）排在前面
+            return a.offset.x < b.offset.x;       // y相同时x小的在左
+            });
+
+        // 分配每行人数，多余单位填入前排
+        int base = N / rows;
+        int rem = N % rows;
+        std::vector<int> row_counts(rows, base);
+        for (int i = 0; i < rem; ++i) row_counts[i]++;
+
+        // 生成网格点（面向前进方向）
+        std::vector<Vector2> grid_points;
+        float total_depth = (rows - 1) * spacing;
+
+        for (int r = 0; r < rows; ++r) {
+            int row_count = row_counts[r];
+            float row_width = (row_count - 1) * spacing;
+            // 纵深偏移：前排（r=0）在前方
+            float depth_offset = (rows - 1 - r) * spacing - total_depth * 0.5f;
+            for (int c = 0; c < row_count; ++c) {
+                float width_offset = c * spacing - row_width * 0.5f;
+                Vector2 point = cat_cmd_center
+                    + forward * depth_offset
+                    + right * width_offset;
+                grid_points.push_back(point);
+            }
+        }
+
+        // 分配目标并修正可达性
+        for (int i = 0; i < N; ++i) {
+            Vector2 ideal = grid_points[i];
+            // 若距离场有效则修正，否则直接使用理想点
+            Vector2 final = dist_field.empty() ? ideal : make_target_reachable(ideal, dist_field, map);
+            targets[off_list[i].unit] = final;
+        }
+
+        // 下一种类偏移
+        row_offset_forward += (rows + 1.0f) * spacing;
     }
+
     return targets;
 }
 
 // ========== 墙壁斥力 ==========
-Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
-{
-    if (!unit->get_component<Movable>())
-        return { 0.0f, 0.0f };
+Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit) {
+    if (!unit->get_component<Movable>()) return { 0.0f, 0.0f };
     const float RAY_LENGTH = 4.0f;
     const float ANGLE_OFFSET = 30.0f;
     const float REPULSION_STRENGTH = 1.5f;
@@ -107,7 +266,6 @@ Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
     Vector2 repulsion(0, 0);
     int cell_size = map->get_cell_size();
     Vector2 center_pos = unit->get_collision_box().get_center_position();
-
     Vector2 forward = unit->get_component<Movable>()->velocity;
     if (forward.length() < 0.01f) forward = Vector2(1, 0);
     forward = forward.normalize();
@@ -115,10 +273,8 @@ Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
     float rad = ANGLE_OFFSET * 3.14159265f / 180.0f;
     Vector2 dirs[3] = {
         forward,
-        Vector2(forward.x * cos(rad) - forward.y * sin(rad),
-                forward.x * sin(rad) + forward.y * cos(rad)),
-        Vector2(forward.x * cos(-rad) - forward.y * sin(-rad),
-                forward.x * sin(-rad) + forward.y * cos(-rad))
+        Vector2(forward.x * cos(rad) - forward.y * sin(rad), forward.x * sin(rad) + forward.y * cos(rad)),
+        Vector2(forward.x * cos(-rad) - forward.y * sin(-rad), forward.x * sin(-rad) + forward.y * cos(-rad))
     };
 
     for (int i = 0; i < 3; ++i) {
@@ -127,10 +283,8 @@ Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
         bool hit = false;
 
         Vector2 end = center_pos + dir * closest_t;
-        float left = std::min(center_pos.x, end.x);
-        float right = std::max(center_pos.x, end.x);
-        float top = std::min(center_pos.y, end.y);
-        float bottom = std::max(center_pos.y, end.y);
+        float left = std::min(center_pos.x, end.x), right = std::max(center_pos.x, end.x);
+        float top = std::min(center_pos.y, end.y), bottom = std::max(center_pos.y, end.y);
 
         int minx = std::max(0, (int)(left / cell_size) - 1);
         int maxx = std::min(map->get_width() - 1, (int)(right / cell_size) + 1);
@@ -140,18 +294,12 @@ Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
         for (int cy = miny; cy <= maxy; ++cy) {
             for (int cx = minx; cx <= maxx; ++cx) {
                 if (map->is_cell_passable(cx, cy)) continue;
-                float cell_left = cx * cell_size;
-                float cell_right = cell_left + cell_size;
-                float cell_top = cy * cell_size;
-                float cell_bottom = cell_top + cell_size;
+                float cell_left = cx * cell_size, cell_right = cell_left + cell_size;
+                float cell_top = cy * cell_size, cell_bottom = cell_top + cell_size;
                 float t = ray_intersect_rect(center_pos, dir, cell_left, cell_top, cell_right, cell_bottom);
-                if (t > 0 && t < closest_t) {
-                    closest_t = t;
-                    hit = true;
-                }
+                if (t > 0 && t < closest_t) { closest_t = t; hit = true; }
             }
         }
-
         if (hit) {
             float distance_grid = closest_t / cell_size;
             float force = REPULSION_STRENGTH / (distance_grid * distance_grid);
@@ -164,18 +312,16 @@ Vector2 MoveSystem::compute_wall_repulsion(const GameObject* unit)
 }
 
 // ========== 单位分离力 ==========
-Vector2 MoveSystem::compute_separation(const GameObject* unit)
-{
+Vector2 MoveSystem::compute_separation(const GameObject* unit) {
     Vector2 separation(0, 0);
     const float SEPARATION_RADIUS = 3.5f;
     const float BASE_REPULSION = 5.0f;
-
     const CollisionBox& self_box = unit->get_collision_box();
     Vector2 center = self_box.get_center_position();
     int cell_size = map->get_cell_size();
 
-    float self_half_diagonal = sqrt(self_box.width * self_box.width + self_box.height * self_box.height) * 0.5f;
-    float perception_radius = self_half_diagonal + SEPARATION_RADIUS * cell_size;
+    float self_half_diag = sqrt(self_box.width * self_box.width + self_box.height * self_box.height) * 0.5f;
+    float perception_radius = self_half_diag + SEPARATION_RADIUS * cell_size;
 
     CollisionBox query_area;
     query_area.position = { center.x - perception_radius, center.y - perception_radius };
@@ -186,16 +332,14 @@ Vector2 MoveSystem::compute_separation(const GameObject* unit)
     WorldEntityMgr::instance()->query_area(query_area, neighbors);
 
     float myPriority = std::max(unit->get_component<Movable>()->velocity.length(), 0.1f);
-    for (GameObject* other : neighbors) {
+    for (auto* other : neighbors) {
         if (other == unit) continue;
-
         auto* otherMovable = other->get_component<Movable>();
         if (!otherMovable) continue;
         float otherPriority = std::max(otherMovable->velocity.length(), 0.1f);
 
         Vector2 otherPos = other->get_collision_box().get_center_position();
-        float dx = center.x - otherPos.x;
-        float dy = center.y - otherPos.y;
+        float dx = center.x - otherPos.x, dy = center.y - otherPos.y;
         float dist_px = sqrt(dx * dx + dy * dy);
         float dist_grid = dist_px / cell_size;
         if (dist_grid > SEPARATION_RADIUS) continue;
@@ -211,74 +355,56 @@ Vector2 MoveSystem::compute_separation(const GameObject* unit)
         }
 
         float force_mag = BASE_REPULSION / (dist_grid * dist_grid) * factor;
-        Vector2 direction = Vector2(dx, dy);
-        float len = direction.length();
-        if (len < 0.01f) direction = Vector2(1, 0);
-        else direction = direction * (1.0f / len);
-        separation += direction * force_mag;
+        Vector2 dir = Vector2(dx, dy);
+        float len = dir.length();
+        if (len < 0.01f) dir = Vector2(1, 0);
+        else dir = dir * (1.0f / len);
+        separation += dir * force_mag;
     }
     return separation;
 }
 
-// 定义一个函数，根据单位位置和目标选择正确的流场和方向
+// 获取流场方向（局部优先，回退全局）
 Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& target,
-    const Vector2& flow_target, float dist_to_target)
-{
+    const Vector2& flow_target, float dist_to_target) {
     const CollisionBox& cb = unit->get_collision_box();
-    auto* movable = unit->get_component<Movable>();
-
-    // 1. 距离个人目标较近时，尝试使用局部流场
     if (dist_to_target < LOCAL_FLOW_RADIUS_CELLS * map->get_cell_size()) {
-        uint64_t key = vec_to_key(target);   // 个人目标键
+        uint64_t key = vec_to_key(target);
         auto it = local_flow_cache.find(key);
         if (it == local_flow_cache.end()) {
-            // 生成局部流场（限制扩散半径 = LOCAL_FLOW_RADIUS_CELLS + 2 保证覆盖）
             int radius_cells = (int)(LOCAL_FLOW_RADIUS_CELLS + 2);
             local_flow_cache[key] = map->generate_local_flow_field(target, (float)radius_cells);
             it = local_flow_cache.find(key);
         }
         if (it != local_flow_cache.end()) {
             Vector2 dir = map->sample_flow_from_box(it->second, cb);
-            // 如果局部流场在此位置有效（非零），直接使用
-            if (dir.length() > 0.01f)
-            {
-                return dir;
-            }
+            if (dir.length() > 0.01f) return dir;
         }
     }
-
-    // 2. 回退到全局流场（远距离，或局部流场未覆盖）
     auto it_global = goal_flow_cache.find(vec_to_key(flow_target));
     if (it_global != goal_flow_cache.end()) {
         Vector2 dir = map->sample_flow_from_box(it_global->second, cb);
-        if (dir.length() > 0.01f)
-            return dir;
+        if (dir.length() > 0.01f) return dir;
     }
-
-    // 3. 都获取不到，返回零向量
     return { 0.0f, 0.0f };
 }
 
-// ========== 步骤1：修正水中目标 ==========
+// 修正水中目标
 void MoveSystem::correct_unwalkable_targets() {
-    auto& all_objects = WorldEntityMgr::instance()->get_object_set();
-
-    std::unordered_map<uint64_t, std::vector<GameObject*>> flow_to_units;
-    for (auto* obj : all_objects) {
-        auto* movable = obj->get_component<Movable>();
-        if (!movable || !movable->is_moving()) continue;
-        flow_to_units[vec_to_key(movable->flow_target)].push_back(obj);
+    auto& all = WorldEntityMgr::instance()->get_object_set();
+    std::unordered_map<uint64_t, std::vector<GameObject*>> flow_units;
+    for (auto* obj : all) {
+        auto* mv = obj->get_component<Movable>();
+        if (mv && mv->is_moving()) flow_units[vec_to_key(mv->flow_target)].push_back(obj);
     }
-
-    for (auto& [key, units] : flow_to_units) {
+    for (auto& [key, units] : flow_units) {
         if (units.empty()) continue;
-        Vector2 original_flow = units[0]->get_component<Movable>()->flow_target;
-        Vector2 corrected = map->find_nearest_passable(original_flow);
-        if (corrected.x != original_flow.x || corrected.y != original_flow.y) {
+        Vector2 orig = units[0]->get_component<Movable>()->flow_target;
+        Vector2 corrected = map->find_nearest_passable(orig);
+        if (corrected != orig) {
             for (auto* u : units) {
                 auto* mv = u->get_component<Movable>();
-                // 保持相对偏移
-                Vector2 offset = mv->target - original_flow;
+                Vector2 offset = mv->target - orig;
                 mv->flow_target = corrected;
                 mv->target = map->find_nearest_passable(corrected + offset);
             }
@@ -286,31 +412,22 @@ void MoveSystem::correct_unwalkable_targets() {
     }
 }
 
-// ========== 步骤2：更新流场缓存 ==========
+// 更新全局流场缓存
 void MoveSystem::update_global_flow_cache() {
-    auto& all_objects = WorldEntityMgr::instance()->get_object_set();
-
-    std::unordered_set<uint64_t> active_goals;
-    for (auto* obj : all_objects) {
-        auto* movable = obj->get_component<Movable>();
-        if (movable && movable->is_moving()) {
-            active_goals.insert(vec_to_key(movable->flow_target));
-        }
+    auto& all = WorldEntityMgr::instance()->get_object_set();
+    std::unordered_set<uint64_t> active;
+    for (auto* obj : all) {
+        auto* mv = obj->get_component<Movable>();
+        if (mv && mv->is_moving()) active.insert(vec_to_key(mv->flow_target));
     }
-
-    // 清理
     for (auto it = goal_flow_cache.begin(); it != goal_flow_cache.end(); ) {
-        if (active_goals.find(it->first) == active_goals.end())
-            it = goal_flow_cache.erase(it);
-        else
-            ++it;
+        if (!active.count(it->first)) it = goal_flow_cache.erase(it);
+        else ++it;
     }
-
-    // 生成
-    for (auto key : active_goals) {
-        if (goal_flow_cache.find(key) == goal_flow_cache.end()) {
-            float x = ((float)(static_cast<int>(key >> 32))) / 100.0f;
-            float y = ((float)(static_cast<int>(key & 0xFFFFFFFF))) / 100.0f;
+    for (auto key : active) {
+        if (!goal_flow_cache.count(key)) {
+            float x = ((float)(int)(key >> 32)) / 100.0f;
+            float y = ((float)(int)(key & 0xFFFFFFFF)) / 100.0f;
             goal_flow_cache[key] = map->generate_goal_flow_field({ x, y });
         }
     }
@@ -318,74 +435,63 @@ void MoveSystem::update_global_flow_cache() {
 
 // 更新局部流场缓存
 void MoveSystem::update_local_flow_cache() {
-    auto& all_objects = WorldEntityMgr::instance()->get_object_set();
-    std::unordered_set<uint64_t> active_local_goals;
-    for (auto* obj : all_objects) {
-        auto* movable = obj->get_component<Movable>();
-        if (!movable || !movable->is_moving()) continue;
-        float dist = (movable->target - obj->get_collision_box().get_center_position()).length();
-        if (dist < LOCAL_FLOW_RADIUS_CELLS * map->get_cell_size()) {
-            active_local_goals.insert(vec_to_key(movable->target));
-        }
+    auto& all = WorldEntityMgr::instance()->get_object_set();
+    std::unordered_set<uint64_t> active_local;
+    for (auto* obj : all) {
+        auto* mv = obj->get_component<Movable>();
+        if (!mv || !mv->is_moving()) continue;
+        float dist = (mv->target - obj->get_collision_box().get_center_position()).length();
+        if (dist < LOCAL_FLOW_RADIUS_CELLS * map->get_cell_size())
+            active_local.insert(vec_to_key(mv->target));
     }
     for (auto it = local_flow_cache.begin(); it != local_flow_cache.end(); ) {
-        if (active_local_goals.find(it->first) == active_local_goals.end())
-            it = local_flow_cache.erase(it);
-        else
-            ++it;
+        if (!active_local.count(it->first)) it = local_flow_cache.erase(it);
+        else ++it;
     }
 }
 
-// ========== 步骤3：移动正在前往目标的单位 ==========
+// 移动单位
 void MoveSystem::move_units(float delta) {
-    auto& all_objects = WorldEntityMgr::instance()->get_object_set();
-    float map_w = (float)map->get_width() * map->get_cell_size();
-    float map_h = (float)map->get_height() * map->get_cell_size();
+    auto& all = WorldEntityMgr::instance()->get_object_set();
+    float w = (float)map->get_width() * map->get_cell_size();
+    float h = (float)map->get_height() * map->get_cell_size();
 
-    for (auto* obj : all_objects) {
-        auto* movable = obj->get_component<Movable>();
-        if (!movable || !movable->is_moving()) continue;
+    for (auto* obj : all) {
+        auto* mv = obj->get_component<Movable>();
+        if (!mv || !mv->is_moving()) continue;
 
         const CollisionBox& cb = obj->get_collision_box();
         Vector2 center = cb.get_center_position();
-        Vector2 target = movable->target;           // 个人精确停止点
-        Vector2 flow_target = movable->flow_target; // 命令中心
+        Vector2 target = mv->target;
+        Vector2 flow_target = mv->flow_target;
+        float dist = (target - center).length();
 
-        float dist_to_target = (target - center).length();
-
-        // 到达判断
-        if (dist_to_target < 5.0f) {
-            movable->stop();
-            movable->velocity = { 0.0f, 0.0f };
+        if (dist < 5.0f) {
+            mv->stop();
+            mv->velocity = { 0.0f, 0.0f };
             continue;
         }
 
-        // ---- 获取合适的流场方向（全局或局部） ----
-        Vector2 flow_dir = get_flow_direction(obj, target, flow_target, dist_to_target);
+        Vector2 flow_dir = get_flow_direction(obj, target, flow_target, dist);
         if (flow_dir.length() < 0.01f) {
-            // 如果完全没有导航方向，保持原地，避免乱走
-            movable->velocity = { 0.0f, 0.0f };
+            mv->velocity = { 0.0f, 0.0f };
             continue;
         }
 
-        // ---- 障斥力 & 分离力 ----
-        Vector2 wall_rep = compute_wall_repulsion(obj);
-        Vector2 separation_force = compute_separation(obj);
-
-        // ---- 混合（流场为主，其他力作修正） ----
-        Vector2 combined = flow_dir + wall_rep + separation_force;
+        Vector2 wall = compute_wall_repulsion(obj);
+        Vector2 sep = compute_separation(obj);
+        Vector2 combined = flow_dir + wall + sep;
         if (combined.length() < 0.01f) continue;
         combined = combined.normalize();
 
-        movable->velocity = combined * movable->speed;
-
-        Vector2 new_pos = cb.position + movable->velocity * delta;
+        mv->velocity = combined * mv->speed;
+        Vector2 new_pos = cb.position + mv->velocity * delta;
 
         // 边界钳位
         if (new_pos.x < 0.0f) new_pos.x = 0.0f;
         if (new_pos.y < 0.0f) new_pos.y = 0.0f;
-        if (new_pos.x > map_w - cb.width)  new_pos.x = map_w - cb.width;
-        if (new_pos.y > map_h - cb.height) new_pos.y = map_h - cb.height;
+        if (new_pos.x > w - cb.width) new_pos.x = w - cb.width;
+        if (new_pos.y > h - cb.height) new_pos.y = h - cb.height;
 
         CollisionBox updated = cb;
         updated.position = new_pos;
@@ -393,39 +499,31 @@ void MoveSystem::move_units(float delta) {
     }
 }
 
-// ========== 步骤4：静止单位被推动 ==========
-void MoveSystem::push_idle_units()
-{
-    auto& all_objects = WorldEntityMgr::instance()->get_object_set();
-    float map_w = (float)map->get_width() * map->get_cell_size();
-    float map_h = (float)map->get_height() * map->get_cell_size();
+// 推动空闲单位
+void MoveSystem::push_idle_units() {
+    auto& all = WorldEntityMgr::instance()->get_object_set();
+    float w = (float)map->get_width() * map->get_cell_size();
+    float h = (float)map->get_height() * map->get_cell_size();
 
-    for (auto* obj : all_objects) {
-        auto* movable = obj->get_component<Movable>();
-        if (!movable) continue;
-        if (movable->is_moving()) continue;           // 只处理已停止的单位
+    for (auto* obj : all) {
+        auto* mv = obj->get_component<Movable>();
+        if (!mv || mv->is_moving()) continue;
 
         const CollisionBox& cb = obj->get_collision_box();
-        Vector2 center = cb.get_center_position();
-
         Vector2 sep = compute_separation(obj);
         Vector2 wall = compute_wall_repulsion(obj);
+        Vector2 total = sep + wall;
+        float str = total.length();
+        if (str < 0.01f) continue;
 
-        Vector2 total_push = sep + wall;
-        float push_strength = total_push.length();
-        if (push_strength < 0.01f) continue;
-
-        // 限制最大移动量，防止被推飞
         const float max_move = 20.0f;
-        if (push_strength > max_move)
-            total_push = total_push.normalize() * max_move;
+        if (str > max_move) total = total.normalize() * max_move;
 
-        Vector2 new_pos = cb.position + total_push;
-
+        Vector2 new_pos = cb.position + total;
         if (new_pos.x < 0.0f) new_pos.x = 0.0f;
         if (new_pos.y < 0.0f) new_pos.y = 0.0f;
-        if (new_pos.x > map_w - cb.width)  new_pos.x = map_w - cb.width;
-        if (new_pos.y > map_h - cb.height) new_pos.y = map_h - cb.height;
+        if (new_pos.x > w - cb.width) new_pos.x = w - cb.width;
+        if (new_pos.y > h - cb.height) new_pos.y = h - cb.height;
 
         if (new_pos != cb.position) {
             CollisionBox updated = cb;
@@ -435,13 +533,12 @@ void MoveSystem::push_idle_units()
     }
 }
 
-// ========== 主更新接口 ==========
+// 主更新入口
 void MoveSystem::on_update(float delta) {
     if (!map) return;
-
     correct_unwalkable_targets();
-    update_global_flow_cache();   // 全局流场缓存维护
-    update_local_flow_cache();    // 局部流场缓存维护
+    update_global_flow_cache();
+    update_local_flow_cache();
     move_units(delta);
     push_idle_units();
 }
