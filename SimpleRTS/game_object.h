@@ -72,10 +72,32 @@ public:
         is_dirty = false;
     }
 
+    const uint64_t get_id() const
+    {
+        return id;
+    }
+
+    void set_id(uint64_t id)
+    {
+        this->id = id;
+    }
+
+    bool check_valid() const
+    {
+        return is_valid;
+    }
+
+    void set_valid(bool flag)
+    {
+        is_valid = flag;
+    }
+
 protected:
+    uint64_t id = 0;
     CollisionBox collision_box;
     std::unordered_map<std::type_index, std::unique_ptr<Component>> components;
 
+    bool is_valid = true;
     bool is_dirty = true;       // 在四叉树中是否需要更新
 };
 
