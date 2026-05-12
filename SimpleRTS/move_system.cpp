@@ -21,19 +21,7 @@ static uint64_t vec_to_key(const Vector2& vec) {
 
 // 最大列数计算
 static int calc_max_cols(int N) {
-    int max_cols = 5;
-    int rows = 0, prev_rows = 0;
-    do {
-        prev_rows = rows;
-        rows = (N + max_cols - 1) / max_cols;
-        if (rows <= 4) {
-            max_cols = 5;
-        }
-        else {
-            int extra = (rows - 4 + 1) / 2;
-            max_cols = 5 + 3 * extra;
-        }
-    } while (rows != prev_rows);
+    int max_cols = std::max(4, (int)std::ceil(std::sqrt(N) * 1.2f));
     return max_cols;
 }
 
@@ -119,7 +107,7 @@ static Vector2 make_target_reachable(const Vector2& ideal, const std::vector<std
     q.push({ gx, gy });
     visited[gy][gx] = true;
 
-    const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
+    static const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
     while (!q.empty()) {
         auto [x, y] = q.front(); q.pop();
         if (dist_field[y][x] < 1e19f) {
@@ -157,7 +145,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
         groups[cat].push_back(unit);
     }
 
-    const float spacing = map->get_cell_size() * 2.5f;  // 单位间距
+    static const float spacing = map->get_cell_size() * 2.5f;  // 单位间距
 
     // 3. 计算整体前进方向（从所有单位中心指向命令中心）
     Vector2 forward(1.0f, 0.0f);
@@ -217,6 +205,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
             return a.offset.x < b.offset.x;       // y相同时x小的在左
             });
 
+        
         // 分配每行人数，多余单位填入前排
         int base = N / rows;
         int rem = N % rows;

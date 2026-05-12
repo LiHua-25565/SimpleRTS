@@ -8,79 +8,75 @@ bool GameMap::is_cell_passable(int x, int y) const {
     return grid[y][x] == TerrainType::Mud;
 }
 
-std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& world_goal) const
+std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& world_goal, float radius) const
 {
     static const float INF = 1e20f;
-    std::vector<std::vector<float>> dist(height, std::vector<float>(width, INF));
+    static const float SQRT2 = 1.41421356237f;
+    static const int dx[8] = { 1,-1,0,0,1,1,-1,-1 };
+    static const int dy[8] = { 0,0,1,-1,1,-1,1,-1 };
+    static const float cost[8] = { 1.0f,1.0f ,1.0f ,1.0f ,SQRT2 ,SQRT2 ,SQRT2 ,SQRT2 };
+    // 距离矩阵 INF标记未到达，-1.0f标记不可通过
+    std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));
 
-    // 标记动态障碍（建筑、资源）
-    const auto& object_set = WorldEntityMgr::instance()->get_object_set();
-    for (auto* obj : object_set) {
-        if (obj->get_component<Structure>() || obj->get_component<Harvestable>()) {
-            CollisionBox box = obj->get_collision_box();
-            int minx = std::max((int)(box.position.x / cell_size), 0);
-            int miny = std::max((int)(box.position.y / cell_size), 0);
-            int maxx = std::min((int)((box.position.x + box.width) / cell_size), width - 1);
-            int maxy = std::min((int)((box.position.y + box.height) / cell_size), height - 1);
-            for (int y = miny; y <= maxy; ++y)
-                for (int x = minx; x <= maxx; ++x)
-                    dist[y][x] = -1.0f;
+    // 标记动态障碍（建筑，资源）
+    const std::unordered_set<GameObject*>& object_set = WorldEntityMgr::instance()->get_object_set();
+    for (GameObject* object : object_set)
+    {
+        if (object->get_component<Structure>() || object->get_component<Harvestable>())
+        {
+            CollisionBox collision_box = object->get_collision_box();
+            int minx = std::max(int(collision_box.position.x / cell_size), 0);
+            int miny = std::max(int(collision_box.position.y / cell_size), 0);
+            int maxx = std::min(int((collision_box.position.x + collision_box.width) / cell_size), width - 1);
+            int maxy = std::min(int((collision_box.position.y + collision_box.height) / cell_size), height - 1);
+            for (int x = minx;x <= maxx;++x)
+                for (int y = miny;y <= maxy;++y)
+                    dist_field[y][x] = -1.0f;
         }
     }
-    // 标记静态障碍 Water
-    for (int y = 0; y < height; ++y)
-        for (int x = 0; x < width; ++x)
-            if (grid[y][x] == TerrainType::Water)
-                dist[y][x] = -1.0f;
 
-    int gx = (int)(world_goal.x / cell_size);
-    int gy = (int)(world_goal.y / cell_size);
-    gx = std::clamp(gx, 0, width - 1);
-    gy = std::clamp(gy, 0, height - 1);
+    // 标记静态障碍（水域）
+    for (int x = 0;x < width;++x)
+        for (int y = 0; y < height;++y)
+            if (grid[y][x] == TerrainType::Water) dist_field[y][x] = -1.0f;
 
-    if (dist[gy][gx] < 0.0f) {
-        // 起点不可通行，就近找一个可通行点
-        bool found = false;
-        for (int r = 1; r < 5 && !found; ++r) {
-            for (int dy = -r; dy <= r && !found; ++dy)
-                for (int dx = -r; dx <= r && !found; ++dx) {
-                    int nx = gx + dx, ny = gy + dy;
-                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                    if (dist[ny][nx] >= 0.0f) {
-                        gx = nx; gy = ny;
-                        found = true;
-                    }
-                }
-        }
-        if (!found) return dist; // 全图无路
-    }
+    // 计算距离场（Dijkstra）
+    int gx = int(world_goal.x / cell_size);
+    int gy = int(world_goal.y / cell_size);
+    if (dist_field[gy][gx] < 0.0f)  // 目标点不可通行
+        return dist_field;
 
-    // Dijkstra
     using State = std::pair<float, std::pair<int, int>>;
     std::priority_queue<State, std::vector<State>, std::greater<State>> pq;
-    dist[gy][gx] = 0.0f;
-    pq.push({ 0.0f, { gx, gy } });
+    dist_field[gy][gx] = 0.0f;
+    pq.push({ 0.0f,{ gx,gy } });
 
-    const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
-    const float costs[8] = { 1.0f,1.0f,1.0f,1.0f,1.414f,1.414f,1.414f,1.414f };
-
-    while (!pq.empty()) {
-        auto [cur_dist, pos] = pq.top(); pq.pop();
+    while (!pq.empty())
+    {
+        // 当前格距离和位置
+        auto [cur_dist, pos] = pq.top();
+        pq.pop();
         int cx = pos.first, cy = pos.second;
-        if (cur_dist > dist[cy][cx]) continue;
-        for (int i = 0; i < 8; ++i) {
-            int nx = cx + dirs[i][0];
-            int ny = cy + dirs[i][1];
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            if (dist[ny][nx] < 0.0f) continue; // 障碍
-            float new_dist = cur_dist + costs[i];
-            if (new_dist < dist[ny][nx]) {
-                dist[ny][nx] = new_dist;
-                pq.push({ new_dist, { nx, ny } });
+        if (cur_dist > dist_field[cy][cx]) continue;
+
+        for (int i = 0;i < 8;++i)
+        {
+            int nx = cx + dx[i], ny = cy + dy[i];
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (dist_field[ny][nx] < 0.0f) continue;    // 跳过不可通行格
+
+            float new_dist = cur_dist + cost[i];
+            if (radius >= 0.0f && new_dist > radius) continue;
+
+            if (new_dist < dist_field[ny][nx])
+            {
+                dist_field[ny][nx] = new_dist;
+                pq.push({ new_dist,{nx,ny} });
             }
         }
     }
-    return dist;
+
+    return dist_field;
 }
 
 std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector2& world_goal) const

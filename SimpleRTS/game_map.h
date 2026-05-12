@@ -17,7 +17,7 @@ enum class TerrainType : uint8_t
 class GameMap
 {
 public:
-    GameMap(int width = 200, int height = 200)
+    GameMap(int width = 400, int height = 400)
         : width(width),
         height(height),
         world_bounds{
@@ -42,7 +42,8 @@ public:
         {
             for (int x = 0;x < 20;x++)
             {
-                grid[y + 100][x + 300] = TerrainType::Water;
+                if((y+100)<=height-1&&(x+300)<=width-1)
+                    grid[y + 100][x + 100] = TerrainType::Water;
             }
         }
     }
@@ -56,7 +57,7 @@ public:
 
     // 新增：计算从 world_goal 出发的可达距离场（只返回距离二维数组）
     // 返回值：height × width 的float矩阵，-1.0f 表示障碍，INF 表示不可达（被隔开）
-    std::vector<std::vector<float>> compute_distance_field(const Vector2& world_goal) const;
+    std::vector<std::vector<float>> compute_distance_field(const Vector2& world_goal, float radius = -1.0f) const;
 
     // 生成局部流场：只计算以 world_goal 为中心、半径 radius_cells 格子范围内的方向
     // 范围外的格子在返回的流场中保持 (0,0)
