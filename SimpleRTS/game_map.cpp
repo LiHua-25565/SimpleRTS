@@ -15,16 +15,15 @@ std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& w
     static const int dx[8] = { 1,-1,0,0,1,1,-1,-1 };
     static const int dy[8] = { 0,0,1,-1,1,-1,1,-1 };
     static const float cost[8] = { 1.0f,1.0f ,1.0f ,1.0f ,SQRT2 ,SQRT2 ,SQRT2 ,SQRT2 };
-    // 距离矩阵 INF标记未到达，-1.0f标记不可通过
     std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));
 
     // 标记动态障碍（建筑，资源）
-    const std::unordered_set<GameObject*>& object_set = WorldEntityMgr::instance()->get_object_set();
-    for (GameObject* object : object_set)
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool)
     {
-        if (object->get_component<Structure>() || object->get_component<Harvestable>())
+        if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
         {
-            CollisionBox collision_box = object->get_collision_box();
+            CollisionBox collision_box = obj->get_collision_box();
             int minx = std::max(int(collision_box.position.x / cell_size), 0);
             int miny = std::max(int(collision_box.position.y / cell_size), 0);
             int maxx = std::min(int((collision_box.position.x + collision_box.width) / cell_size), width - 1);
@@ -53,7 +52,6 @@ std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& w
 
     while (!pq.empty())
     {
-        // 当前格距离和位置
         auto [cur_dist, pos] = pq.top();
         pq.pop();
         int cx = pos.first, cy = pos.second;
@@ -63,7 +61,7 @@ std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& w
         {
             int nx = cx + dx[i], ny = cy + dy[i];
             if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            if (dist_field[ny][nx] < 0.0f) continue;    // 跳过不可通行格
+            if (dist_field[ny][nx] < 0.0f) continue;
 
             float new_dist = cur_dist + cost[i];
             if (radius >= 0.0f && new_dist > radius) continue;
@@ -87,17 +85,16 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
     static const int dy[8] = { 0,0,1,-1,1,-1,1,-1 };
     static const float cost[8] = { 1.0f,1.0f ,1.0f ,1.0f ,SQRT2 ,SQRT2 ,SQRT2 ,SQRT2 };
     std::vector<std::vector<Vector2>> flow_field(height, std::vector<Vector2>(width, { 0.0f, 0.0f }));
-    
-    // 距离矩阵 INF标记未到达，-1.0f标记不可通过
-    std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));    
+
+    std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));
 
     // 标记动态障碍（建筑，资源）
-    const std::unordered_set<GameObject*>& object_set = WorldEntityMgr::instance()->get_object_set();
-    for (GameObject* object : object_set)
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool)
     {
-        if (object->get_component<Structure>() || object->get_component<Harvestable>())
+        if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
         {
-            CollisionBox collision_box = object->get_collision_box();
+            CollisionBox collision_box = obj->get_collision_box();
             int minx = std::max(int(collision_box.position.x / cell_size), 0);
             int miny = std::max(int(collision_box.position.y / cell_size), 0);
             int maxx = std::min(int((collision_box.position.x + collision_box.width) / cell_size), width - 1);
@@ -123,10 +120,9 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
     std::priority_queue<State, std::vector<State>, std::greater<State>> pq;
     dist_field[gy][gx] = 0.0f;
     pq.push({ 0.0f,{ gx,gy } });
-    
+
     while (!pq.empty())
     {
-        // 当前格距离和位置
         auto [cur_dist, pos] = pq.top();
         pq.pop();
         int cx = pos.first, cy = pos.second;
@@ -136,7 +132,7 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
         {
             int nx = cx + dx[i], ny = cy + dy[i];
             if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            if (dist_field[ny][nx] < 0.0f) continue;    // 跳过不可通行格
+            if (dist_field[ny][nx] < 0.0f) continue;
 
             float new_dist = cur_dist + cost[i];
             if (new_dist < dist_field[ny][nx])
@@ -153,12 +149,12 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
     {
         dir_vectors[i] = Vector2((float)dx[i], (float)dy[i]).normalize();
     }
-    
+
     for (int y = 0;y < height;++y)
     {
         for (int x = 0;x < width;++x)
         {
-            if (dist_field[y][x] <= 0.0f || dist_field[y][x] >= INF / 2) continue;  // 终点和不可通行点
+            if (dist_field[y][x] <= 0.0f || dist_field[y][x] >= INF / 2) continue;
 
             float best_dist = dist_field[y][x];
             int best_idx = -1;
@@ -186,14 +182,12 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
 {
     std::vector<std::vector<Vector2>> flow_field(height, std::vector<Vector2>(width, { 0.0f, 0.0f }));
 
-    // 与全局流场完全一致的距离场定义：
-    // INF 表示未到达，-1.0f 表示不可通过（障碍）
     static const float INF = 1e20f;
     std::vector<std::vector<float>> dist(height, std::vector<float>(width, INF));
 
     // 标记动态障碍（建筑、资源）
-    const auto& object_set = WorldEntityMgr::instance()->get_object_set();
-    for (auto* obj : object_set) {
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool) {
         if (obj->get_component<Structure>() || obj->get_component<Harvestable>()) {
             CollisionBox box = obj->get_collision_box();
             int minx = std::max((int)(box.position.x / cell_size), 0);
@@ -202,7 +196,7 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
             int maxy = std::min((int)((box.position.y + box.height) / cell_size), height - 1);
             for (int y = miny; y <= maxy; ++y)
                 for (int x = minx; x <= maxx; ++x)
-                    dist[y][x] = -1.0f;   // 不可通过
+                    dist[y][x] = -1.0f;
         }
     }
 
@@ -212,13 +206,11 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
             if (grid[y][x] == TerrainType::Water)
                 dist[y][x] = -1.0f;
 
-    // 目标点格子坐标
     int gx = (int)(world_goal.x / cell_size);
     int gy = (int)(world_goal.y / cell_size);
     gx = std::clamp(gx, 0, width - 1);
     gy = std::clamp(gy, 0, height - 1);
 
-    // 若目标点不可通行，寻找最近可通行点（在远处也可，这里做简单处理）
     if (dist[gy][gx] < 0.0f) {
         bool found = false;
         for (int r = 1; r <= (int)max_dist_cells && !found; ++r) {
@@ -226,16 +218,15 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
                 for (int dx = -r; dx <= r && !found; ++dx) {
                     int nx = gx + dx, ny = gy + dy;
                     if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                    if (dist[ny][nx] >= 0.0f) {   // 可通行
+                    if (dist[ny][nx] >= 0.0f) {
                         gx = nx; gy = ny;
                         found = true;
                     }
                 }
         }
-        if (!found) return flow_field; // 无通路
+        if (!found) return flow_field;
     }
 
-    // Dijkstra（与全局流场一致）
     using State = std::pair<float, std::pair<int, int>>;
     std::priority_queue<State, std::vector<State>, std::greater<State>> pq;
     dist[gy][gx] = 0.0f;
@@ -249,14 +240,13 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
         int cx = pos.first, cy = pos.second;
         if (cur_dist > dist[cy][cx]) continue;
 
-        // ***** 距离限制：只扩散 max_dist_cells 步 *****
         if (cur_dist >= max_dist_cells) continue;
 
         for (int i = 0; i < 8; ++i) {
             int nx = cx + dirs[i][0];
             int ny = cy + dirs[i][1];
             if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            if (dist[ny][nx] < 0.0f) continue;  // 障碍
+            if (dist[ny][nx] < 0.0f) continue;
 
             float new_dist = cur_dist + costs[i];
             if (new_dist < dist[ny][nx]) {
@@ -266,14 +256,13 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
         }
     }
 
-    // 生成方向场（与全局流场一致）
     Vector2 dir_vectors[8];
     for (int i = 0; i < 8; ++i)
         dir_vectors[i] = Vector2((float)dirs[i][0], (float)dirs[i][1]).normalize();
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            if (dist[y][x] <= 0.0f || dist[y][x] >= INF / 2.0f) continue; // 终点或障碍或未到达
+            if (dist[y][x] <= 0.0f || dist[y][x] >= INF / 2.0f) continue;
 
             float best_dist = dist[y][x];
             int best_idx = -1;

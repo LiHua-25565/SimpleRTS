@@ -380,9 +380,9 @@ Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& ta
 
 // 修正水中目标
 void MoveSystem::correct_unwalkable_targets() {
-    auto& all = WorldEntityMgr::instance()->get_object_set();
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
     std::unordered_map<uint64_t, std::vector<GameObject*>> flow_units;
-    for (auto* obj : all) {
+    for (auto& [id, obj] : pool) {  // 遍历 id->object 映射
         auto* mv = obj->get_component<Movable>();
         if (mv && mv->is_moving()) flow_units[vec_to_key(mv->flow_target)].push_back(obj);
     }
@@ -403,9 +403,9 @@ void MoveSystem::correct_unwalkable_targets() {
 
 // 更新全局流场缓存
 void MoveSystem::update_global_flow_cache() {
-    auto& all = WorldEntityMgr::instance()->get_object_set();
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
     std::unordered_set<uint64_t> active;
-    for (auto* obj : all) {
+    for (auto& [id, obj] : pool) {
         auto* mv = obj->get_component<Movable>();
         if (mv && mv->is_moving()) active.insert(vec_to_key(mv->flow_target));
     }
@@ -424,9 +424,9 @@ void MoveSystem::update_global_flow_cache() {
 
 // 更新局部流场缓存
 void MoveSystem::update_local_flow_cache() {
-    auto& all = WorldEntityMgr::instance()->get_object_set();
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
     std::unordered_set<uint64_t> active_local;
-    for (auto* obj : all) {
+    for (auto& [id, obj] : pool) {
         auto* mv = obj->get_component<Movable>();
         if (!mv || !mv->is_moving()) continue;
         float dist = (mv->target - obj->get_collision_box().get_center_position()).length();
@@ -441,11 +441,11 @@ void MoveSystem::update_local_flow_cache() {
 
 // 移动单位
 void MoveSystem::move_units(float delta) {
-    auto& all = WorldEntityMgr::instance()->get_object_set();
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
     float w = (float)map->get_width() * map->get_cell_size();
     float h = (float)map->get_height() * map->get_cell_size();
 
-    for (auto* obj : all) {
+    for (auto& [id, obj] : pool) {
         auto* mv = obj->get_component<Movable>();
         if (!mv || !mv->is_moving()) continue;
 
@@ -490,11 +490,11 @@ void MoveSystem::move_units(float delta) {
 
 // 推动空闲单位
 void MoveSystem::push_idle_units() {
-    auto& all = WorldEntityMgr::instance()->get_object_set();
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
     float w = (float)map->get_width() * map->get_cell_size();
     float h = (float)map->get_height() * map->get_cell_size();
 
-    for (auto* obj : all) {
+    for (auto& [id, obj] : pool) {
         auto* mv = obj->get_component<Movable>();
         if (!mv || mv->is_moving()) continue;
 
