@@ -30,9 +30,9 @@ public:
 
     void clear();
 	
-    const std::unordered_set<GameObject*>& get_selected_object_pool() const
+    const std::unordered_set<uint64_t>& get_selected_object_id_pool() const
     {
-        return selected_object_pool;
+        return selected_object_id_pool;
     }
 
 private:
@@ -40,7 +40,7 @@ private:
     ~SelectionMgr();
 
     SelectMode current_mode = SelectMode::Normal;
-	std::unordered_set<GameObject*> selected_object_pool;
+	std::unordered_set<uint64_t> selected_object_id_pool;
 };
 
 #endif // !_SELECTION_MGR_H_

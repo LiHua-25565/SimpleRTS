@@ -1,6 +1,8 @@
 #include "selection_mgr.h"
 #include "world_entity_mgr.h"
 
+#include <vector>
+
 SelectionMgr* SelectionMgr::instance()
 {
 	static SelectionMgr mgr;
@@ -12,17 +14,15 @@ SelectionMgr::~SelectionMgr() = default;
 
 void SelectionMgr::clear()
 {
-    for (auto* obj : selected_object_pool)
-    {
-        if (!obj) continue;
-        auto* selectable = obj->get_component<Selectable>();
-        if (selectable)
-        {
-            selectable->is_selected = false;
-        }
-    }
+	std::vector<GameObject*>object_list = WorldEntityMgr::instance()->get_object_by_id(selected_object_id_set);
+	for (GameObject* obj : object_list)
+	{
+		auto selectable = obj->get_component<Selectable>();
+		if (selectable)
+			selectable->is_selected = false;
+	}
 
-	selected_object_pool.clear();
+	selected_object_id_set.clear();
 }
 
 void SelectionMgr::select_single(GameObject* obj)
@@ -41,13 +41,13 @@ void SelectionMgr::select_single(GameObject* obj)
 	if (current_mode == SelectMode::Remove)
 	{
 		selectable->is_selected = false;
-		selected_object_pool.erase(obj);
+		selected_object_id_set.erase(obj->get_id());
 		return;
 	}
 
 	// ÆÕÍ¨ / ¼ÓÑ¡
 	selectable->is_selected = true;
-	selected_object_pool.insert(obj);
+	selected_object_id_set.insert(obj->get_id());
 }
 
 void SelectionMgr::select_in_area(const CollisionBox& world_area)
@@ -74,12 +74,12 @@ void SelectionMgr::select_in_area(const CollisionBox& world_area)
 			if (current_mode == SelectMode::Remove)
 			{
 				selectable->is_selected = false;
-				selected_object_pool.erase(obj);
+				selected_object_id_set.erase(obj->get_id());
 			}
 			else
 			{
 				selectable->is_selected = true;
-				selected_object_pool.insert(obj);
+				selected_object_id_set.insert(obj->get_id());
 			}
 		}
 	}
