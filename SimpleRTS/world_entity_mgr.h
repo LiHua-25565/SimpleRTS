@@ -28,10 +28,7 @@ public:
 
 	const std::unordered_map<uint64_t, GameObject*>& get_object_pool() const;
 
-	GameMap* get_map()
-	{
-		return map;
-	}
+	GameMap* get_map();
 
 private:
 	WorldEntityMgr();

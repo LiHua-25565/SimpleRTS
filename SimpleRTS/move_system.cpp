@@ -135,7 +135,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     if (selected_units.empty()) return targets;
 
     // 1. 生成距离场（可达性修正用）
-    auto dist_field = map->compute_distance_field(command_center);
+    auto dist_field = map->compute_distance_field(command_center,50.0f);
 
     // 2. 按类别分组
     std::map<UnitCategory, std::vector<GameObject*>> groups;

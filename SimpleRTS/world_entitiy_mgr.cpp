@@ -128,7 +128,7 @@ const std::unordered_map<uint64_t, GameObject*>& WorldEntityMgr::get_object_pool
 GameObject* WorldEntityMgr::get_object_by_id(uint64_t id)
 {
 	auto it = object_pool.find(id);
-	if (it != object_pool.end())
+	if (it != object_pool.end() && it->second->check_valid())
 		return it->second;
 	return nullptr;
 }
@@ -143,7 +143,7 @@ std::vector<GameObject*> WorldEntityMgr::get_object_by_id(std::vector<uint64_t>&
 	for (uint64_t id : id_list)
 	{
 		auto it = object_pool.find(id);
-		if (it != object_pool.end())
+		if (it != object_pool.end() && it->second->check_valid())
 		{
 			obj_list.push_back(it->second);
 			valid_ids.push_back(id);
@@ -163,7 +163,7 @@ std::vector<GameObject*> WorldEntityMgr::get_object_by_id(std::unordered_set<uin
 	for (auto it = id_set.begin();it != id_set.end();)
 	{
 		auto found = object_pool.find(*it);
-		if (found != object_pool.end())
+		if (found != object_pool.end() && found->second->check_valid())
 		{
 			obj_list.push_back(found->second);
 			++it;

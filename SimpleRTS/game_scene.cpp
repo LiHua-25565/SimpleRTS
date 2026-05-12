@@ -2,13 +2,13 @@
 #include "cursor_mgr.h"
 #include "selection_mgr.h"
 
+#include <chrono>
+
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
 
 void GameScene::on_input(const SDL_Event& event)
 {
-
-    // 监听左键按下
     switch (event.type)
     {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -18,66 +18,76 @@ void GameScene::on_input(const SDL_Event& event)
             float mx = event.button.x;
             float my = event.button.y;
             RenderMgr* rm = RenderMgr::instance();
-            Vector2 mm_pos = rm->get_minimap_position();  // 需提供get接口
+            Vector2 mm_pos = rm->get_minimap_position();
             float mm_w = rm->get_minimap_width();
             float mm_h = rm->get_minimap_height();
 
             if (mx >= mm_pos.x && mx <= mm_pos.x + mm_w &&
                 my >= mm_pos.y && my <= mm_pos.y + mm_h)
             {
-                // 转换到世界坐标
+                // 小地图点击：移动相机
                 float world_x = ((mx - mm_pos.x) / mm_w) * rm->get_world_width();
                 float world_y = ((my - mm_pos.y) / mm_h) * rm->get_world_height();
-
-                // 将相机中心对准该点（注意屏幕中心偏移）
                 Vector2 new_cam_pos;
                 new_cam_pos.x = world_x - camera.get_screen_w() / 2.0f / camera.get_scale();
                 new_cam_pos.y = world_y - camera.get_screen_h() / 2.0f / camera.get_scale();
                 camera.set_position(new_cam_pos);
-
-                return; // 不触发框选
+                return;
             }
 
+            // 正常左键按下：开始框选
             float mouse_x = event.button.x;
             float mouse_y = event.button.y;
             selection_box.on_start(mouse_x, mouse_y);
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
+            // 右键拖拽开始
             is_right_dragging = true;
             right_drag_start_position = { event.button.x, event.button.y };
             camera_start_position = camera.get_position();
         }
     }
     break;
+
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             bool hit_unit = selection_box.on_end(camera);
 
-            // Normal 模式下，如果没点到单位，且有选中单位 → 移动
+            // Normal 模式，点击空地 → 移动选中单位
             if (!hit_unit &&
                 SelectionMgr::instance()->get_current_mode() == SelectionMgr::SelectMode::Normal)
             {
-                const auto& selected = SelectionMgr::instance()->get_selected_object_pool();
-                if (!selected.empty())
+                const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                if (!id_set.empty())
                 {
-                    Vector2 raw_target = camera.screen_to_world({ event.button.x, event.button.y });
-                    Vector2 cmd_center = game_map.find_nearest_passable(raw_target);
+                    // 从 ID 集合获取所有有效对象
+                    std::vector<GameObject*> selected_objects;
+                    selected_objects.reserve(id_set.size());
+                    for (uint64_t id : id_set)
+                    {
+                        GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+                        if (obj) selected_objects.push_back(obj);
+                    }
 
-                    std::vector<GameObject*> selected_vec(selected.begin(), selected.end());
-                    auto formation_targets = compute_formation_targets(selected_vec, cmd_center, &game_map);
+                    if (!selected_objects.empty())
+                    {
+                        Vector2 raw_target = camera.screen_to_world({ event.button.x, event.button.y });
+                        Vector2 cmd_center = game_map.find_nearest_passable(raw_target);
 
-                    for (GameObject* obj : selected) {
-                        auto* movable = obj->get_component<Movable>();
-                        if (movable) {
-                            movable->target = formation_targets[obj];   // 个人精确点
-                            movable->flow_target = cmd_center;               // 共享流场目标
-                            SDL_Log("Set target: obj=%p, target=(%.1f,%.1f), flow_target=(%.1f,%.1f)",
-                                obj, movable->target.x, movable->target.y,
-                                movable->flow_target.x, movable->flow_target.y);
-                            move_feedback_system.add_line_for_unit(obj, formation_targets[obj], 1.0f);
+                        auto formation_targets = compute_formation_targets(selected_objects, cmd_center, &game_map);
+
+                        for (GameObject* obj : selected_objects)
+                        {
+                            auto* movable = obj->get_component<Movable>();
+                            if (movable)
+                            {
+                                movable->target = formation_targets[obj];
+                                movable->flow_target = cmd_center;
+                                move_feedback_system.add_line_for_unit(obj, formation_targets[obj], 1.0f);
+                            }
                         }
                     }
                 }
@@ -88,7 +98,6 @@ void GameScene::on_input(const SDL_Event& event)
             if (is_right_dragging)
             {
                 is_right_dragging = false;
-                // 如果鼠标移动距离很小（<5像素），视为“点击右键” → 清除选中
                 float dx = event.button.x - right_drag_start_position.x;
                 float dy = event.button.y - right_drag_start_position.y;
                 if (fabsf(dx) < 5.0f && fabsf(dy) < 5.0f)
@@ -99,6 +108,7 @@ void GameScene::on_input(const SDL_Event& event)
         }
     }
     break;
+
     case SDL_EVENT_MOUSE_MOTION:
     {
         if (is_right_dragging)
@@ -116,16 +126,20 @@ void GameScene::on_input(const SDL_Event& event)
         selection_box.on_update(mouse_x, mouse_y);
     }
     break;
+
     case SDL_EVENT_KEY_DOWN:
     {
         if (event.key.key == SDLK_S)
         {
-            const auto& selected = SelectionMgr::instance()->get_selected_object_pool();
-            for (GameObject* obj : selected)
+            const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+            for (uint64_t id : id_set)
             {
+                GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+                if (!obj) continue;
+
                 auto* movable = obj->get_component<Movable>();
                 if (movable)
-                    movable->stop();       // 清空 target，停止移动
+                    movable->stop();
             }
         }
     }
@@ -133,7 +147,7 @@ void GameScene::on_input(const SDL_Event& event)
     }
 }
 
-void GameScene::on_update(float delta) 
+void GameScene::on_update(float delta)
 {
     const bool* keyState = SDL_GetKeyboardState(nullptr);
 
@@ -148,16 +162,35 @@ void GameScene::on_update(float delta)
 
     if (is_key_ctrl_down)
         SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
-    if(is_key_alt_down)
+    if (is_key_alt_down)
         SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
-    if(!is_key_alt_down && !is_key_ctrl_down)
+    if (!is_key_alt_down && !is_key_ctrl_down)
         SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
 
     camera_controller.on_update(delta);
-    move_system.on_update(delta);
-    move_feedback_system.on_update(delta);
-    WorldEntityMgr::instance()->on_update();
 
+    // === 计时代码开始 ===
+    auto t0 = std::chrono::high_resolution_clock::now();
+    move_system.on_update(delta);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    move_feedback_system.on_update(delta);
+    auto t2 = std::chrono::high_resolution_clock::now();
+
+    WorldEntityMgr::instance()->on_update();
+    auto t3 = std::chrono::high_resolution_clock::now();
+    // === 计时代码结束 ===
+
+    // 计算耗时（毫秒）
+    auto ms1 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
+    auto ms2 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0;
+    auto ms3 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1000.0;
+
+    static int frame_counter = 0;
+    if (++frame_counter % 60 == 0) {  // 每60帧输出一次，避免刷屏
+        SDL_Log("FrameTimings: MoveSys=%.3fms, Feedback=%.3fms, WorldUpdate=%.3fms",
+            ms1, ms2, ms3);
+    }
 }
 
 void GameScene::on_enter()
