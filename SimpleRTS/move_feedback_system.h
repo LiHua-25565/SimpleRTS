@@ -24,8 +24,8 @@ private:
     struct FeedbackLine
     {
         Vector2 end;                    // 终点（世界坐标）
-        float time_left;                // 剩余时间（秒）
-        GameObject* owner = nullptr;    // 关联的单位（可为空）
+        float time_left = 0.0f;                // 剩余时间（秒）
+        uint64_t owner_id = 0;          // 关联的单位ID（0表示无绑定）
     };
 
 private:
