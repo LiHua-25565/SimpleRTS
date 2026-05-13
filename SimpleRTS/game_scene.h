@@ -38,7 +38,8 @@ private:
 private:
 	bool is_key_ctrl_down = false;
 	bool is_key_alt_down = false;
-	bool is_right_dragging = false;
+	bool is_left_btn_down = false;
+	bool is_right_btn_down = false;
 	Vector2 right_drag_start_position;	// 屏幕坐标
 	Vector2 camera_start_position;		// 拖拽开始时的相机世界坐标
 

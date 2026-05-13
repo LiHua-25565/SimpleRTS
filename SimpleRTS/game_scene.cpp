@@ -15,6 +15,7 @@ void GameScene::on_input(const SDL_Event& event)
     {
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            is_left_btn_down = true;
             float mx = event.button.x;
             float my = event.button.y;
             RenderMgr* rm = RenderMgr::instance();
@@ -43,7 +44,7 @@ void GameScene::on_input(const SDL_Event& event)
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
             // 右键拖拽开始
-            is_right_dragging = true;
+            is_right_btn_down = true;
             right_drag_start_position = { event.button.x, event.button.y };
             camera_start_position = camera.get_position();
         }
@@ -54,6 +55,7 @@ void GameScene::on_input(const SDL_Event& event)
     {
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            is_left_btn_down = false;
             bool hit_unit = selection_box.on_end(camera);
 
             // Normal 模式，点击空地 → 移动选中单位
@@ -95,9 +97,9 @@ void GameScene::on_input(const SDL_Event& event)
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
-            if (is_right_dragging)
+            if (is_right_btn_down)
             {
-                is_right_dragging = false;
+                is_right_btn_down = false;
                 float dx = event.button.x - right_drag_start_position.x;
                 float dy = event.button.y - right_drag_start_position.y;
                 if (fabsf(dx) < 5.0f && fabsf(dy) < 5.0f)
@@ -111,18 +113,37 @@ void GameScene::on_input(const SDL_Event& event)
 
     case SDL_EVENT_MOUSE_MOTION:
     {
-        if (is_right_dragging)
+        float mouse_x = event.motion.x;
+        float mouse_y = event.motion.y;
+        if (is_left_btn_down)
         {
-            float dx = event.motion.x - right_drag_start_position.x;
-            float dy = event.motion.y - right_drag_start_position.y;
+            RenderMgr* rm = RenderMgr::instance();
+            Vector2 mm_pos = rm->get_minimap_position();
+            float mm_w = rm->get_minimap_width();
+            float mm_h = rm->get_minimap_height();
+            if (mouse_x >= mm_pos.x && mouse_x <= mm_pos.x + mm_w &&
+                mouse_y >= mm_pos.y && mouse_y <= mm_pos.y + mm_h)
+            {
+                // 小地图点击：移动相机
+                float world_x = ((mouse_x - mm_pos.x) / mm_w) * rm->get_world_width();
+                float world_y = ((mouse_y - mm_pos.y) / mm_h) * rm->get_world_height();
+                Vector2 new_cam_pos;
+                new_cam_pos.x = world_x - camera.get_screen_w() / 2.0f / camera.get_scale();
+                new_cam_pos.y = world_y - camera.get_screen_h() / 2.0f / camera.get_scale();
+                camera.set_position(new_cam_pos);
+                return;
+            }
+        }
+        if (is_right_btn_down)
+        {
+            float dx = mouse_x - right_drag_start_position.x;
+            float dy = mouse_y - right_drag_start_position.y;
             float scale = camera.get_scale();
             Vector2 new_pos = camera_start_position;
             new_pos.x -= dx / scale;
             new_pos.y -= dy / scale;
             camera.set_position(new_pos);
         }
-        float mouse_x = event.motion.x;
-        float mouse_y = event.motion.y;
         selection_box.on_update(mouse_x, mouse_y);
     }
     break;
