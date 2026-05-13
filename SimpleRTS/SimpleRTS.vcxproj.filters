@@ -102,6 +102,9 @@
     <ClCompile Include="move_feedback_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="resources_mgr.cpp">
+      <Filter>头文件\Content\Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -139,9 +142,6 @@
     </ClInclude>
     <ClInclude Include="collision_box.h">
       <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="resources.h">
-      <Filter>头文件\Content\Resources</Filter>
     </ClInclude>
     <ClInclude Include="cursor_mgr.h">
       <Filter>头文件\Content\Cursor</Filter>
@@ -187,6 +187,9 @@
     </ClInclude>
     <ClInclude Include="move_feedback_system.h">
       <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="resources_mgr.h">
+      <Filter>头文件\Content\Resources</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

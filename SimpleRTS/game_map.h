@@ -21,31 +21,43 @@ public:
         : width(width),
         height(height),
         world_bounds{
-            {0.0f, 0.0f },                // position
-            (float)(width * cell_size),    // width
-            (float)(height * cell_size)    // height
+            {0.0f, 0.0f},
+            (float)(width * cell_size),
+            (float)(height * cell_size)
         }
     {
-        grid.resize(height, std::vector<TerrainType>(width,TerrainType::Mud));
+        // 全部初始化为 Mud
+        grid.resize(height, std::vector<TerrainType>(width, TerrainType::Mud));
 
-        for (int y = 0; y < 50;y++)
-        {
-            for (int x = 1;x < 10;x++)
-            {
-                grid[y+  25*(x%2)][x*10] = TerrainType::Water;
-                grid[y + 25 * (x % 2)][x * 10+1] = TerrainType::Water;
-                grid[y + 25 * (x%2)][x * 10+2] = TerrainType::Water;
-            }
-        }
+        // 计算中心偏移，使四个 10×10 方块居中，方块总尺寸为 21×21 (包含间隔)
+        const int block_size = 10;
+        const int gap = 1;                     // 方块之间的间隔（格数）
+        const int total_span = block_size * 2 + gap;   // 21 格
+        int start_x = (width - total_span) / 2;
+        int start_y = (height - total_span) / 2;
 
-        for (int y = 0;y < 40;y++)
-        {
-            for (int x = 0;x < 20;x++)
-            {
-                if((y+100)<=height-1&&(x+300)<=width-1)
-                    grid[y + 100][x + 100] = TerrainType::Water;
-            }
-        }
+        // 左上：Water
+        for (int y = 0; y < block_size; ++y)
+            for (int x = 0; x < block_size; ++x)
+                grid[start_y + y][start_x + x] = TerrainType::Water;
+
+        // 右上：Wood
+        for (int y = 0; y < block_size; ++y)
+            for (int x = 0; x < block_size; ++x)
+                grid[start_y + y][start_x + block_size + gap + x] = TerrainType::Wood;
+
+        // 左下：Rock
+        for (int y = 0; y < block_size; ++y)
+            for (int x = 0; x < block_size; ++x)
+                grid[start_y + block_size + gap + y][start_x + x] = TerrainType::Rock;
+
+        // 右下：Gold
+        for (int y = 0; y < block_size; ++y)
+            for (int x = 0; x < block_size; ++x)
+                grid[start_y + block_size + gap + y][start_x + block_size + gap + x] = TerrainType::Gold;
+
+        // 生成静态流场（如果还需要的话，可以在这里调用）
+        // generate_static_flow_field();
     }
 
 

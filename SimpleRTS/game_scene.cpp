@@ -241,6 +241,7 @@ void GameScene::on_enter()
         CollisionBox collision_box{ {x,y},w,h };
         factory.create_unit(collision_box);
     }
+
 }
 
 void GameScene::on_exit()

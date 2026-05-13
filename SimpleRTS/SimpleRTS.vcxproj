@@ -144,6 +144,7 @@
     <ClCompile Include="render_mgr.cpp" />
     <ClCompile Include="render_system.cpp" />
     <ClCompile Include="render_texture.cpp" />
+    <ClCompile Include="resources_mgr.cpp" />
     <ClCompile Include="scene_definitions.cpp" />
     <ClCompile Include="scene_mgr.cpp" />
     <ClCompile Include="selection_box.cpp" />
@@ -169,7 +170,7 @@
     <ClInclude Include="render_mgr.h" />
     <ClInclude Include="render_system.h" />
     <ClInclude Include="render_texture.h" />
-    <ClInclude Include="resources.h" />
+    <ClInclude Include="resources_mgr.h" />
     <ClInclude Include="scene.h" />
     <ClInclude Include="scene_mgr.h" />
     <ClInclude Include="selection_box.h" />
