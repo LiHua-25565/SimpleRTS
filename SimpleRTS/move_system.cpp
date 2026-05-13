@@ -19,6 +19,11 @@ static uint64_t vec_to_key(const Vector2& vec) {
         | static_cast<uint64_t>(static_cast<int>(vec.y * 100.f)));
 }
 
+// 点积
+static inline float dot(const Vector2& a, const Vector2& b) {
+    return a.x * b.x + a.y * b.y;
+}
+
 // 最大列数计算
 static int calc_max_cols(int N) {
     int max_cols = std::max(4, (int)std::ceil(std::sqrt(N) * 1.2f));
@@ -45,7 +50,44 @@ static float ray_intersect_rect(const Vector2& origin, const Vector2& dir,
     return -1.0f;
 }
 
-// 检测编队矩形是否全部可通行（狭窄地形检查）
+// ========== 可达性修正（按需 BFS） ==========
+static Vector2 make_target_reachable(const Vector2& ideal, const GameMap* map) {
+    int cell_size = map->get_cell_size();
+    int w = map->get_width();
+    int h = map->get_height();
+
+    int gx = (int)(ideal.x / cell_size);
+    int gy = (int)(ideal.y / cell_size);
+    gx = std::clamp(gx, 0, w - 1);
+    gy = std::clamp(gy, 0, h - 1);
+
+    if (map->is_cell_passable(gx, gy))
+        return ideal;
+
+    std::vector<std::vector<bool>> visited(h, std::vector<bool>(w, false));
+    std::queue<std::pair<int, int>> q;
+    q.push({ gx, gy });
+    visited[gy][gx] = true;
+
+    const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
+    while (!q.empty()) {
+        auto [x, y] = q.front(); q.pop();
+        if (map->is_cell_passable(x, y)) {
+            return { x * cell_size + cell_size * 0.5f, y * cell_size + cell_size * 0.5f };
+        }
+        for (auto d : dirs) {
+            int nx = x + d[0], ny = y + d[1];
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (!visited[ny][nx]) {
+                visited[ny][nx] = true;
+                q.push({ nx, ny });
+            }
+        }
+    }
+    return ideal; // 极端情况
+}
+
+// ========== 检测矩形区域是否全部可通行 ==========
 static bool can_formation_fit(const GameMap* map,
     const Vector2& center,
     const Vector2& forward,
@@ -54,6 +96,7 @@ static bool can_formation_fit(const GameMap* map,
     float half_width = (cols - 1) * spacing * 0.5f;
     float half_depth = (rows - 1) * spacing * 0.5f;
 
+    // 矩形四个角
     Vector2 corners[4] = {
         center + forward * half_depth + right * half_width,
         center + forward * half_depth - right * half_width,
@@ -71,61 +114,19 @@ static bool can_formation_fit(const GameMap* map,
     }
 
     int cell_size = map->get_cell_size();
-    int gx_min = std::max(0, (int)(min_x / cell_size));
-    int gx_max = std::min(map->get_width() - 1, (int)(max_x / cell_size));
-    int gy_min = std::max(0, (int)(min_y / cell_size));
-    int gy_max = std::min(map->get_height() - 1, (int)(max_y / cell_size));
+    int x0 = std::max(0, (int)(min_x / cell_size));
+    int x1 = std::min(map->get_width() - 1, (int)(max_x / cell_size));
+    int y0 = std::max(0, (int)(min_y / cell_size));
+    int y1 = std::min(map->get_height() - 1, (int)(max_y / cell_size));
 
-    for (int y = gy_min; y <= gy_max; ++y)
-        for (int x = gx_min; x <= gx_max; ++x)
+    for (int y = y0; y <= y1; ++y)
+        for (int x = x0; x <= x1; ++x)
             if (!map->is_cell_passable(x, y))
                 return false;
     return true;
 }
 
-// 可达性修正：如果理想点在不可达区域，返回最近的可达格子中心
-static Vector2 make_target_reachable(const Vector2& ideal, const std::vector<std::vector<float>>& dist_field, const GameMap* map) {
-    int cell_size = map->get_cell_size();
-    int w = map->get_width();
-    int h = map->get_height();
-
-    // 距离场为空则返回原坐标（安全保护）
-    if (dist_field.empty() || dist_field[0].empty()) return ideal;
-
-    int gx = (int)(ideal.x / cell_size);
-    int gy = (int)(ideal.y / cell_size);
-    gx = std::clamp(gx, 0, w - 1);
-    gy = std::clamp(gy, 0, h - 1);
-
-    // 如果本就可达（距离 < INF/2），直接返回原坐标
-    if (dist_field[gy][gx] < 1e19f)
-        return ideal;
-
-    // BFS搜索最近可达格子
-    std::vector<std::vector<bool>> visited(h, std::vector<bool>(w, false));
-    std::queue<std::pair<int, int>> q;
-    q.push({ gx, gy });
-    visited[gy][gx] = true;
-
-    static const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
-    while (!q.empty()) {
-        auto [x, y] = q.front(); q.pop();
-        if (dist_field[y][x] < 1e19f) {
-            return { x * cell_size + cell_size * 0.5f, y * cell_size + cell_size * 0.5f };
-        }
-        for (auto d : dirs) {
-            int nx = x + d[0], ny = y + d[1];
-            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-            if (!visited[ny][nx]) {
-                visited[ny][nx] = true;
-                q.push({ nx, ny });
-            }
-        }
-    }
-    return ideal; // 没找到，保持原值
-}
-
-// 编队目标计算（主函数）
+// ========== 主函数：计算编队目标点 ==========
 std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     const std::vector<GameObject*>& selected_units,
     const Vector2& command_center,
@@ -134,112 +135,150 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     std::unordered_map<GameObject*, Vector2> targets;
     if (selected_units.empty()) return targets;
 
-    // 1. 生成距离场（可达性修正用）
-    auto dist_field = map->compute_distance_field(command_center,50.0f);
-
-    // 2. 按类别分组
-    std::map<UnitCategory, std::vector<GameObject*>> groups;
+    // 1. 按兵种类别 + 碰撞箱尺寸分组
+    struct GroupKey {
+        UnitCategory category;
+        int width, height;
+        bool operator<(const GroupKey& o) const {
+            if (category != o.category) return category < o.category;
+            if (width != o.width) return width < o.width;
+            return height < o.height;
+        }
+    };
+    std::map<GroupKey, std::vector<GameObject*>> groups;
     for (auto* unit : selected_units) {
         auto* type = unit->get_component<UnitType>();
         UnitCategory cat = type ? type->category : UnitCategory::Melee;
-        groups[cat].push_back(unit);
+        const CollisionBox& box = unit->get_collision_box();
+        int w = (int)(box.width / 2) * 2;   // 对齐到偶数
+        int h = (int)(box.height / 2) * 2;
+        groups[{cat, w, h}].push_back(unit);
     }
 
-    static const float spacing = map->get_cell_size() * 2.5f;  // 单位间距
-
-    // 3. 计算整体前进方向（从所有单位中心指向命令中心）
-    Vector2 forward(1.0f, 0.0f);
+    // 2. 计算整体前进方向（从选中单位重心指向命令中心）
     Vector2 overall_center(0.0f, 0.0f);
-    for (auto* unit : selected_units) {
+    for (auto* unit : selected_units)
         overall_center += unit->get_collision_box().get_center_position();
-    }
     overall_center.x /= selected_units.size();
     overall_center.y /= selected_units.size();
-
     Vector2 to_target = command_center - overall_center;
-    if (to_target.length() > 10.0f) {
-        forward = to_target.normalize();
+    Vector2 default_forward(1.0f, 0.0f);
+    if (to_target.length() > 10.0f)
+        default_forward = to_target.normalize();
+    Vector2 default_right(default_forward.y, -default_forward.x);
+
+    // 候选方向（默认 + 8个常用方向）
+    std::vector<std::pair<Vector2, Vector2>> candidates;
+    candidates.push_back({ default_forward, default_right });
+    const Vector2 dirs[8] = {
+        {1,0}, {0,1}, {-1,0}, {0,-1},
+        {0.707f, 0.707f}, {-0.707f, 0.707f}, {-0.707f, -0.707f}, {0.707f, -0.707f}
+    };
+    for (auto& d : dirs) {
+        Vector2 r(d.y, -d.x);
+        bool duplicate = false;
+        for (auto& c : candidates) {
+            if (std::abs(c.first.x - d.x) < 0.01f && std::abs(c.first.y - d.y) < 0.01f)
+                duplicate = true;
+        }
+        if (!duplicate) candidates.push_back({ d, r });
     }
-    Vector2 right(forward.y, -forward.x);   // 侧向方向
 
-    float row_offset_forward = 0.0f;        // 不同类别沿前进方向的偏移
+    // 3. 逐组处理
+    float row_offset_forward = 0.0f;   // 不同组沿前进方向的累积偏移
 
-    // 4. 为每个类别生成编队
-    for (auto& [cat, units] : groups) {
+    for (auto& [key, units] : groups) {
         int N = (int)units.size();
+        // 动态间距：基于本组单位尺寸
+        float spacing = std::max(key.width, key.height) * 1.3f;
         int max_cols = calc_max_cols(N);
-        int cols = std::min(N, max_cols);
-        int rows = (N + cols - 1) / cols;
 
-        // 该类别在前进方向上的实际中心
-        Vector2 cat_cmd_center = command_center + forward * row_offset_forward;
+        // 寻找最佳方向和列数（最大化列数，其次是行数最少）
+        int best_cols = 0, best_rows = 0;
+        Vector2 best_forward, best_right;
+        bool found = false;
 
-        // 狭窄地形适应：缩小列数直到矩形可通行
-        if (!can_formation_fit(map, cat_cmd_center, forward, right, cols, rows, spacing)) {
-            while (cols > 1) {
-                --cols;
-                rows = (N + cols - 1) / cols;
-                if (can_formation_fit(map, cat_cmd_center, forward, right, cols, rows, spacing))
-                    break;
+        for (auto& [forward, right] : candidates) {
+            for (int cols = max_cols; cols >= 1; --cols) {
+                int rows = (N + cols - 1) / cols;
+                Vector2 group_center = command_center + forward * row_offset_forward;
+                if (can_formation_fit(map, group_center, forward, right, cols, rows, spacing)) {
+                    if (!found || cols > best_cols || (cols == best_cols && rows < best_rows)) {
+                        best_cols = cols;
+                        best_rows = rows;
+                        best_forward = forward;
+                        best_right = right;
+                        found = true;
+                    }
+                }
             }
         }
 
-        // 计算当前类别单位中心（用于相对偏移排序）
-        Vector2 cat_center(0.0f, 0.0f);
-        for (auto* u : units) {
-            cat_center += u->get_collision_box().get_center_position();
+        // 若所有方向都失败，退化为一列（纵队）
+        if (!found) {
+            best_cols = 1;
+            best_rows = N;
+            best_forward = default_forward;
+            best_right = default_right;
         }
-        cat_center.x /= N;
-        cat_center.y /= N;
 
-        // 记录每个单位的相对偏移并排序（保持原始空间关系）
-        struct UnitOffset { GameObject* unit; Vector2 offset; };
-        std::vector<UnitOffset> off_list;
+        // 组内中心（用于相对位置排序）
+        Vector2 group_center(0.0f, 0.0f);
+        for (auto* u : units)
+            group_center += u->get_collision_box().get_center_position();
+        group_center.x /= N;
+        group_center.y /= N;
+
+        // 单位排序：基于投影到 chosen 方向上的前后/左右关系
+        struct Proj {
+            GameObject* unit;
+            float f, r; // forward, right 投影
+        };
+        std::vector<Proj> projs;
         for (auto* u : units) {
-            Vector2 pos = u->get_collision_box().get_center_position();
-            off_list.push_back({ u, pos - cat_center });
+            Vector2 rel = u->get_collision_box().get_center_position() - group_center;
+            projs.push_back({ u, dot(rel, best_forward), dot(rel, best_right) });
         }
-        std::sort(off_list.begin(), off_list.end(), [](const UnitOffset& a, const UnitOffset& b) {
-            if (std::abs(a.offset.y - b.offset.y) > 0.1f)
-                return a.offset.y < b.offset.y;   // 越靠前的（y小）排在前面
-            return a.offset.x < b.offset.x;       // y相同时x小的在左
+        // 排序：主键 forward 投影降序（大的在前排），次键 right 投影升序（小的在左）
+        std::sort(projs.begin(), projs.end(), [](const Proj& a, const Proj& b) {
+            if (std::abs(a.f - b.f) > 0.1f) return a.f > b.f;   // 降序
+            return a.r < b.r;            // 升序
             });
 
-        
-        // 分配每行人数，多余单位填入前排
-        int base = N / rows;
-        int rem = N % rows;
-        std::vector<int> row_counts(rows, base);
+        // 分配每行人数（多余单位优先填满前排）
+        int base = best_rows > 0 ? N / best_rows : N;
+        int rem = best_rows > 0 ? N % best_rows : 0;
+        std::vector<int> row_counts(best_rows, base);
         for (int i = 0; i < rem; ++i) row_counts[i]++;
 
-        // 生成网格点（面向前进方向）
+        // 生成网格点
         std::vector<Vector2> grid_points;
-        float total_depth = (rows - 1) * spacing;
+        float total_width = (best_cols - 1) * spacing;
+        float total_depth = (best_rows - 1) * spacing;
+        Vector2 start_corner = command_center + best_forward * row_offset_forward
+            + best_right * (-total_width * 0.5f)
+            + best_forward * (total_depth * 0.5f); // 最前排居中开始
 
-        for (int r = 0; r < rows; ++r) {
+        int unit_idx = 0;
+        for (int r = 0; r < best_rows; ++r) {
             int row_count = row_counts[r];
             float row_width = (row_count - 1) * spacing;
-            // 纵深偏移：前排（r=0）在前方
-            float depth_offset = (rows - 1 - r) * spacing - total_depth * 0.5f;
+            float row_start_offset = (total_width - row_width) * 0.5f;
+            Vector2 row_start = start_corner - best_forward * (r * spacing) + best_right * row_start_offset;
             for (int c = 0; c < row_count; ++c) {
-                float width_offset = c * spacing - row_width * 0.5f;
-                Vector2 point = cat_cmd_center
-                    + forward * depth_offset
-                    + right * width_offset;
+                Vector2 point = row_start + best_right * (c * spacing);
                 grid_points.push_back(point);
             }
         }
 
-        // 分配目标并修正可达性
+        // 将网格点按顺序分配给排序后的单位，并进行可达性修正
         for (int i = 0; i < N; ++i) {
-            Vector2 ideal = grid_points[i];
-            // 若距离场有效则修正，否则直接使用理想点
-            Vector2 final = dist_field.empty() ? ideal : make_target_reachable(ideal, dist_field, map);
-            targets[off_list[i].unit] = final;
+            Vector2 final_pos = make_target_reachable(grid_points[i], map);
+            targets[projs[i].unit] = final_pos;
         }
 
-        // 下一种类偏移
-        row_offset_forward += (rows + 1.0f) * spacing;
+        // 更新下一组的偏移（沿前进方向）
+        row_offset_forward += (best_rows + 1.5f) * spacing;
     }
 
     return targets;
