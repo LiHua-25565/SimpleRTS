@@ -53,6 +53,11 @@ struct Movable : public Component {
     Vector2 velocity = { 0.0f, 0.0f };
     MoveMode move_mode = MoveMode::Land;
 
+    // ÐÂÔö£ºÈÃÂ·³·Àë×´Ì¬
+    bool is_evading = false;
+    Vector2 evade_target = { 0.0f, 0.0f };
+    float evade_time_left = 0.0f;       // ³·ÀëÊ£ÓàÊ±¼ä£¨Ãë£©
+
     bool is_moving() const { return target.x >= 0.0f; }
     void stop() { target = { -1.0f, -1.0f }; flow_target = { -1.0f, -1.0f }; }
 };
