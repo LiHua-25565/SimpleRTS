@@ -17,7 +17,7 @@ enum class TerrainType : uint8_t
 class GameMap
 {
 public:
-    GameMap(int width = 200, int height = 200)
+    GameMap(int width = 300, int height = 200)
         : width(width),
         height(height),
         world_bounds{

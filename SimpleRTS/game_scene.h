@@ -27,6 +27,14 @@ public:
 	void on_exit();
 
 private:
+	int screen_w_ = 1280, screen_h_ = 720;   // 当前逻辑分辨率
+
+	// 小地图UI 相对尺寸（屏幕百分比，最后按照最短边成正方形）
+	const float minimap_width_percent = 0.15f;   
+	const float minimap_height_percent = 0.22f;  
+	const float minimap_margin_percent = 0.02f;   // 右下边距
+
+private:
 	GameMap game_map;			
 	ObjectFactory factory;
 	RenderSystem render_system;
@@ -47,6 +55,8 @@ private:
 
 	Camera camera;
 	CameraController camera_controller;
+
+	void update_ui_layout();
 
 	void camera_input(const bool* keyState);
 

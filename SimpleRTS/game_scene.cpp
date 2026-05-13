@@ -216,7 +216,10 @@ void GameScene::on_update(float delta)
 
 void GameScene::on_enter()
 {
-    int win_w = 1280, win_h = 720;  
+    int win_w, win_h;
+    SDL_GetRenderLogicalPresentation(renderer, &win_w, &win_h, nullptr);
+    update_ui_layout();
+
     camera.init((float)win_w, (float)win_h,
         (float)(game_map.get_width() * game_map.get_cell_size()),
         (float)(game_map.get_height() * game_map.get_cell_size()));
@@ -348,4 +351,19 @@ void GameScene::bake_terrain()
     map_bake_tex.end(renderer);
     map_baked = true;
     //SDL_Log("bake_terrain done, tex=%p (%dx%d)", map_bake_tex.get_texture(), total_w, total_h);
+}
+
+void GameScene::update_ui_layout()
+{
+    float mm_w = screen_w_ * minimap_width_percent;
+    float mm_h = screen_h_ * minimap_height_percent;
+    float margin = screen_w_ * minimap_margin_percent;
+
+    // 让小地图区域为正方形（取宽和高中较小的一边）
+    float mm_size = std::min(mm_w, mm_h);
+    float mm_x = screen_w_ - mm_size - margin;
+    float mm_y = screen_h_ - mm_size - margin;
+
+    RenderMgr::instance()->set_minimap_size(mm_size, mm_size);
+    RenderMgr::instance()->set_minimap_position(mm_x, mm_y);
 }

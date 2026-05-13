@@ -106,59 +106,67 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
 {
     if (world_w <= 0 || world_h <= 0) return;
 
-    SDL_FRect terrain_rect = { minimap_pos.x, minimap_pos.y, minimap_w, minimap_h };
-    // 小地图背景（黑底）
+    // 整个小地图方形区域（背景）
+    SDL_FRect full_rect = { minimap_pos.x, minimap_pos.y, minimap_w, minimap_h };
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);          // 黑色背景
+    SDL_RenderFillRect(renderer, &full_rect);
+
+    // 计算保持世界比例的实际地图绘制区域（居中）
+    float world_aspect = (float)world_w / world_h;
+    float rect_aspect = minimap_w / minimap_h;
+
+    SDL_FRect map_rect;
+    if (world_aspect > rect_aspect) {
+        // 世界更宽，宽度撑满，高度按比例缩小，垂直居中
+        map_rect.w = minimap_w;
+        map_rect.h = minimap_w / world_aspect;
+        map_rect.x = minimap_pos.x;
+        map_rect.y = minimap_pos.y + (minimap_h - map_rect.h) / 2.0f;
+    }
+    else {
+        // 世界更高，高度撑满，宽度按比例缩小，水平居中
+        map_rect.h = minimap_h;
+        map_rect.w = minimap_h * world_aspect;
+        map_rect.x = minimap_pos.x + (minimap_w - map_rect.w) / 2.0f;
+        map_rect.y = minimap_pos.y;
+    }
+
+    // 绘制地形纹理（放在黑色背景之上）
     if (minimap_terrain)
-        SDL_RenderTexture(renderer, minimap_terrain, nullptr, &terrain_rect);
-    else
-    {
+        SDL_RenderTexture(renderer, minimap_terrain, nullptr, &map_rect);
+    else {
         SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
-        SDL_RenderFillRect(renderer, &terrain_rect);
+        SDL_RenderFillRect(renderer, &map_rect);
     }
 
-    // 小地图边框
+    // 绘制小地图边框（画在完整方形区域上）
     SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
-    SDL_RenderRect(renderer, &terrain_rect);
+    SDL_RenderRect(renderer, &full_rect);
 
-    // 遍历所有小地图指令
+    // 绘制单位点（基于 map_rect 映射）
     for (const auto& cmd : minimap_cmd_list)
     {
-        if (!cmd.is_selected)
-        {
-            float mm_x = minimap_pos.x + (cmd.position.x / world_w) * minimap_w;
-            float mm_y = minimap_pos.y + (cmd.position.y / world_h) * minimap_h;
+        float mm_x = map_rect.x + (cmd.position.x / world_w) * map_rect.w;
+        float mm_y = map_rect.y + (cmd.position.y / world_h) * map_rect.h;
 
-            SDL_FRect dot = { mm_x - 1, mm_y - 1, 3, 3 };
-            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
-            SDL_RenderFillRect(renderer, &dot);
-        }
+        float dot_size = cmd.is_selected ? 5.0f : 3.0f;
+        SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
+        SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
+        SDL_RenderFillRect(renderer, &dot);
     }
+    // 注意：原代码分了选中/未选中两层遍历，你可以合并，也可保留两层，都改为使用 map_rect
 
-    // 后画【选中】的单位（顶层，5x5大点，更醒目）
-    for (const auto& cmd : minimap_cmd_list)
-    {
-        if (cmd.is_selected)
-        {
-            float mm_x = minimap_pos.x + (cmd.position.x / world_w) * minimap_w;
-            float mm_y = minimap_pos.y + (cmd.position.y / world_h) * minimap_h;
-
-            // 选中的单位画大一圈，视觉上更突出
-            SDL_FRect dot = { mm_x - 2, mm_y - 2, 5, 5 };
-            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
-            SDL_RenderFillRect(renderer, &dot);
-        }
-    }
-
+    // 绘制相机视野框
     if (camera)
     {
         Vector2 cam_pos = camera->get_position();
         float cam_w = camera->get_screen_w() / camera->get_scale();
         float cam_h = camera->get_screen_h() / camera->get_scale();
 
-        float rx = minimap_pos.x + (cam_pos.x / world_w) * minimap_w;
-        float ry = minimap_pos.y + (cam_pos.y / world_h) * minimap_h;
-        float rw = (cam_w / world_w) * minimap_w;
-        float rh = (cam_h / world_h) * minimap_h;
+        float rx = map_rect.x + (cam_pos.x / world_w) * map_rect.w;
+        float ry = map_rect.y + (cam_pos.y / world_h) * map_rect.h;
+        float rw = (cam_w / world_w) * map_rect.w;
+        float rh = (cam_h / world_h) * map_rect.h;
 
         SDL_FRect cam_rect = { rx, ry, rw, rh };
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
