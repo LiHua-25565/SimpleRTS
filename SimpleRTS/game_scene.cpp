@@ -60,6 +60,7 @@ void GameScene::on_enter()
 
     ResourcesMgr::instance()->init(1);
     ResourcesMgr::instance()->set_local_player_id(0);
+    factory.init(renderer, font, &game_map);
     move_system.set_map(&game_map);
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system);
     update_ui_layout();

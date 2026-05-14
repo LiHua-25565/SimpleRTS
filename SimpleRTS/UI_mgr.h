@@ -12,7 +12,7 @@ class UIMgr
 public:
     static UIMgr* instance();
 
-    bool init(SDL_Renderer* renderer);
+    void init(SDL_Renderer* renderer, TTF_Font* font);
     void shutdown();
     void update_layout(int screen_w, int screen_h);
     void update_content();

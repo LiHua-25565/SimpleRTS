@@ -44,8 +44,14 @@ int main(int argc, char* argv[])
     SDL_Window* window = SDL_CreateWindow(u8"MySTR",
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
-    UIMgr::instance()->init(renderer);
+    TTF_Font* font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
+    if (!font)
+    {
+        SDL_Log("UIMgr: Fail to load font: %s", SDL_GetError());
+    }
+    UIMgr::instance()->init(renderer, font);
     game_scene->set_renderer(renderer);
+    game_scene->set_font(font);
 
     bool is_fullscreen = false;
 

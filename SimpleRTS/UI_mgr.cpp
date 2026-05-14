@@ -7,16 +7,12 @@ UIMgr* UIMgr::instance()
 	return &mgr;
 }
 
-bool UIMgr::init(SDL_Renderer* renderer)
+void UIMgr::init(SDL_Renderer* renderer, TTF_Font* font)
 {
 	this->renderer = renderer;
-	font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
-	if (!font)
-	{
-		SDL_Log("UIMgr: Fail to load font: %s", SDL_GetError());
-		return false;
-	}
-	return true;
+    this->font = font;
+    TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
+
 }
 
 void UIMgr::shutdown()

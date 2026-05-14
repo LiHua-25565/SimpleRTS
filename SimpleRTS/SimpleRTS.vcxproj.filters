@@ -206,5 +206,8 @@
     <ClInclude Include="input_system.h">
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
+    <ClInclude Include="resources_type.h">
+      <Filter>头文件\Content\Resources</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

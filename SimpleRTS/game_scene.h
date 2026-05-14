@@ -36,6 +36,7 @@ private:
 	const float minimap_margin_percent = 0.02f;   // сроб╠ъ╬Ю
 
 private:
+	TTF_Font* font = nullptr;
 	GameMap game_map;			
 	ObjectFactory factory;
 	RenderSystem render_system;

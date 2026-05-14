@@ -3,6 +3,7 @@
 
 #include "color.h"
 #include "render_def.h"
+#include "resources_type.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -17,6 +18,14 @@ enum class UnitCategory : uint8_t {
     Ranged,     // 远程
     Siege,      // 攻城
     Villager    // 农民
+};
+
+enum class ResourceEntityType : uint8_t {
+    Wood,        // 树木，2×2格
+    SGold,       // 小金矿，10×10格
+    LGold,       // 大金矿，15×15格
+    Stone,       // 石矿，10×10格
+    Berries,     // 浆果丛，4×4格
 };
 
 struct UnitType : public Component {
@@ -78,8 +87,10 @@ struct Structure : public Component {
     // 标记建筑实体（用于寻路时视为障碍）
 };
 
+// 资源实体 (寻路时视为障碍)
 struct Harvestable : public Component {
-    // 资源实体 (寻路时视为障碍)
+    ResourceEntityType entity_type = ResourceEntityType::Wood;  // 实体种类
+    ResourceType output_type = ResourceType::Wood;              // 采集后产出
 };
 
 #endif // !_COMPONENTS_H_

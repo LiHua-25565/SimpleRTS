@@ -1,16 +1,8 @@
 #ifndef _RESOURCES_MGR_H_
 #define _RESOURCES_MGR_H_
-#include <cstdint>
+#include "resources_type.h"
 #include <vector>
 #include <functional>
-
-enum class ResourceType : uint8_t {
-    Wood,
-    Food,
-    Gold,
-    Stone,    // 可扩展
-    Count     // 自动计数，方便定义数组大小
-};
 
 // 每个玩家的资源袋
 struct ResourceBag {
