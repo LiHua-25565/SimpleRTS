@@ -136,6 +136,7 @@
     <ClCompile Include="cursor_mgr.cpp" />
     <ClCompile Include="game_map.cpp" />
     <ClCompile Include="game_scene.cpp" />
+    <ClCompile Include="input_system.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="factories.cpp" />
     <ClCompile Include="move_feedback_system.cpp" />
@@ -163,6 +164,7 @@
     <ClInclude Include="game_map.h" />
     <ClInclude Include="game_object.h" />
     <ClInclude Include="game_scene.h" />
+    <ClInclude Include="input_system.h" />
     <ClInclude Include="menu_scene.h" />
     <ClInclude Include="move_feedback_system.h" />
     <ClInclude Include="move_system.h" />

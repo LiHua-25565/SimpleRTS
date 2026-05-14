@@ -11,6 +11,7 @@
 #include "render_system.h"
 #include "move_system.h"
 #include "move_feedback_system.h"
+#include "input_system.h"
 
 #include <vector>
 
@@ -18,8 +19,8 @@ class GameScene : public Scene
 {
 public:
 
-	GameScene();
-	~GameScene();
+	GameScene() = default;
+	~GameScene() = default;
 	void on_input(const SDL_Event& event);
 	void on_update(float delta);
 	void on_render();
@@ -40,30 +41,15 @@ private:
 	RenderSystem render_system;
 	MoveSystem move_system;
 	MoveFeedbackSystem move_feedback_system;
+	InputSystem input_system;
 	RenderTexture map_bake_tex;  // 地形烘焙大图
 	bool map_baked = false;      // 是否已经烘焙过
 
 private:
-	bool is_key_ctrl_down = false;
-	bool is_key_alt_down = false;
-	bool is_left_btn_down = false;
-	bool is_right_btn_down = false;
-	bool is_middle_btn_down = false;
-	bool is_left_btn_minimap_dragging = false;
-	Vector2 left_minimap_drag_start;
-	Vector2 middle_drag_start_position;	// 屏幕坐标
-	Vector2 camera_start_position;		// 拖拽开始时的相机世界坐标
-
 	SelectionBox selection_box;
 
 	Camera camera;
 	CameraController camera_controller;
-
-	bool is_point_in_minimap(float x, float y) const;
-
-	Vector2 minimap_to_world(float x, float y) const;
-
-	void move_camera_to_minimap(float x, float y);
 
 	void update_ui_layout();
 

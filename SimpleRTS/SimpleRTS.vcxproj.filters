@@ -111,6 +111,9 @@
     <ClCompile Include="UI_mgr.cpp">
       <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClCompile>
+    <ClCompile Include="input_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -199,6 +202,9 @@
     </ClInclude>
     <ClInclude Include="UI_mgr.h">
       <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClInclude>
+    <ClInclude Include="input_system.h">
+      <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
