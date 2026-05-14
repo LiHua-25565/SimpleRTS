@@ -8,10 +8,7 @@
 enum class TerrainType : uint8_t
 {
     Mud,
-    Water,
-    Wood,
-    Rock,
-    Gold
+    Water
 };
 
 class GameMap
@@ -40,26 +37,7 @@ public:
         for (int y = 0; y < block_size; ++y)
             for (int x = 0; x < block_size; ++x)
                 grid[start_y + y][start_x + x] = TerrainType::Water;
-
-        // 右上：Wood
-        for (int y = 0; y < block_size; ++y)
-            for (int x = 0; x < block_size; ++x)
-                grid[start_y + y][start_x + block_size + gap + x] = TerrainType::Wood;
-
-        // 左下：Rock
-        for (int y = 0; y < block_size; ++y)
-            for (int x = 0; x < block_size; ++x)
-                grid[start_y + block_size + gap + y][start_x + x] = TerrainType::Rock;
-
-        // 右下：Gold
-        for (int y = 0; y < block_size; ++y)
-            for (int x = 0; x < block_size; ++x)
-                grid[start_y + block_size + gap + y][start_x + block_size + gap + x] = TerrainType::Gold;
-
-        // 生成静态流场（如果还需要的话，可以在这里调用）
-        // generate_static_flow_field();
     }
-
 
     // 查询某一格子是否可通行
     bool is_cell_passable(int x, int y) const;  
