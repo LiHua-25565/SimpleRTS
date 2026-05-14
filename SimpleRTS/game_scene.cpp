@@ -1,6 +1,8 @@
 #include "game_scene.h"
 #include "cursor_mgr.h"
 #include "selection_mgr.h"
+#include "resources_mgr.h"
+#include "UI_mgr.h"
 
 #include <chrono>
 
@@ -196,6 +198,7 @@ void GameScene::on_update(float delta)
     auto t1 = std::chrono::high_resolution_clock::now();
 
     move_feedback_system.on_update(delta);
+    UIMgr::instance()->update_content();
     auto t2 = std::chrono::high_resolution_clock::now();
 
     WorldEntityMgr::instance()->on_update();
@@ -209,7 +212,7 @@ void GameScene::on_update(float delta)
 
     static int frame_counter = 0;
     if (++frame_counter % 60 == 0) {  // 每60帧输出一次，避免刷屏
-        SDL_Log("FrameTimings: MoveSys=%.3fms, Feedback=%.3fms, WorldUpdate=%.3fms",
+        SDL_Log("FrameTimings: MoveSys=%.3fms, Feedback&ui=%.3fms, WorldUpdate=%.3fms",
             ms1, ms2, ms3);
     }
 }
@@ -218,7 +221,6 @@ void GameScene::on_enter()
 {
     int win_w, win_h;
     SDL_GetRenderLogicalPresentation(renderer, &win_w, &win_h, nullptr);
-    update_ui_layout();
 
     camera.init((float)win_w, (float)win_h,
         (float)(game_map.get_width() * game_map.get_cell_size()),
@@ -233,12 +235,15 @@ void GameScene::on_enter()
     bake_terrain();
     RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture());
 
+    ResourcesMgr::instance()->init(1);
+    ResourcesMgr::instance()->set_local_player_id(0);
     move_system.set_map(&game_map);
+    update_ui_layout();
 
-    for (int i = 0;i < 10;i++)
+    for (int i = 0;i < 30;i++)
     {
-        float x = 250;
-        float y = 100+i*50;
+        float x = 250 + i / 10 * 50;
+        float y = 100 + (i % 10) * 50;
         float w = 32;
         float h = 32;
         CollisionBox collision_box{ {x,y},w,h };
@@ -258,6 +263,8 @@ void GameScene::on_render()
     render_system.on_render();
     move_feedback_system.on_render();
     selection_box.on_render();
+
+    UIMgr::instance()->on_render();
 }
 
 void GameScene::camera_input(const bool* keyState)
@@ -366,4 +373,5 @@ void GameScene::update_ui_layout()
 
     RenderMgr::instance()->set_minimap_size(mm_size, mm_size);
     RenderMgr::instance()->set_minimap_position(mm_x, mm_y);
+    UIMgr::instance()->update_layout(screen_w_, screen_h_);
 }

@@ -10,11 +10,21 @@ void ResourcesMgr::init(int player_count)
 {
 	player_resources.clear();
 	player_resources.resize(player_count);
+	player_resource_types.assign(player_count, {});   // 初始为空
 
-	for (auto& bag : player_resources) {
+	// 默认阵营（例如人类）的资源类型
+	std::vector<ResourceType> default_types = {
+		ResourceType::Gold, ResourceType::Wood,
+		ResourceType::Food, ResourceType::Stone
+	};
+	for (int i = 0; i < player_count; ++i) {
+		set_player_resource_types(i, default_types);
+		// 初始资源数值
+		auto& bag = player_resources[i];
 		bag[ResourceType::Wood] = 200;
 		bag[ResourceType::Food] = 200;
 		bag[ResourceType::Gold] = 100;
+		bag[ResourceType::Stone] = 100;
 	}
 }
 
@@ -50,4 +60,15 @@ void ResourcesMgr::add_resource(int player_id, ResourceType type, int amount)
 	res += amount;
 	if (on_resource_changed)
 		on_resource_changed(player_id, type, res);	
+}
+
+void ResourcesMgr::set_player_resource_types(int player_id, const std::vector<ResourceType>& types) {
+	if (player_id < 0 || player_id >= (int)player_resource_types.size()) return;
+	player_resource_types[player_id] = types;
+}
+
+const std::vector<ResourceType>& ResourcesMgr::get_player_resource_types(int player_id) const {
+	static std::vector<ResourceType> empty;
+	if (player_id < 0 || player_id >= (int)player_resource_types.size()) return empty;
+	return player_resource_types[player_id];
 }

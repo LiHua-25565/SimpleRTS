@@ -2,6 +2,7 @@
 #include "scene_mgr.h"
 #include "render_mgr.h"
 #include "selection_mgr.h"
+#include "UI_mgr.h"
 #include "game_scene.h"
 #include "menu_scene.h"
 #include "selector_scene.h"
@@ -29,6 +30,7 @@ void init()
 
 void quit()
 {
+    UIMgr::instance()->shutdown();
     SDL_Quit();
     TTF_Quit();
     MIX_Quit();
@@ -42,6 +44,7 @@ int main(int argc, char* argv[])
     SDL_Window* window = SDL_CreateWindow(u8"MySTR",
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+    UIMgr::instance()->init(renderer);
     game_scene->set_renderer(renderer);
 
     bool is_fullscreen = false;

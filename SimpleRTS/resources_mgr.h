@@ -47,10 +47,16 @@ public:
     int get_local_player_id() const { return local_player_id; }
     void set_local_player_id(int id) { local_player_id = id; }
 
+    // 设置某个玩家关注的资源类型（通常在创建玩家或阵营时调用一次）
+    void set_player_resource_types(int player_id, const std::vector<ResourceType>& types);
+    // 获取某个玩家关注的资源类型列表
+    const std::vector<ResourceType>& get_player_resource_types(int player_id) const;
+
 private:
     ResourcesMgr() = default;
     std::vector<ResourceBag> player_resources;   // 按玩家 ID 索引
-    int local_player_id = 0;                     // 当前玩家
+    std::vector<std::vector<ResourceType>> player_resource_types;
+    int local_player_id = -1;                     // 当前玩家
     std::function<void(int player_id, ResourceType type, int new_value)> on_resource_changed;
 };
 

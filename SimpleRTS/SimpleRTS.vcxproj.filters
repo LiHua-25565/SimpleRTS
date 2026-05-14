@@ -28,9 +28,6 @@
     <Filter Include="头文件\Content\Objects">
       <UniqueIdentifier>{b14e6659-95de-4322-a70b-538f9e6859ac}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件\Content\Render">
-      <UniqueIdentifier>{69260817-7a3a-4426-b543-42a015d20754}</UniqueIdentifier>
-    </Filter>
     <Filter Include="头文件\Content\Resources">
       <UniqueIdentifier>{db9f483d-f242-4708-913a-3e687be318be}</UniqueIdentifier>
     </Filter>
@@ -45,6 +42,9 @@
     </Filter>
     <Filter Include="头文件\Content\Map, World And Trees">
       <UniqueIdentifier>{a782f91b-8bfc-4394-a5bc-bdd69940ec36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Render &amp; UI">
+      <UniqueIdentifier>{69260817-7a3a-4426-b543-42a015d20754}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -70,7 +70,7 @@
       <Filter>头文件\Content\Cursor</Filter>
     </ClCompile>
     <ClCompile Include="render_mgr.cpp">
-      <Filter>头文件\Content\Render</Filter>
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClCompile>
     <ClCompile Include="camera.cpp">
       <Filter>头文件\Content\Camera</Filter>
@@ -104,6 +104,9 @@
     </ClCompile>
     <ClCompile Include="resources_mgr.cpp">
       <Filter>头文件\Content\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="UI_mgr.cpp">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -147,10 +150,10 @@
       <Filter>头文件\Content\Cursor</Filter>
     </ClInclude>
     <ClInclude Include="render_mgr.h">
-      <Filter>头文件\Content\Render</Filter>
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClInclude>
     <ClInclude Include="render_def.h">
-      <Filter>头文件\Content\Render</Filter>
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClInclude>
     <ClInclude Include="camera.h">
       <Filter>头文件\Content\Camera</Filter>
@@ -190,6 +193,9 @@
     </ClInclude>
     <ClInclude Include="resources_mgr.h">
       <Filter>头文件\Content\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="UI_mgr.h">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
