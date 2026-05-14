@@ -6,6 +6,41 @@
 
 #include <chrono>
 
+// 辅助函数
+// 判断点是否在小地图区域内
+bool GameScene::is_point_in_minimap(float x, float y) const
+{
+    RenderMgr* rm = RenderMgr::instance();
+    Vector2 mm_pos = rm->get_minimap_position();
+    float mm_w = rm->get_minimap_width();
+    float mm_h = rm->get_minimap_height();
+    return (x >= mm_pos.x && x <= mm_pos.x + mm_w &&
+        y >= mm_pos.y && y <= mm_pos.y + mm_h);
+}
+
+// 将小地图坐标转换为世界坐标
+Vector2 GameScene::minimap_to_world(float x, float y) const
+{
+    RenderMgr* rm = RenderMgr::instance();
+    const SDL_FRect& content = rm->get_minimap_content_rect();
+    // 将小地图像素坐标映射到内容矩形内的相对比例，再转为世界坐标
+    float ratio_x = (x - content.x) / content.w;
+    float ratio_y = (y - content.y) / content.h;
+    float world_x = ratio_x * rm->get_world_width();
+    float world_y = ratio_y * rm->get_world_height();
+    return { world_x, world_y };
+}
+
+// 移动相机到小地图对应位置
+void GameScene::move_camera_to_minimap(float x, float y)
+{
+    Vector2 world = minimap_to_world(x, y);
+    Vector2 new_cam_pos;
+    new_cam_pos.x = world.x - camera.get_screen_w() / 2.0f / camera.get_scale();
+    new_cam_pos.y = world.y - camera.get_screen_h() / 2.0f / camera.get_scale();
+    camera.set_position(new_cam_pos);
+}
+
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
 
@@ -15,140 +50,143 @@ void GameScene::on_input(const SDL_Event& event)
     {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     {
+        float mx = event.button.x;
+        float my = event.button.y;
+
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             is_left_btn_down = true;
-            float mx = event.button.x;
-            float my = event.button.y;
-            RenderMgr* rm = RenderMgr::instance();
-            Vector2 mm_pos = rm->get_minimap_position();
-            float mm_w = rm->get_minimap_width();
-            float mm_h = rm->get_minimap_height();
-
-            if (mx >= mm_pos.x && mx <= mm_pos.x + mm_w &&
-                my >= mm_pos.y && my <= mm_pos.y + mm_h)
+            float mx = event.button.x, my = event.button.y;
+            if (is_point_in_minimap(mx, my))
             {
-                // 小地图点击：移动相机
-                float world_x = ((mx - mm_pos.x) / mm_w) * rm->get_world_width();
-                float world_y = ((my - mm_pos.y) / mm_h) * rm->get_world_height();
-                Vector2 new_cam_pos;
-                new_cam_pos.x = world_x - camera.get_screen_w() / 2.0f / camera.get_scale();
-                new_cam_pos.y = world_y - camera.get_screen_h() / 2.0f / camera.get_scale();
-                camera.set_position(new_cam_pos);
+                // 开始小地图拖拽
+                is_left_btn_minimap_dragging = true;
+                left_minimap_drag_start = { mx, my };
+                camera_start_position = camera.get_position();
+                // 同时立即移动一次（点击效果）
+                move_camera_to_minimap(mx, my);
                 return;
             }
-
-            // 正常左键按下：开始框选
-            float mouse_x = event.button.x;
-            float mouse_y = event.button.y;
-            selection_box.on_start(mouse_x, mouse_y);
+            // 否则正常框选
+            selection_box.on_start(mx, my);
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
-            // 右键拖拽开始
-            is_right_btn_down = true;
-            right_drag_start_position = { event.button.x, event.button.y };
+            is_right_btn_down = true;   // 标记右键按下，抬起时处理移动
+        }
+        else if (event.button.button == SDL_BUTTON_MIDDLE)
+        {
+            is_middle_btn_down = true;
+            middle_drag_start_position = { mx, my };
             camera_start_position = camera.get_position();
         }
+        break;
     }
-    break;
 
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
+        float mx = event.button.x;
+        float my = event.button.y;
+
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             is_left_btn_down = false;
+
+            if (is_left_btn_minimap_dragging)
+            {
+                is_left_btn_minimap_dragging = false;
+                return;   // 直接返回，不执行 selection_box.on_end 和后续清空逻辑
+            }
+
             bool hit_unit = selection_box.on_end(camera);
 
-            // Normal 模式，点击空地 → 移动选中单位
-            if (!hit_unit &&
-                SelectionMgr::instance()->get_current_mode() == SelectionMgr::SelectMode::Normal)
+            // 如果未点中任何单位，且不在小地图上，才清空选择
+            if (!hit_unit && !is_point_in_minimap(mx, my))
             {
-                const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
-                if (!id_set.empty())
+                if (SelectionMgr::instance()->get_current_mode() == SelectionMgr::SelectMode::Normal)
+                    SelectionMgr::instance()->clear();
+            }
+        }
+        else if (event.button.button == SDL_BUTTON_RIGHT)
+        {
+            is_right_btn_down = false;
+
+            // 右键点击 → 移动选中单位
+            const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+            if (!id_set.empty())
+            {
+                // 如果点在小地图上，使用小地图坐标；否则使用世界坐标
+                Vector2 world_target;
+                if (is_point_in_minimap(mx, my))
                 {
-                    // 从 ID 集合获取所有有效对象
-                    std::vector<GameObject*> selected_objects;
-                    selected_objects.reserve(id_set.size());
-                    for (uint64_t id : id_set)
+                    world_target = minimap_to_world(mx, my);
+                }
+                else
+                {
+                    world_target = camera.screen_to_world({ mx, my });
+                }
+                world_target = game_map.find_nearest_passable(world_target);
+
+                // 获取有效对象并计算编队目标
+                std::vector<GameObject*> selected_objects;
+                selected_objects.reserve(id_set.size());
+                for (uint64_t id : id_set)
+                {
+                    GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+                    if (obj) selected_objects.push_back(obj);
+                }
+
+                if (!selected_objects.empty())
+                {
+                    auto formation_targets = compute_formation_targets(selected_objects, world_target, &game_map);
+                    for (GameObject* obj : selected_objects)
                     {
-                        GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
-                        if (obj) selected_objects.push_back(obj);
-                    }
-
-                    if (!selected_objects.empty())
-                    {
-                        Vector2 raw_target = camera.screen_to_world({ event.button.x, event.button.y });
-                        Vector2 cmd_center = game_map.find_nearest_passable(raw_target);
-
-                        auto formation_targets = compute_formation_targets(selected_objects, cmd_center, &game_map);
-
-                        for (GameObject* obj : selected_objects)
+                        auto* movable = obj->get_component<Movable>();
+                        if (movable)
                         {
-                            auto* movable = obj->get_component<Movable>();
-                            if (movable)
-                            {
-                                movable->target = formation_targets[obj];
-                                movable->flow_target = cmd_center;
-                                move_feedback_system.add_line_for_unit(obj, formation_targets[obj], 1.0f);
-                            }
+                            movable->target = formation_targets[obj];
+                            movable->flow_target = world_target;
+                            move_feedback_system.add_line_for_unit(obj, formation_targets[obj], 1.0f);
                         }
                     }
                 }
             }
         }
-        else if (event.button.button == SDL_BUTTON_RIGHT)
+        else if (event.button.button == SDL_BUTTON_MIDDLE)
         {
-            if (is_right_btn_down)
-            {
-                is_right_btn_down = false;
-                float dx = event.button.x - right_drag_start_position.x;
-                float dy = event.button.y - right_drag_start_position.y;
-                if (fabsf(dx) < 5.0f && fabsf(dy) < 5.0f)
-                {
-                    SelectionMgr::instance()->clear();
-                }
-            }
+            is_middle_btn_down = false;
         }
+        break;
     }
-    break;
 
     case SDL_EVENT_MOUSE_MOTION:
     {
-        float mouse_x = event.motion.x;
-        float mouse_y = event.motion.y;
-        if (is_left_btn_down)
+        float mx = event.motion.x;
+        float my = event.motion.y;
+
+        // 左键在小地图上拖拽
+        if (is_left_btn_down && is_left_btn_minimap_dragging)
         {
-            RenderMgr* rm = RenderMgr::instance();
-            Vector2 mm_pos = rm->get_minimap_position();
-            float mm_w = rm->get_minimap_width();
-            float mm_h = rm->get_minimap_height();
-            if (mouse_x >= mm_pos.x && mouse_x <= mm_pos.x + mm_w &&
-                mouse_y >= mm_pos.y && mouse_y <= mm_pos.y + mm_h)
-            {
-                // 小地图点击：移动相机
-                float world_x = ((mouse_x - mm_pos.x) / mm_w) * rm->get_world_width();
-                float world_y = ((mouse_y - mm_pos.y) / mm_h) * rm->get_world_height();
-                Vector2 new_cam_pos;
-                new_cam_pos.x = world_x - camera.get_screen_w() / 2.0f / camera.get_scale();
-                new_cam_pos.y = world_y - camera.get_screen_h() / 2.0f / camera.get_scale();
-                camera.set_position(new_cam_pos);
-                return;
-            }
+            move_camera_to_minimap(mx, my);
+            return;
         }
-        if (is_right_btn_down)
+        // 中键拖拽地图
+        if (is_middle_btn_down)
         {
-            float dx = mouse_x - right_drag_start_position.x;
-            float dy = mouse_y - right_drag_start_position.y;
+            float dx = mx - middle_drag_start_position.x;
+            float dy = my - middle_drag_start_position.y;
             float scale = camera.get_scale();
             Vector2 new_pos = camera_start_position;
             new_pos.x -= dx / scale;
             new_pos.y -= dy / scale;
             camera.set_position(new_pos);
+            return; // 拖拽时不处理其他
         }
-        selection_box.on_update(mouse_x, mouse_y);
+
+        // 左键拖动时更新选择框
+        selection_box.on_update(mx, my);
+        break;
     }
-    break;
 
     case SDL_EVENT_KEY_DOWN:
     {
@@ -159,14 +197,12 @@ void GameScene::on_input(const SDL_Event& event)
             {
                 GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
                 if (!obj) continue;
-
                 auto* movable = obj->get_component<Movable>();
-                if (movable)
-                    movable->stop();
+                if (movable) movable->stop();
             }
         }
+        break;
     }
-    break;
     }
 }
 

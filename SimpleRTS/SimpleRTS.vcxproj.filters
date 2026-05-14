@@ -46,6 +46,9 @@
     <Filter Include="头文件\Content\Render &amp; UI">
       <UniqueIdentifier>{69260817-7a3a-4426-b543-42a015d20754}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\Content\Objects\Building">
+      <UniqueIdentifier>{af590e34-10bd-4df0-ae10-9813b0e50ebd}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

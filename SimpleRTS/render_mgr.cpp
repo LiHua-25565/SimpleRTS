@@ -108,30 +108,13 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
 
     // 整个小地图方形区域（背景）
     SDL_FRect full_rect = { minimap_pos.x, minimap_pos.y, minimap_w, minimap_h };
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);          // 黑色背景
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(renderer, &full_rect);
 
-    // 计算保持世界比例的实际地图绘制区域（居中）
-    float world_aspect = (float)world_w / world_h;
-    float rect_aspect = minimap_w / minimap_h;
+    // 直接使用已缓存的内容矩形，不再重复计算
+    SDL_FRect map_rect = minimap_content_rect;
 
-    SDL_FRect map_rect;
-    if (world_aspect > rect_aspect) {
-        // 世界更宽，宽度撑满，高度按比例缩小，垂直居中
-        map_rect.w = minimap_w;
-        map_rect.h = minimap_w / world_aspect;
-        map_rect.x = minimap_pos.x;
-        map_rect.y = minimap_pos.y + (minimap_h - map_rect.h) / 2.0f;
-    }
-    else {
-        // 世界更高，高度撑满，宽度按比例缩小，水平居中
-        map_rect.h = minimap_h;
-        map_rect.w = minimap_h * world_aspect;
-        map_rect.x = minimap_pos.x + (minimap_w - map_rect.w) / 2.0f;
-        map_rect.y = minimap_pos.y;
-    }
-
-    // 绘制地形纹理（放在黑色背景之上）
+    // 绘制地形纹理
     if (minimap_terrain)
         SDL_RenderTexture(renderer, minimap_terrain, nullptr, &map_rect);
     else {
@@ -139,7 +122,7 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
         SDL_RenderFillRect(renderer, &map_rect);
     }
 
-    // 绘制小地图边框（画在完整方形区域上）
+    // 小地图边框（画在完整方形区域上）
     SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
     SDL_RenderRect(renderer, &full_rect);
 
@@ -148,13 +131,11 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
     {
         float mm_x = map_rect.x + (cmd.position.x / world_w) * map_rect.w;
         float mm_y = map_rect.y + (cmd.position.y / world_h) * map_rect.h;
-
         float dot_size = cmd.is_selected ? 5.0f : 3.0f;
         SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
         SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
         SDL_RenderFillRect(renderer, &dot);
     }
-    // 注意：原代码分了选中/未选中两层遍历，你可以合并，也可保留两层，都改为使用 map_rect
 
     // 绘制相机视野框
     if (camera)
@@ -162,15 +143,36 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
         Vector2 cam_pos = camera->get_position();
         float cam_w = camera->get_screen_w() / camera->get_scale();
         float cam_h = camera->get_screen_h() / camera->get_scale();
-
         float rx = map_rect.x + (cam_pos.x / world_w) * map_rect.w;
         float ry = map_rect.y + (cam_pos.y / world_h) * map_rect.h;
         float rw = (cam_w / world_w) * map_rect.w;
         float rh = (cam_h / world_h) * map_rect.h;
-
         SDL_FRect cam_rect = { rx, ry, rw, rh };
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
         SDL_RenderRect(renderer, &cam_rect);
+    }
+}
+
+void RenderMgr::update_minimap_content_rect()
+{
+    if (world_w <= 0 || world_h <= 0 || minimap_w <= 0 || minimap_h <= 0) return;
+
+    float world_aspect = world_w / world_h;
+    float rect_aspect = minimap_w / minimap_h;
+
+    if (world_aspect > rect_aspect) {
+        // 世界更宽，宽度撑满，高度按比例缩小，垂直居中
+        minimap_content_rect.w = minimap_w;
+        minimap_content_rect.h = minimap_w / world_aspect;
+        minimap_content_rect.x = minimap_pos.x;
+        minimap_content_rect.y = minimap_pos.y + (minimap_h - minimap_content_rect.h) / 2.0f;
+    }
+    else {
+        // 世界更高，高度撑满，宽度按比例缩小，水平居中
+        minimap_content_rect.h = minimap_h;
+        minimap_content_rect.w = minimap_h * world_aspect;
+        minimap_content_rect.x = minimap_pos.x + (minimap_w - minimap_content_rect.w) / 2.0f;
+        minimap_content_rect.y = minimap_pos.y;
     }
 }
 
@@ -180,4 +182,76 @@ void RenderMgr::sort_cmds()
 		[](const RenderCmd& a, const RenderCmd& b) {
 			return (int)a.layer < (int)b.layer;
 		});
+}
+
+void RenderMgr::set_world_size(float width, float height)
+{
+    world_w = width;
+    world_h = height;
+    update_minimap_content_rect();   // 世界尺寸变化后更新内容矩形
+}
+
+void RenderMgr::set_minimap_position(float x, float y)
+{
+    minimap_pos.x = x;
+    minimap_pos.y = y;
+    update_minimap_content_rect();
+}
+
+void RenderMgr::set_minimap_position(const Vector2& position)
+{
+    minimap_pos = position;
+    update_minimap_content_rect();
+}
+
+void RenderMgr::set_minimap_size(float w, float h)
+{
+    minimap_w = w;
+    minimap_h = h;
+    update_minimap_content_rect();
+}
+
+float RenderMgr::get_minimap_width() const
+{
+    return minimap_w;
+}
+
+float RenderMgr::get_minimap_height() const
+{
+    return minimap_h;
+}
+
+void RenderMgr::set_minimap_terrain(SDL_Texture* tex)
+{
+    minimap_terrain = tex;
+}
+
+const Vector2& RenderMgr::get_minimap_position() const
+{
+    return minimap_pos;
+}
+
+void RenderMgr::set_minimap_content_rect(const SDL_FRect& rect)
+{
+    minimap_content_rect = rect;
+}
+
+const SDL_FRect& RenderMgr::get_minimap_content_rect() const
+{
+    return minimap_content_rect;
+}
+
+float RenderMgr::get_world_width() const
+{
+    return world_w;
+}
+
+float RenderMgr::get_world_height() const
+{
+    return world_h;
+}
+
+void RenderMgr::set_camera(Camera* camera)
+{
+    this->camera = camera;
 }

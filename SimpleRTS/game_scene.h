@@ -48,13 +48,22 @@ private:
 	bool is_key_alt_down = false;
 	bool is_left_btn_down = false;
 	bool is_right_btn_down = false;
-	Vector2 right_drag_start_position;	// 屏幕坐标
+	bool is_middle_btn_down = false;
+	bool is_left_btn_minimap_dragging = false;
+	Vector2 left_minimap_drag_start;
+	Vector2 middle_drag_start_position;	// 屏幕坐标
 	Vector2 camera_start_position;		// 拖拽开始时的相机世界坐标
 
 	SelectionBox selection_box;
 
 	Camera camera;
 	CameraController camera_controller;
+
+	bool is_point_in_minimap(float x, float y) const;
+
+	Vector2 minimap_to_world(float x, float y) const;
+
+	void move_camera_to_minimap(float x, float y);
 
 	void update_ui_layout();
 
