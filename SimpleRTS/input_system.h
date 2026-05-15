@@ -15,7 +15,7 @@ public:
     InputSystem() = default;
 
     // 在 GameScene::on_enter 中调用，设置依赖
-    void init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback);
+    void init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback, int local_player_id);
 
     // 处理所有输入事件
     void handle_event(const SDL_Event& event);
@@ -23,21 +23,23 @@ public:
     void on_update(float delta);
 
 private:
+    int local_player_id = 0;
+
     Camera* camera = nullptr;
     CameraController camera_controller;
     GameMap* map = nullptr;
-    SelectionBox* selectionBox = nullptr;
-    MoveFeedbackSystem* feedbackSystem = nullptr;
+    SelectionBox* selection_box = nullptr;
+    MoveFeedbackSystem* feedback_system = nullptr;
 
-    bool leftBtnDown = false;
-    bool leftMinimapDrag = false;
-    Vector2 leftMinimapDragStart;
-    Vector2 cameraStartPos;
+    bool left_btn_down = false;
+    bool is_left_minimap_dragging = false;
+    Vector2 left_minimap_drag_start;
+    Vector2 camera_start_pos;
 
-    bool rightBtnDown = false;
+    bool right_btn_down = false;
 
-    bool middleBtnDown = false;
-    Vector2 middleDragStart;
+    bool middle_btn_down = false;
+    Vector2 middle_drag_start;
 
     // 小地图辅助
     bool is_point_in_minimap(float x, float y) const;

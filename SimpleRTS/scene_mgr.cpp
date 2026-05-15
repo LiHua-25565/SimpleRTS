@@ -1,5 +1,6 @@
 #include "scene_mgr.h"
 #include "cursor_mgr.h"
+#include "game_scene.h"
 
 SceneMgr* SceneMgr::instance()
 {
@@ -51,4 +52,8 @@ void SceneMgr::on_input(const SDL_Event& event)
 	CursorMgr::instance()->on_input(event);
 	if (current_scene)
 		current_scene->on_input(event);
+}
+
+GameScene* SceneMgr::get_game_scene() const {
+	return static_cast<GameScene*>(game_scene);
 }

@@ -35,10 +35,14 @@ public:
         return selected_object_id_set;
     }
 
+    void set_local_player_id(int player_id);
+    int get_local_player_id() const;
+
 private:
     SelectionMgr();
     ~SelectionMgr();
 
+    int local_player_id = 0;
     SelectMode current_mode = SelectMode::Normal;
 	std::unordered_set<uint64_t> selected_object_id_set;
 };

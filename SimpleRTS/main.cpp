@@ -49,8 +49,19 @@ int main(int argc, char* argv[])
         SDL_Log("FATAL: TTF_OpenFont failed: %s", SDL_GetError());
     }
     UIMgr::instance()->init(renderer, font);
-    game_scene->set_renderer(renderer);
+
+    auto game_scene = new GameScene();
     game_scene->set_font(font);
+    game_scene->set_renderer(renderer);
+    auto menu_scene = new MenuScene();      // 如果有的话
+    auto selector_scene = new SelectorScene();
+
+    // 注册到 SceneMgr
+    SceneMgr::instance()->set_menu_scene(menu_scene);
+    SceneMgr::instance()->set_game_scene(game_scene);
+    SceneMgr::instance()->set_selector_scene(selector_scene);
+
+    SceneMgr::instance()->set_current_scene(selector_scene);
 
     bool is_fullscreen = false;
 
@@ -64,10 +75,6 @@ int main(int argc, char* argv[])
         1280, 720,
         SDL_LOGICAL_PRESENTATION_LETTERBOX // 等比例留黑边
     );
-
-    // 创建场景
-
-    SceneMgr::instance()->set_current_scene(game_scene);
 
     SDL_Event event;
     bool is_quit = false;

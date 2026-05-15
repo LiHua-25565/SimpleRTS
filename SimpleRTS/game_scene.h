@@ -27,6 +27,9 @@ public:
 	void on_enter();
 	void on_exit();
 
+	void set_local_player_id(int id) { local_player_id = id; }
+	int get_local_player_id() const { return local_player_id; }
+
 private:
 	int screen_w_ = 1280, screen_h_ = 720;   // 当前逻辑分辨率
 
@@ -36,7 +39,10 @@ private:
 	const float minimap_margin_percent = 0.02f;   // 右下边距
 
 private:
-	
+	int local_player_id = 0;
+	SelectionBox selection_box;
+	Camera camera;
+	CameraController camera_controller;
 	GameMap game_map;			
 	ObjectFactory factory;
 	RenderSystem render_system;
@@ -47,11 +53,6 @@ private:
 	bool map_baked = false;      // 是否已经烘焙过
 
 private:
-	SelectionBox selection_box;
-
-	Camera camera;
-	CameraController camera_controller;
-
 	void update_ui_layout();
 
 	void camera_input(const bool* keyState);

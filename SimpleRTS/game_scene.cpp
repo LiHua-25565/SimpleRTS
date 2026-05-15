@@ -60,19 +60,22 @@ void GameScene::on_enter()
     RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture());
 
     SDL_Log("on_enter: renderer=%p, font=%p", renderer, font);
-    ResourcesMgr::instance()->init(1);
-    ResourcesMgr::instance()->set_local_player_id(0);
+    ResourcesMgr::instance()->init(3);
+    ResourcesMgr::instance()->set_local_player_id(local_player_id);
+    SelectionMgr::instance()->set_local_player_id(local_player_id);
     TextureCache::instance()->init(renderer, font);
     factory.init(&game_map);
     move_system.set_map(&game_map);
-    input_system.init(&camera, &game_map, &selection_box, &move_feedback_system);
+    input_system.init(&camera, &game_map, &selection_box, &move_feedback_system, local_player_id);
     update_ui_layout();
 
-    factory.create_resource(ResourceEntityType::SGold, 10, 10);
-    factory.create_resource(ResourceEntityType::LGold, 30, 10);
-    factory.create_resource(ResourceEntityType::Stone, 50, 10);
-    factory.create_resource(ResourceEntityType::Wood, 70, 10);
-    factory.create_resource(ResourceEntityType::Berries, 90, 10);
+    factory.set_player_id(local_player_id);
+
+    factory.create_resource_by_type(ResourceEntityType::SGold, 10, 10);
+    factory.create_resource_by_type(ResourceEntityType::LGold, 30, 10);
+    factory.create_resource_by_type(ResourceEntityType::Stone, 50, 10);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 70, 10);
+    factory.create_resource_by_type(ResourceEntityType::Berries, 90, 10);
 
     for (int i = 0;i < 30;i++)
     {
@@ -81,7 +84,7 @@ void GameScene::on_enter()
         float w = 32;
         float h = 32;
         CollisionBox collision_box{ {x,y},w,h };
-        factory.create_unit(collision_box);
+        factory.create_unit_by_type(UnitEntityType::Villager,collision_box);
     }
 
 }

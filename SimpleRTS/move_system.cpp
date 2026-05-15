@@ -137,7 +137,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
 
     // 1. 按兵种类别 + 碰撞箱尺寸分组
     struct GroupKey {
-        UnitCategory category;
+        UnitEntityType category;
         int width, height;
         bool operator<(const GroupKey& o) const {
             if (category != o.category) return category < o.category;
@@ -148,7 +148,7 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     std::map<GroupKey, std::vector<GameObject*>> groups;
     for (auto* unit : selected_units) {
         auto* type = unit->get_component<UnitType>();
-        UnitCategory cat = type ? type->category : UnitCategory::Melee;
+        UnitEntityType cat = type ? type->type : UnitEntityType::Villager;
         const CollisionBox& box = unit->get_collision_box();
         int w = (int)(box.width / 2) * 2;   // 对齐到偶数
         int h = (int)(box.height / 2) * 2;

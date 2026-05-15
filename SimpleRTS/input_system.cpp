@@ -5,12 +5,13 @@
 #include "render_mgr.h"
 #include <cmath>
 
-void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback)
+void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback, int id)
 {
     this->camera = cam;
     this->map = map;
-    this->selectionBox = selBox;
-    this->feedbackSystem = feedback;
+    this->selection_box = selBox;
+    this->feedback_system = feedback;
+    this->local_player_id = id;
     camera_controller.set_camera(camera);
 }
 
@@ -25,26 +26,26 @@ void InputSystem::handle_event(const SDL_Event& event)
 
         if (event.button.button == SDL_BUTTON_LEFT)
         {
-            leftBtnDown = true;
+            left_btn_down = true;
             if (is_point_in_minimap(mx, my))
             {
-                leftMinimapDrag = true;
-                leftMinimapDragStart = { mx, my };
-                cameraStartPos = camera->get_position();
+                is_left_minimap_dragging = true;
+                left_minimap_drag_start = { mx, my };
+                camera_start_pos = camera->get_position();
                 move_camera_to_minimap(mx, my);
                 return;
             }
-            selectionBox->on_start(mx, my);
+            selection_box->on_start(mx, my);
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
-            rightBtnDown = true;
+            right_btn_down = true;
         }
         else if (event.button.button == SDL_BUTTON_MIDDLE)
         {
-            middleBtnDown = true;
-            middleDragStart = { mx, my };
-            cameraStartPos = camera->get_position();
+            middle_btn_down = true;
+            middle_drag_start = { mx, my };
+            camera_start_pos = camera->get_position();
         }
         break;
     }
@@ -56,15 +57,15 @@ void InputSystem::handle_event(const SDL_Event& event)
 
         if (event.button.button == SDL_BUTTON_LEFT)
         {
-            leftBtnDown = false;
+            left_btn_down = false;
 
-            if (leftMinimapDrag)
+            if (is_left_minimap_dragging)
             {
-                leftMinimapDrag = false;
+                is_left_minimap_dragging = false;
                 return;
             }
 
-            bool hit_unit = selectionBox->on_end(*camera);
+            bool hit_unit = selection_box->on_end(*camera);
 
             if (!hit_unit && !is_point_in_minimap(mx, my))
             {
@@ -74,7 +75,7 @@ void InputSystem::handle_event(const SDL_Event& event)
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
-            rightBtnDown = false;
+            right_btn_down = false;
 
             const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
             if (!id_set.empty())
@@ -100,19 +101,18 @@ void InputSystem::handle_event(const SDL_Event& event)
                     for (GameObject* obj : selected_objects)
                     {
                         auto* movable = obj->get_component<Movable>();
-                        if (movable)
-                        {
-                            movable->target = formation_targets[obj];
-                            movable->flow_target = world_target;
-                            feedbackSystem->add_line_for_unit(obj, formation_targets[obj], 1.0f);
-                        }
+                        auto* ownership = obj->get_component<Ownership>();
+                        if (!movable || !ownership || ownership->player_id != local_player_id) continue;
+                        movable->target = formation_targets[obj];
+                        movable->flow_target = world_target;
+                        feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
                     }
                 }
             }
         }
         else if (event.button.button == SDL_BUTTON_MIDDLE)
         {
-            middleBtnDown = false;
+            middle_btn_down = false;
         }
         break;
     }
@@ -122,26 +122,26 @@ void InputSystem::handle_event(const SDL_Event& event)
         float mx = event.motion.x;
         float my = event.motion.y;
 
-        if (leftBtnDown && leftMinimapDrag)
+        if (left_btn_down && is_left_minimap_dragging)
         {
             move_camera_to_minimap(mx, my);
             return;
         }
 
-        if (middleBtnDown)
+        if (middle_btn_down)
         {
-            float dx = mx - middleDragStart.x;
-            float dy = my - middleDragStart.y;
+            float dx = mx - middle_drag_start.x;
+            float dy = my - middle_drag_start.y;
             float scale = camera->get_scale();
-            Vector2 new_pos = cameraStartPos;
+            Vector2 new_pos = camera_start_pos;
             new_pos.x -= dx / scale;
             new_pos.y -= dy / scale;
             camera->set_position(new_pos);
             return;
         }
 
-        if (leftBtnDown)
-            selectionBox->on_update(mx, my);
+        if (left_btn_down)
+            selection_box->on_update(mx, my);
         break;
     }
 
@@ -155,7 +155,9 @@ void InputSystem::handle_event(const SDL_Event& event)
                 GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
                 if (!obj) continue;
                 auto* movable = obj->get_component<Movable>();
-                if (movable) movable->stop();
+                auto* ownership = obj->get_component<Ownership>();
+                if (!movable || !ownership || ownership->player_id != local_player_id) continue;
+                movable->stop();
             }
         }
         break;

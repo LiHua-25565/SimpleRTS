@@ -40,8 +40,8 @@ void SelectionBox::on_render()
 	cmd.w = rect_w;
 	cmd.h = rect_h;
 
-	cmd.color = { 0, 0, 0, 0 };
-	cmd.border_color = { 100, 180, 255, 255 };
+	cmd.color = to_sdl_color(Color::None);
+	cmd.border_color = to_sdl_color(Color::SelectionBlue);
 	cmd.border_width = 2;
 
 	RenderMgr::instance()->push_main_cmd(cmd);

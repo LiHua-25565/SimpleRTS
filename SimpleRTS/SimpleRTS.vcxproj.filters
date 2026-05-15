@@ -57,9 +57,6 @@
     <ClCompile Include="scene_mgr.cpp">
       <Filter>头文件\Content\Scenes</Filter>
     </ClCompile>
-    <ClCompile Include="scene_definitions.cpp">
-      <Filter>头文件\Content\Scenes</Filter>
-    </ClCompile>
     <ClCompile Include="game_scene.cpp">
       <Filter>头文件\Content\Scenes</Filter>
     </ClCompile>
@@ -114,8 +111,11 @@
     <ClCompile Include="input_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="selector_scene.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
     <ClCompile Include="texture_cache.cpp">
-      <Filter>头文件\Content</Filter>
+      <Filter>头文件\Content\Factories</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -212,8 +212,11 @@
     <ClInclude Include="resources_type.h">
       <Filter>头文件\Content\Resources</Filter>
     </ClInclude>
+    <ClInclude Include="unit_type.h">
+      <Filter>头文件\Content\Objects\Building</Filter>
+    </ClInclude>
     <ClInclude Include="texture_cache.h">
-      <Filter>头文件\Content</Filter>
+      <Filter>头文件\Content\Factories</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

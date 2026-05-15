@@ -23,7 +23,7 @@ GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const
     return nullptr;
 }
 
-GameObject* ObjectFactory::create_resource(ResourceEntityType type, int grid_x, int grid_y, bool allow_overlap)
+GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int grid_x, int grid_y, bool allow_overlap)
 {
     if (!map) return nullptr;
 
@@ -62,8 +62,7 @@ GameObject* ObjectFactory::create_resource(ResourceEntityType type, int grid_x, 
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    SDL_Texture* tex = TextureCache::instance()->get_resource_texture(
-        type, currentPlayerId, (int)w, (int)h);
+    SDL_Texture* tex = TextureCache::instance()->get_resource_texture( type, (int)w, (int)h);
     if (tex) {
         render->texture = tex;
         render->color = Color::White;
@@ -81,36 +80,82 @@ GameObject* ObjectFactory::create_resource(ResourceEntityType type, int grid_x, 
     health_comp->current_health = health;
 
     obj->add_component<Selectable>();
-    auto* ownership = obj->add_component<Ownership>();
-    ownership->playerId = currentPlayerId;
-    ownership->teamId = 0;
 
     WorldEntityMgr::instance()->insert_object(obj);
     return obj;
 }
 
-GameObject* ObjectFactory::create_unit(const CollisionBox& collisionBox, bool allow_overlap)
+GameObject* ObjectFactory::create_unit_by_type(UnitEntityType type, const CollisionBox& box, bool allow_overlap)
+{
+    switch (type) {
+    case UnitEntityType::Villager:
+        return create_villager(box, allow_overlap);
+        // 未来添加：
+        // case UnitEntityType::Cavalry: return create_cavalry(box, allow_overlap);
+        // ...
+    default:
+        return nullptr;
+    }
+}
+
+GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_overlap)
 {
     if (!map) return nullptr;
 
-    // 检查目标位置是否可通行（不是水）
-    int cx = (int)(collisionBox.position.x / map->get_cell_size());
-    int cy = (int)(collisionBox.position.y / map->get_cell_size());
-    if (!map->is_cell_passable(cx, cy))
-        return nullptr;
+    // 检查可通行性
+    int cx = (int)(box.position.x / map->get_cell_size());
+    int cy = (int)(box.position.y / map->get_cell_size());
+    if (!map->is_cell_passable(cx, cy)) return nullptr;
 
-    // 如果不允许重叠，则检查碰撞
-    if (!allow_overlap && check_overlap(collisionBox))
-        return nullptr;
+    // 检查重叠
+    if (!allow_overlap && check_overlap(box)) return nullptr;
 
-    auto* obj = new GameObject(collisionBox);
+    auto* obj = new GameObject(box);
 
-    obj->add_component<Renderable>()->color = Color::Red;
+    // 纹理
+    auto* render = obj->add_component<Renderable>();
+    SDL_Color color = get_player_color(current_player_id);
+    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(UnitEntityType::Villager, color, (int)box.width, (int)box.height);
+    if (tex) {
+        render->texture = tex;
+        render->color = Color::White;
+    }
+    else {
+        render->color = Color::Red;
+    }
+
     obj->add_component<Selectable>();
+
     auto* movable = obj->add_component<Movable>();
-    movable->speed = 80.0f;
-    obj->add_component<UnitType>()->category = UnitCategory::Villager;
+    movable->speed = 60.0f;
+
+    auto* unitType = obj->add_component<UnitType>();
+    unitType->type = UnitEntityType::Villager;
+
+    // 采集组件
+    auto* gatherer = obj->add_component<Gatherer>();
+    gatherer->gather_amount = 10;
+    gatherer->gather_interval = 1.0f;
+
+    // 生命值
+    auto* health = obj->add_component<Health>();
+    health->max_health = 50;
+    health->current_health = 50;
+
+    // 所有权
+    auto* ownership = obj->add_component<Ownership>();
+    ownership->player_id = current_player_id;
+    ownership->team_id = 0;
 
     WorldEntityMgr::instance()->insert_object(obj);
     return obj;
+}
+
+SDL_Color ObjectFactory::get_player_color(int player_id)
+{
+    switch (player_id) {
+    case 1:  return to_sdl_color(Color::DarkBlue);
+    case 2:  return to_sdl_color(Color::DarkRed);
+    default: return to_sdl_color(Color::LightGray);
+    }
 }

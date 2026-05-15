@@ -67,6 +67,12 @@ void SelectionMgr::select_in_area(const CollisionBox& world_area)
 		auto* selectable = obj->get_component<Selectable>();
 		if (!selectable) continue;
 
+		// 框选时只选中己方单位
+		auto* ownership = obj->get_component<Ownership>();
+		auto* unit_type = obj->get_component<UnitType>();
+		if (!ownership || ownership->player_id != local_player_id || !unit_type)
+			continue;
+
 		const CollisionBox& obj_box = obj->get_collision_box();
 
 		if (world_area.intersects(obj_box))
@@ -121,4 +127,14 @@ void SelectionMgr::set_select_mode(SelectMode mode)
 const SelectionMgr::SelectMode& SelectionMgr::get_current_mode() const
 {
 	return current_mode;
+}
+
+void SelectionMgr::set_local_player_id(int player_id) 
+{ 
+	local_player_id = player_id; 
+}
+
+int SelectionMgr::get_local_player_id() const 
+{ 
+	return local_player_id;
 }

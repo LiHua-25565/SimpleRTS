@@ -1,4 +1,5 @@
 #include "render_mgr.h"
+#include "color.h"
 
 #include <algorithm>
 
@@ -108,7 +109,8 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
 
     // 整个小地图方形区域（背景）
     SDL_FRect full_rect = { minimap_pos.x, minimap_pos.y, minimap_w, minimap_h };
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_Color bg = to_sdl_color(Color::Black);
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &full_rect);
 
     // 直接使用已缓存的内容矩形，不再重复计算
@@ -118,12 +120,14 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
     if (minimap_terrain)
         SDL_RenderTexture(renderer, minimap_terrain, nullptr, &map_rect);
     else {
-        SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+        SDL_Color color = to_sdl_color(Color::DarkGray);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderFillRect(renderer, &map_rect);
     }
 
     // 小地图边框（画在完整方形区域上）
-    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+    SDL_Color border = to_sdl_color(Color::Gray);
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderRect(renderer, &full_rect);
 
     // 绘制单位点（基于 map_rect 映射）
@@ -148,7 +152,9 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
         float rw = (cam_w / world_w) * map_rect.w;
         float rh = (cam_h / world_h) * map_rect.h;
         SDL_FRect cam_rect = { rx, ry, rw, rh };
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+        SDL_Color cam = to_sdl_color(Color::White);
+        cam.a = 200;
+        SDL_SetRenderDrawColor(renderer, cam.r, cam.g, cam.b, cam.a);
         SDL_RenderRect(renderer, &cam_rect);
     }
 }

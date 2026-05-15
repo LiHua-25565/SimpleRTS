@@ -75,7 +75,9 @@ void MoveFeedbackSystem::on_render()
 
         RenderCmd cmd;
         cmd.layer = RenderLayer::FeedbackLine;
-        cmd.color = { 255, 255, 255, 200 };
+        SDL_Color line_color = to_sdl_color(Color::White);
+        line_color.a = 200;
+        cmd.color = line_color;
         cmd.is_line = true;
         cmd.line_start = center;          // 动态起点
         cmd.line_end = line.end;        // 固定终点

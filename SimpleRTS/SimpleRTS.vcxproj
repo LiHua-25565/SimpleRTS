@@ -146,10 +146,10 @@
     <ClCompile Include="render_system.cpp" />
     <ClCompile Include="render_texture.cpp" />
     <ClCompile Include="resources_mgr.cpp" />
-    <ClCompile Include="scene_definitions.cpp" />
     <ClCompile Include="scene_mgr.cpp" />
     <ClCompile Include="selection_box.cpp" />
     <ClCompile Include="selection_mgr.cpp" />
+    <ClCompile Include="selector_scene.cpp" />
     <ClCompile Include="texture_cache.cpp" />
     <ClCompile Include="UI_mgr.cpp" />
     <ClCompile Include="world_entitiy_mgr.cpp" />
@@ -184,6 +184,7 @@
     <ClInclude Include="texture_cache.h" />
     <ClInclude Include="timer.h" />
     <ClInclude Include="UI_mgr.h" />
+    <ClInclude Include="unit_type.h" />
     <ClInclude Include="util.h" />
     <ClInclude Include="vector2.h" />
     <ClInclude Include="world_entity_mgr.h" />

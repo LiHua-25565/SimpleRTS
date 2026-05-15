@@ -1,4 +1,5 @@
 #include "texture_cache.h"
+#include "color.h"
 #include <string>
 
 // 辅助函数：根据资源类型返回暗色背景
@@ -6,37 +7,25 @@ static SDL_Color get_resource_bg_color(ResourceEntityType type)
 {
     switch (type) {
     case ResourceEntityType::SGold:
-    case ResourceEntityType::LGold:
-        return { 80, 60, 20, 255 };   // 暗金色
-    case ResourceEntityType::Stone:
-        return { 60, 60, 60, 255 };   // 深灰色
-    case ResourceEntityType::Wood:
-        return { 30, 80, 30, 255 };   // 暗绿色
-    case ResourceEntityType::Berries:
-        return { 50, 100, 40, 255 };  // 亮一点的绿
-    default:
-        return { 40, 40, 40, 255 };   // 默认深灰
+    case ResourceEntityType::LGold:  return to_sdl_color(Color::DarkGold);
+    case ResourceEntityType::Stone:  return to_sdl_color(Color::MediumGray);
+    case ResourceEntityType::Wood:   return to_sdl_color(Color::DarkGreen);
+    case ResourceEntityType::Berries:return to_sdl_color(Color::LightGreen);
+    default:                         return to_sdl_color(Color::DarkGray);
     }
 }
 
 // 根据资源类型返回文字颜色
-static SDL_Color get_resource_text_color(ResourceEntityType type)
-{
+static SDL_Color get_resource_text_color(ResourceEntityType type) {
     switch (type) {
     case ResourceEntityType::SGold:
-    case ResourceEntityType::LGold:
-        return { 255, 215, 0, 255 };   // 金色
-    case ResourceEntityType::Stone:
-        return { 220, 220, 220, 255 }; // 亮灰色
-    case ResourceEntityType::Wood:
-        return { 60, 180, 60, 255 };   // 绿色
-    case ResourceEntityType::Berries:
-        return { 220, 60, 60, 255 };   // 红色
-    default:
-        return { 255, 255, 255, 255 }; // 白色
+    case ResourceEntityType::LGold:  return to_sdl_color(Color::Gold);
+    case ResourceEntityType::Stone:  return to_sdl_color(Color::Silver);
+    case ResourceEntityType::Wood:   return to_sdl_color(Color::LeafGreen);
+    case ResourceEntityType::Berries:return to_sdl_color(Color::Crimson);
+    default:                         return to_sdl_color(Color::White);
     }
 }
-
 
 TextureCache* TextureCache::instance()
 {
@@ -52,29 +41,30 @@ void TextureCache::init(SDL_Renderer* r, TTF_Font* f)
 
 void TextureCache::shutdown()
 {
-    for (auto& [key, tex] : cache)
+    for (auto& [key, tex] : resource_cache)
         SDL_DestroyTexture(tex);
-    cache.clear();
+    resource_cache.clear();
+    for (auto& [key, tex] : unit_cache)
+        SDL_DestroyTexture(tex);
+    unit_cache.clear();
     renderer = nullptr;
     font = nullptr;
 }
 
-SDL_Texture* TextureCache::get_resource_texture(ResourceEntityType type, int playerId,
-    int width, int height)
+SDL_Texture* TextureCache::get_resource_texture(ResourceEntityType type, int width, int height)
 {
-    CacheKey key{ type, playerId, width, height };
-    auto it = cache.find(key);
-    if (it != cache.end())
+    ResourceKey key{ type,width, height };
+    auto it = resource_cache.find(key);
+    if (it != resource_cache.end())
         return it->second;
 
-    SDL_Texture* tex = create_resource_texture(type, playerId, width, height);
+    SDL_Texture* tex = create_resource_texture(type, width, height);
     if (tex)
-        cache[key] = tex;
+        resource_cache[key] = tex;
     return tex;
 }
 
-SDL_Texture* TextureCache::create_resource_texture(ResourceEntityType type, int playerId,
-    int width, int height)
+SDL_Texture* TextureCache::create_resource_texture(ResourceEntityType type, int width, int height)
 {
     if (!renderer || !font) return nullptr;
     if (width <= 0 || height <= 0) return nullptr;
@@ -126,9 +116,73 @@ std::string TextureCache::get_resource_name(ResourceEntityType type) const
     }
 }
 
+std::string TextureCache::get_unit_name(UnitEntityType type) const
+{
+    switch (type) {
+    case UnitEntityType::Villager:     return u8"民";
+    case UnitEntityType::Cavalry:      return u8"骑";
+    case UnitEntityType::Spearman:     return u8"矛";
+    case UnitEntityType::Archer:       return u8"弓";
+    case UnitEntityType::Crossbowman:  return u8"弩";
+    default: return "?";
+    }
+}
+
+// 创建单位纹理（透明底 + 阵营色边框 + 阵营色居中文字）
+SDL_Texture* TextureCache::create_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+{
+    if (!renderer || !font) return nullptr;
+    if (width <= 0 || height <= 0) return nullptr;
+
+    // 1. 创建透明表面
+    SDL_Surface* surf = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA8888);
+    if (!surf) return nullptr;
+
+    SDL_PixelFormat fmt = surf->format;
+    const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
+    Uint32 transparent = SDL_MapRGBA(details, nullptr, 0, 0, 0, 0);
+
+    // 填充全透明
+    SDL_Rect full = { 0, 0, width, height };
+    SDL_FillSurfaceRects(surf, &full, 1, transparent);
+
+    // 2. 渲染居中文字（阵营色）
+    std::string text = get_unit_name(type);
+    SDL_Surface* textSurf = TTF_RenderText_Blended(font, text.c_str(), 0, color);
+    if (textSurf) {
+        SDL_Rect dst = {
+            (width - textSurf->w) / 2,
+            (height - textSurf->h) / 2,
+            textSurf->w,
+            textSurf->h
+        };
+        SDL_BlitSurface(textSurf, nullptr, surf, &dst);
+        SDL_DestroySurface(textSurf);
+    }
+
+    // 3. 转换为纹理
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    SDL_DestroySurface(surf);
+    return tex;
+}
+
+// 获取单位纹理（带缓存）
+SDL_Texture* TextureCache::get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+{
+    UnitKey key{ type, color.r | (color.g << 8) | (color.b << 16) | (color.a << 24), width, height };
+    auto it = unit_cache.find(key);
+    if (it != unit_cache.end()) return it->second;
+
+    SDL_Texture* tex = create_unit_texture(type, color, width, height);
+    if (tex) unit_cache[key] = tex;
+    return tex;
+}
+
 SDL_Color TextureCache::get_player_color(int playerId) const
 {
-    // TODO: 根据玩家ID返回阵营颜色
-    // 预留：0 中立白色，1 玩家1蓝色，2 玩家2红色等
-    return { 255, 255, 255, 255 };
+    switch (playerId) {
+    case 1:  return to_sdl_color(Color::DarkBlue);
+    case 2:  return to_sdl_color(Color::DarkRed);
+    default: return to_sdl_color(Color::LightGray);
+    }
 }

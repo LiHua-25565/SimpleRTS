@@ -1,3 +1,4 @@
+#include "color.h"
 #include "UI_mgr.h"
 #include "render_mgr.h"
 
@@ -37,6 +38,7 @@ void UIMgr::update_layout(int screen_w, int screen_h)
     displayed_types = res->get_player_resource_types(player);
 
     int count = static_cast<int>(displayed_types.size());
+    SDL_Log("count = %d", count);
     resource_rects.resize(count);
     resource_textures.assign(count, nullptr);
     resource_values.assign(count, 0);
@@ -99,7 +101,7 @@ void UIMgr::on_render()
         // 1. 白色背景矩形
         RenderCmd bg_cmd;
         bg_cmd.layer = RenderLayer::UI;
-        bg_cmd.color = { 30, 30, 30, 255 }; 
+        bg_cmd.color = to_sdl_color(Color::DarkGray);
         bg_cmd.position = { bg.x, bg.y };
         bg_cmd.w = bg.w;
         bg_cmd.h = bg.h;
@@ -113,7 +115,7 @@ void UIMgr::on_render()
                 RenderCmd tex_cmd;
                 tex_cmd.layer = RenderLayer::UI;
                 tex_cmd.texture = tex;
-                tex_cmd.color = { 255, 255, 255, 255 };   // 保持纹理原色
+                tex_cmd.color = to_sdl_color(Color::White);   // 保持纹理原色
                 tex_cmd.position = {
                     bg.x + (bg.w - tw) / 2.0f,
                     bg.y + (bg.h - th) / 2.0f
@@ -134,7 +136,7 @@ void UIMgr::rebuild_resource_textures()
     int count = static_cast<int>(displayed_types.size());
     resource_textures.resize(count, nullptr);
 
-    SDL_Color yellow = { 255, 255, 0, 255 };
+    SDL_Color yellow = to_sdl_color(Color::Gold);
     for (int i = 0; i < count; ++i) {
         ResourceType type = displayed_types[i];
         std::string name = resource_names[static_cast<int>(type)];
