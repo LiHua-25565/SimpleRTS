@@ -150,6 +150,7 @@
     <ClCompile Include="scene_mgr.cpp" />
     <ClCompile Include="selection_box.cpp" />
     <ClCompile Include="selection_mgr.cpp" />
+    <ClCompile Include="texture_cache.cpp" />
     <ClCompile Include="UI_mgr.cpp" />
     <ClCompile Include="world_entitiy_mgr.cpp" />
   </ItemGroup>
@@ -180,6 +181,7 @@
     <ClInclude Include="selection_box.h" />
     <ClInclude Include="selection_mgr.h" />
     <ClInclude Include="selector_scene.h" />
+    <ClInclude Include="texture_cache.h" />
     <ClInclude Include="timer.h" />
     <ClInclude Include="UI_mgr.h" />
     <ClInclude Include="util.h" />

@@ -45,9 +45,8 @@ int main(int argc, char* argv[])
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     TTF_Font* font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
-    if (!font)
-    {
-        SDL_Log("UIMgr: Fail to load font: %s", SDL_GetError());
+    if (!font) {
+        SDL_Log("FATAL: TTF_OpenFont failed: %s", SDL_GetError());
     }
     UIMgr::instance()->init(renderer, font);
     game_scene->set_renderer(renderer);

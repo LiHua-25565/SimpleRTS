@@ -3,24 +3,23 @@
 
 #include "game_object.h"
 #include "world_entity_mgr.h"
+#include <string>
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
-class ObjectFactory
-{
+class ObjectFactory {
 public:
-	// 初始化：预创建所有资源纹理（需要 renderer）
-	void init(SDL_Renderer* renderer, TTF_Font* font, GameMap* map);
-	// 清理纹理资源
-	void shutdown();
+    void init(GameMap* map);
 
-	GameObject* create_unit(const CollisionBox& collision_box);
-	GameObject* create_resource(ResourceEntityType type, int grid_x, int grid_y, const GameMap* map);
+    GameObject* create_unit(const CollisionBox& collision_box);
+    GameObject* create_resource(ResourceEntityType type, int grid_x, int grid_y);
+
+    // 新增：设置玩家ID（用于阵营纹理）
+    void set_player_id(int playerId) { currentPlayerId = playerId; }
 
 private:
-	GameMap* map = nullptr;
-	TTF_Font* font = nullptr;
-	SDL_Renderer* renderer = nullptr;
+    GameMap* map = nullptr;
+    int currentPlayerId = 0;   // 当前创建实体所属玩家
 };
 #endif // !_FACTORIES_H_

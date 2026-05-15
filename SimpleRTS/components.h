@@ -20,14 +20,6 @@ enum class UnitCategory : uint8_t {
     Villager    // 农民
 };
 
-enum class ResourceEntityType : uint8_t {
-    Wood,        // 树木，2×2格
-    SGold,       // 小金矿，10×10格
-    LGold,       // 大金矿，15×15格
-    Stone,       // 石矿，10×10格
-    Berries,     // 浆果丛，4×4格
-};
-
 struct UnitType : public Component {
     UnitCategory category = UnitCategory::Melee;
     // 可选：用于同类别内排序的子优先级

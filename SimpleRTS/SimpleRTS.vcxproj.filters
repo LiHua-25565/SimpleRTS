@@ -114,6 +114,9 @@
     <ClCompile Include="input_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="texture_cache.cpp">
+      <Filter>头文件\Content</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -208,6 +211,9 @@
     </ClInclude>
     <ClInclude Include="resources_type.h">
       <Filter>头文件\Content\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="texture_cache.h">
+      <Filter>头文件\Content</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

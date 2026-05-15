@@ -1,4 +1,5 @@
 #include "game_scene.h"
+#include "texture_cache.h"
 #include "cursor_mgr.h"
 #include "selection_mgr.h"
 #include "resources_mgr.h"
@@ -58,9 +59,11 @@ void GameScene::on_enter()
     bake_terrain();
     RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture());
 
+    SDL_Log("on_enter: renderer=%p, font=%p", renderer, font);
     ResourcesMgr::instance()->init(1);
     ResourcesMgr::instance()->set_local_player_id(0);
-    factory.init(renderer, font, &game_map);
+    TextureCache::instance()->init(renderer, font);
+    factory.init(&game_map);
     move_system.set_map(&game_map);
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system);
     update_ui_layout();
@@ -74,6 +77,12 @@ void GameScene::on_enter()
         CollisionBox collision_box{ {x,y},w,h };
         factory.create_unit(collision_box);
     }
+
+    factory.create_resource(ResourceEntityType::SGold, 10, 10);
+    factory.create_resource(ResourceEntityType::LGold, 30, 10);
+    factory.create_resource(ResourceEntityType::Stone, 50, 10);
+    factory.create_resource(ResourceEntityType::Wood, 70, 10);
+    factory.create_resource(ResourceEntityType::Berries, 90, 10);
 
 }
 
