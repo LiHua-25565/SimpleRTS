@@ -12,11 +12,12 @@ class ObjectFactory {
 public:
     void init(GameMap* map);
 
-    GameObject* create_unit(const CollisionBox& collision_box);
-    GameObject* create_resource(ResourceEntityType type, int grid_x, int grid_y);
+    GameObject* create_unit(const CollisionBox& collision_box, bool allow_overlap = false);
+    GameObject* create_resource(ResourceEntityType type, int grid_x, int grid_y, bool allow_overlap = false);
 
     // 新增：设置玩家ID（用于阵营纹理）
     void set_player_id(int playerId) { currentPlayerId = playerId; }
+    GameObject* check_overlap(const CollisionBox& box) const;
 
 private:
     GameMap* map = nullptr;

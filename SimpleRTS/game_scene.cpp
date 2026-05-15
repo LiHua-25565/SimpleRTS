@@ -68,6 +68,12 @@ void GameScene::on_enter()
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system);
     update_ui_layout();
 
+    factory.create_resource(ResourceEntityType::SGold, 10, 10);
+    factory.create_resource(ResourceEntityType::LGold, 30, 10);
+    factory.create_resource(ResourceEntityType::Stone, 50, 10);
+    factory.create_resource(ResourceEntityType::Wood, 70, 10);
+    factory.create_resource(ResourceEntityType::Berries, 90, 10);
+
     for (int i = 0;i < 30;i++)
     {
         float x = 250 + i / 10 * 50;
@@ -77,12 +83,6 @@ void GameScene::on_enter()
         CollisionBox collision_box{ {x,y},w,h };
         factory.create_unit(collision_box);
     }
-
-    factory.create_resource(ResourceEntityType::SGold, 10, 10);
-    factory.create_resource(ResourceEntityType::LGold, 30, 10);
-    factory.create_resource(ResourceEntityType::Stone, 50, 10);
-    factory.create_resource(ResourceEntityType::Wood, 70, 10);
-    factory.create_resource(ResourceEntityType::Berries, 90, 10);
 
 }
 

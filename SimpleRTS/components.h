@@ -85,5 +85,10 @@ struct Harvestable : public Component {
     ResourceType output_type = ResourceType::Wood;              // 采集后产出
 };
 
+struct Projectile : public Component
+{
+    // 抛射物实体
+};
+
 #endif // !_COMPONENTS_H_
 
