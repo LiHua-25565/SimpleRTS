@@ -5,9 +5,16 @@
 #include "render_def.h"
 #include "resources_type.h"
 #include "unit_type.h"
+#include "building_type.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
+
+inline constexpr uint8_t WOOD_MASK = 1 << 0;
+inline constexpr uint8_t FOOD_MASK = 1 << 1;
+inline constexpr uint8_t GOLD_MASK = 1 << 2;
+inline constexpr uint8_t STONE_MASK = 1 << 3;
+inline constexpr uint8_t ALL_MASK = WOOD_MASK | FOOD_MASK | GOLD_MASK | STONE_MASK;
 
 class GameObject;
 
@@ -16,10 +23,16 @@ public:
     virtual ~Component() = default;
 };
 
-struct UnitType : public Component {
+struct UnitType : public Component 
+{
     UnitEntityType type = UnitEntityType::Villager;
-    // 可选：用于同类别内排序的子优先级
+    // 用于同类别内排序的子优先级
     int sub_priority = 0;
+};
+
+struct BuildingType :public Component
+{
+    BuildingEntityType type = BuildingEntityType::TownCenter;
 };
 
 struct Renderable : public Component 
@@ -82,17 +95,23 @@ struct Gatherer : public Component {
     int gather_amount = 10;             // 每次采集伤害（及获得的基础数量）
 
     // 携带相关
-    ResourceType carried_type = ResourceType::Wood; // 当前携带的资源类型（可设一个None值）
-    int carried_amount = 0;             // 当前已携带数量
+    ResourceType carried_type = ResourceType::Gold; // 当前携带的资源类型（可设一个None值）
+    int carried_amount = 10;             // 当前已携带数量
     int carry_capacity = 30;            // 最大携带量
 
     float timer = 0.0f;                // 采集计时器
-    GameObject* target_resource = nullptr; // 当前采集目标
+    GameObject* target_resource = nullptr;   // 采集目标
+    GameObject* dropoff_target = nullptr;    // 提交目标建筑
 };
 
 // 标记建筑实体
 struct Structure : public Component {
     // 标记建筑实体（用于寻路时视为障碍）
+};
+
+// 提交资源建筑组件
+struct ResourceDropoff : public Component {
+    uint8_t accept_mask = 0;   // 初始0，通过 | 添加可接受的资源种类
 };
 
 // 资源实体

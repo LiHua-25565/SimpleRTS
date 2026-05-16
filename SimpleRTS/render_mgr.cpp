@@ -79,7 +79,7 @@ void RenderMgr::render_main(SDL_Renderer* renderer)
         // 有纹理 → 渲染贴图
         if (cmd.texture)
         {
-            SDL_SetTextureColorMod(cmd.texture, cmd.color.r, cmd.color.g, cmd.color.b);
+            SDL_SetTextureColorMod(cmd.texture, 255, 255, 255);
             SDL_SetTextureAlphaMod(cmd.texture, cmd.color.a);
             SDL_RenderTexture(renderer, cmd.texture, nullptr, &dst_rect);
         }
@@ -135,10 +135,22 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
     {
         float mm_x = map_rect.x + (cmd.position.x / world_w) * map_rect.w;
         float mm_y = map_rect.y + (cmd.position.y / world_h) * map_rect.h;
-        float dot_size = cmd.is_selected ? 5.0f : 3.0f;
-        SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
-        SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
-        SDL_RenderFillRect(renderer, &dot);
+        float h = cmd.h;
+        float w = cmd.w;
+        if (h >= (float)8.0f * cell_size && w >= (float)8.0 * cell_size)
+        {
+            float dot_size = cmd.is_selected ? 6.0f : 5.0f;
+            SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
+            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
+            SDL_RenderFillRect(renderer, &dot);
+        }
+        else
+        {
+            float dot_size = cmd.is_selected ? 5.0f : 3.0f;
+            SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
+            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
+            SDL_RenderFillRect(renderer, &dot);
+        }
     }
 
     // 绘制相机视野框
@@ -260,4 +272,9 @@ float RenderMgr::get_world_height() const
 void RenderMgr::set_camera(Camera* camera)
 {
     this->camera = camera;
+}
+
+void RenderMgr::set_sell_size(int cell_size)
+{
+    this->cell_size = cell_size;
 }

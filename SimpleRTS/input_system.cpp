@@ -4,6 +4,7 @@
 #include "world_entity_mgr.h"
 #include "render_mgr.h"
 #include <cmath>
+#include <algorithm>
 
 void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback, int id)
 {
@@ -77,35 +78,99 @@ void InputSystem::handle_event(const SDL_Event& event)
         {
             right_btn_down = false;
 
-            const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
-            if (!id_set.empty())
-            {
-                Vector2 world_target;
-                if (is_point_in_minimap(mx, my))
-                    world_target = minimap_to_world(mx, my);
-                else
-                    world_target = camera->screen_to_world({ mx, my });
-                world_target = map->find_nearest_passable(world_target);
+            // 1. 检查是否点击了己方可提交资源建筑（精确碰撞）
+            Vector2 world_click;
+            if (is_point_in_minimap(mx, my))
+                world_click = minimap_to_world(mx, my);
+            else
+                world_click = camera->screen_to_world({ mx, my });
 
-                std::vector<GameObject*> selected_objects;
-                selected_objects.reserve(id_set.size());
-                for (uint64_t id : id_set)
-                {
-                    GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
-                    if (obj) selected_objects.push_back(obj);
+            CollisionBox click_area{ world_click, 1.0f, 1.0f };
+            std::vector<GameObject*> hit_objects;
+            WorldEntityMgr::instance()->query_area(click_area, hit_objects);
+
+            bool issued_submit = false;
+            for (auto* obj : hit_objects)
+            {
+                if (!obj->check_valid()) continue;
+                auto* dropoff = obj->get_component<ResourceDropoff>();
+                if (!dropoff) continue;
+                auto* owner = obj->get_component<Ownership>();
+                if (!owner || owner->player_id != local_player_id) continue;
+
+                // 精确碰撞：点击点必须在建筑碰撞盒内
+                const auto& cb = obj->get_collision_box();
+                if (world_click.x < cb.position.x || world_click.x > cb.position.x + cb.width ||
+                    world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height) continue;
+
+                // 为每个携带资源的采集单位设置提交目标
+                std::vector<GameObject*> submit_units;
+                const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                std::vector<GameObject*> collectors;
+                for (uint64_t id : id_set) {
+                    GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
+                    if (!unit) continue;
+                    auto* gatherer = unit->get_component<Gatherer>();
+                    if (!gatherer || gatherer->carried_amount <= 0) continue;
+                    auto* ownership = unit->get_component<Ownership>();
+                    if (!ownership || ownership->player_id != local_player_id) continue;
+                    collectors.push_back(unit);
                 }
 
-                if (!selected_objects.empty())
+                if (!collectors.empty()) {
+                    Vector2 building_center = obj->get_collision_box().get_center_position();
+                    // 2. 使用编队目标函数，以建筑中心为命令中心，为单位们分配环绕建筑的精确目标点
+                    auto formation_targets = compute_formation_targets(collectors, building_center, map);
+
+                    for (GameObject* unit : collectors) {
+                        auto* gatherer = unit->get_component<Gatherer>();
+                        gatherer->dropoff_target = obj;   // 记录提交目标建筑
+
+                        auto* movable = unit->get_component<Movable>();
+                        if (movable) {
+                            movable->target = formation_targets[unit];       // 个人精确点
+                            movable->flow_target = building_center;          // 共享流场目标，所有单位共用同一流场
+                            feedback_system->add_line_for_unit(unit, formation_targets[unit], 0.5f);
+                        }
+                    }
+                    issued_submit = true;  // 标记已处理，不再执行后续移动逻辑
+                }
+                if (issued_submit) break; // 只响应第一个有效建筑
+            }
+
+            // 2. 如果没有发生提交，则执行原有编队移动
+            if (!issued_submit)
+            {
+                const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                if (!id_set.empty())
                 {
-                    auto formation_targets = compute_formation_targets(selected_objects, world_target, map);
-                    for (GameObject* obj : selected_objects)
+                    Vector2 world_target;
+                    if (is_point_in_minimap(mx, my))
+                        world_target = minimap_to_world(mx, my);
+                    else
+                        world_target = camera->screen_to_world({ mx, my });
+                    world_target = map->find_nearest_passable(world_target);
+
+                    std::vector<GameObject*> selected_objects;
+                    selected_objects.reserve(id_set.size());
+                    for (uint64_t id : id_set)
                     {
-                        auto* movable = obj->get_component<Movable>();
-                        auto* ownership = obj->get_component<Ownership>();
-                        if (!movable || !ownership || ownership->player_id != local_player_id) continue;
-                        movable->target = formation_targets[obj];
-                        movable->flow_target = world_target;
-                        feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
+                        GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+                        if (obj) selected_objects.push_back(obj);
+                    }
+
+                    if (!selected_objects.empty())
+                    {
+                        auto formation_targets = compute_formation_targets(selected_objects, world_target, map);
+                        for (GameObject* obj : selected_objects)
+                        {
+                            auto* movable = obj->get_component<Movable>();
+                            auto* ownership = obj->get_component<Ownership>();
+                            if (!movable || !ownership || ownership->player_id != local_player_id) continue;
+                            movable->target = formation_targets[obj];
+                            movable->flow_target = world_target;
+                            feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
+                        }
                     }
                 }
             }

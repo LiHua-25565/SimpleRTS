@@ -2,6 +2,7 @@
 #include "render_mgr.h"
 #include "selection_mgr.h"
 #include "resources_mgr.h"
+#include "texture_cache.h"
 
 // render_system.cpp
 void RenderSystem::on_render()
@@ -22,15 +23,25 @@ void RenderSystem::on_render()
         float w = collider.width;
         float h = collider.height;
 
+        SDL_Texture* tex = nullptr;
+        auto* gatherer = obj->get_component<Gatherer>();
+        if (gatherer) {
+            // 农民类单位，根据携带资源决定纹理
+            ResourceType carried = gatherer->carried_type; // 可能为 None
+            SDL_Color color = to_sdl_color(renderable->color); // 阵营色
+            tex = TextureCache::instance()->get_carrying_unit_texture(obj->add_component<UnitType>()->type, color, (int)collider.width, (int)collider.height, carried);
+        }
+        else {
+            tex = renderable->texture; // 普通纹理（可能已经生成过）
+        }
+
         RenderCmd cmd{};
         cmd.position = pos;
         cmd.w = w;
         cmd.h = h;
-        cmd.texture = renderable->texture;
+        if (tex) cmd.texture = tex;
         cmd.layer = RenderLayer::Unit;
-
-        // 纹理原色，默认不染色
-        cmd.color = to_sdl_color(Color::White);
+        cmd.color = to_sdl_color(renderable->color);
 
         bool is_selected = selected_ids.count(id) > 0;
         auto* ownership = obj->get_component<Ownership>();

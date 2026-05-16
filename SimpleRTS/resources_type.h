@@ -3,6 +3,7 @@
 #include <cstdint>
 
 enum class ResourceType : uint8_t {
+    None,
     Wood,
     Food,
     Gold,

@@ -12,6 +12,7 @@
 #include "move_system.h"
 #include "move_feedback_system.h"
 #include "input_system.h"
+#include "resource_submit_system.h"
 
 #include <vector>
 
@@ -45,10 +46,13 @@ private:
 	CameraController camera_controller;
 	GameMap game_map;			
 	ObjectFactory factory;
+
 	RenderSystem render_system;
 	MoveSystem move_system;
 	MoveFeedbackSystem move_feedback_system;
 	InputSystem input_system;
+	ResourceSubmitSystem resource_submit_system;
+
 	RenderTexture map_bake_tex;  // 地形烘焙大图
 	bool map_baked = false;      // 是否已经烘焙过
 

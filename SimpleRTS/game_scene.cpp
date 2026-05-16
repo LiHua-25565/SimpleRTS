@@ -14,11 +14,11 @@ void GameScene::on_input(const SDL_Event& event)
 
 void GameScene::on_update(float delta)
 {
-    input_system.on_update(delta);
-
     // === 计时代码开始 ===
     auto t0 = std::chrono::high_resolution_clock::now();
+    input_system.on_update(delta);
     move_system.on_update(delta);
+    resource_submit_system.on_update(delta);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     move_feedback_system.on_update(delta);
@@ -36,7 +36,7 @@ void GameScene::on_update(float delta)
 
     static int frame_counter = 0;
     if (++frame_counter % 60 == 0) {  // 每60帧输出一次，避免刷屏
-        SDL_Log("FrameTimings: MoveSys=%.3fms, Feedback&ui=%.3fms, WorldUpdate=%.3fms",
+        SDL_Log("FrameTimings: Systems=%.3fms, Feedback&ui=%.3fms, WorldUpdate=%.3fms",
             ms1, ms2, ms3);
     }
 }
@@ -71,6 +71,7 @@ void GameScene::on_enter()
 
     factory.set_player_id(local_player_id);
 
+    factory.create_town_center(60, 60);
     factory.create_resource_by_type(ResourceEntityType::SGold, 10, 10);
     factory.create_resource_by_type(ResourceEntityType::LGold, 30, 10);
     factory.create_resource_by_type(ResourceEntityType::Stone, 50, 10);

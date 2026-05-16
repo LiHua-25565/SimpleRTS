@@ -33,7 +33,13 @@ private:
     std::vector<int> resource_values;
 
     // 资源名称映射（与 ResourceType 枚举索引对应）
-    std::string resource_names[static_cast<int>(ResourceType::Count)] = { u8"金", u8"木", u8"肉", u8"石" };
+    std::string resource_names[static_cast<int>(ResourceType::Count)] = {
+    "",        // None (索引 0)
+    u8"木",    // Wood (索引 1)
+    u8"肉",    // Food (索引 2)
+    u8"金",    // Gold (索引 3)
+    u8"石"     // Stone (索引 4)
+    };
 
     // 相对布局参数（屏幕百分比）
     float panel_w_percent = 0.10f;

@@ -139,6 +139,7 @@ void UIMgr::rebuild_resource_textures()
     SDL_Color yellow = to_sdl_color(Color::Gold);
     for (int i = 0; i < count; ++i) {
         ResourceType type = displayed_types[i];
+        if (type == ResourceType::None) continue;
         std::string name = resource_names[static_cast<int>(type)];
         std::string text = name + " " + std::to_string(resource_values[i]);
 

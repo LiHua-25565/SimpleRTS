@@ -19,12 +19,14 @@ public:
 
     GameObject* create_villager(const CollisionBox& box, bool allow_overlap = false);   // 快捷创建（农民）
 
+    GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
+
     // 新增：设置玩家ID（用于阵营纹理）
     void set_player_id(int playerId) { current_player_id = playerId; }
     GameObject* check_overlap(const CollisionBox& box) const;
 
 public:
-    static SDL_Color get_player_color(int player_id);
+    static Color get_player_color(int player_id);
 
 private:
     GameMap* map = nullptr;

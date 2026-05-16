@@ -65,7 +65,7 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
     SDL_Texture* tex = TextureCache::instance()->get_resource_texture( type, (int)w, (int)h);
     if (tex) {
         render->texture = tex;
-        render->color = Color::White;
+        render->color = color;
     }
     else {
         render->color = color;
@@ -114,14 +114,17 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
 
     // 纹理
     auto* render = obj->add_component<Renderable>();
-    SDL_Color color = get_player_color(current_player_id);
-    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(UnitEntityType::Villager, color, (int)box.width, (int)box.height);
+
+    // 1. 设置单位的自身颜色（阵营颜色）
+    Color unit_color = get_player_color(current_player_id);
+    render->color = unit_color;
+
+    // 2. 获取纹理时传入 SDL_Color
+    SDL_Color sdl_color = to_sdl_color(unit_color);
+    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(
+        UnitEntityType::Villager, sdl_color, (int)box.width, (int)box.height);
     if (tex) {
         render->texture = tex;
-        render->color = Color::White;
-    }
-    else {
-        render->color = Color::Red;
     }
 
     obj->add_component<Selectable>();
@@ -151,11 +154,68 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     return obj;
 }
 
-SDL_Color ObjectFactory::get_player_color(int player_id)
+GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow_overlap)
+{
+    if (!map) return nullptr;
+
+    const int size_cells = 20;
+    int cell_size = map->get_cell_size();
+    float w = (float)(size_cells * cell_size);
+    float h = (float)(size_cells * cell_size);
+    float x = (float)(grid_x * cell_size);
+    float y = (float)(grid_y * cell_size);
+    CollisionBox box{ {x, y}, w, h };
+
+    // 可通行性检查
+    for (int row = 0; row < size_cells; ++row)
+        for (int col = 0; col < size_cells; ++col)
+            if (!map->is_cell_passable(grid_x + col, grid_y + row))
+                return nullptr;
+
+    if (!allow_overlap && check_overlap(box)) return nullptr;
+
+    auto* obj = new GameObject(box);
+
+    // 渲染组件：使用建筑纹理
+    auto* render = obj->add_component<Renderable>();
+    Color tc_color = get_player_color(current_player_id);
+    render->color = tc_color;
+
+    SDL_Color sdl_color = to_sdl_color(tc_color);
+    SDL_Texture* tex = TextureCache::instance()->get_building_texture(
+        BuildingEntityType::TownCenter, sdl_color, (int)w, (int)h);
+    if (tex) {
+        render->texture = tex;
+
+        // 建筑结构标记
+        obj->add_component<Structure>();
+        // 资源交付能力
+        auto* dropoff = obj->add_component<ResourceDropoff>();
+        dropoff->accept_mask = ALL_MASK;
+
+        // 可选中
+        obj->add_component<Selectable>();
+
+        // 所有权
+        auto* ownership = obj->add_component<Ownership>();
+        ownership->player_id = current_player_id;
+        ownership->team_id = 0;
+
+        // 生命值
+        auto* health = obj->add_component<Health>();
+        health->max_health = 1000;
+        health->current_health = 1000;
+
+        WorldEntityMgr::instance()->insert_object(obj);
+        return obj;
+    }
+}
+
+Color ObjectFactory::get_player_color(int player_id)
 {
     switch (player_id) {
-    case 1:  return to_sdl_color(Color::DarkBlue);
-    case 2:  return to_sdl_color(Color::DarkRed);
-    default: return to_sdl_color(Color::LightGray);
+    case 1:  return Color::DarkBlue;
+    case 2:  return Color::DarkRed;
+    default: return Color::LightGray;
     }
 }

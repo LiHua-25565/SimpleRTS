@@ -31,6 +31,7 @@ public:
 
     void set_minimap_content_rect(const SDL_FRect& rect);
     const SDL_FRect& get_minimap_content_rect() const;
+    void set_sell_size(int sell_size);
 
 private:
     RenderMgr() = default;
@@ -46,6 +47,8 @@ private:
     SDL_FRect minimap_content_rect = { 0 };
     std::vector<RenderCmd> main_cmd_list;
     std::vector<RenderCmd> minimap_cmd_list;
+
+    int cell_size = 10;
 
     Vector2 minimap_pos;
     float minimap_w = 0;
