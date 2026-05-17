@@ -91,6 +91,9 @@ void GameScene::on_enter()
         factory.create_unit_by_type(UnitEntityType::Villager,collision_box);
     }
 
+    factory.set_player_id(0);
+    factory.create_unit_by_type(UnitEntityType::Villager, { {300.0f,300.0f},32.0f,32.0f });
+
 }
 
 void GameScene::on_exit()

@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
     SceneMgr::instance()->set_game_scene(game_scene);
     SceneMgr::instance()->set_selector_scene(selector_scene);
 
-    SceneMgr::instance()->set_current_scene(selector_scene);
+    SceneMgr::instance()->set_current_scene(game_scene);
 
     bool is_fullscreen = false;
 

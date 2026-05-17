@@ -40,7 +40,7 @@ private:
 	const float minimap_margin_percent = 0.02f;   // сроб╠ъ╬Ю
 
 private:
-	int local_player_id = 0;
+	int local_player_id = 1;
 	SelectionBox selection_box;
 	Camera camera;
 	CameraController camera_controller;

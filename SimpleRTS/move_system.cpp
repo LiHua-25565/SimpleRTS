@@ -444,7 +444,8 @@ void MoveSystem::on_update(float delta)
         if (step > dist) step = dist;
 
         Vector2 pos = obj->get_collision_box().position;
-        pos += dir.normalize() * step;
+        movable->velocity = dir.normalize() * step;
+        pos += movable->velocity;
 
         obj->set_position(pos);
     }
