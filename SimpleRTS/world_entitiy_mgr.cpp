@@ -1,4 +1,5 @@
 #include "world_entity_mgr.h"
+#include "rvo_adapter.h"
 #include "Windows.h"
 
 WorldEntityMgr* WorldEntityMgr::instance()
@@ -98,6 +99,8 @@ void WorldEntityMgr::destroy_object(GameObject* obj)
 	// 2. 立即从四叉树移除（避免其他系统在延迟期间查询到无效对象）
 	if (quadtree)
 		quadtree->remove(obj);
+
+	RVOAdapter::instance()->request_rebuild();
 }
 
 void WorldEntityMgr::query_area(const CollisionBox& area, std::vector<GameObject*>& out)

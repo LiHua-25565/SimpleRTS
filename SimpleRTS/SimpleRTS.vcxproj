@@ -102,14 +102,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\thirdparty\SDL3\include;..\thirdparty\SDL3_image\include;..\thirdparty\SDL3_ttf\include;..\thirdparty\SDL3_gfx\include;..\thirdparty\SDL3_mixer\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\thirdparty\SDL3\include;..\thirdparty\SDL3_image\include;..\thirdparty\SDL3_ttf\include;..\thirdparty\SDL3_gfx\include;..\thirdparty\SDL3_mixer\include;..\thirdparty\RVO2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\thirdparty\SDL3\lib\x64;..\thirdparty\SDL3_gfx\lib;..\thirdparty\SDL3_image\lib\x64;..\thirdparty\SDL3_ttf\lib\x64;..\thirdparty\SDL3_mixer\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SDL3.lib;SDL3_ttf.lib;SDL3_gfx.lib;SDL3_image.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\thirdparty\SDL3\lib\x64;..\thirdparty\SDL3_gfx\lib;..\thirdparty\SDL3_image\lib\x64;..\thirdparty\SDL3_ttf\lib\x64;..\thirdparty\SDL3_mixer\lib\x64;..\thirdparty\RVO2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>RVO.lib;SDL3.lib;SDL3_ttf.lib;SDL3_gfx.lib;SDL3_image.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -120,14 +120,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\thirdparty\SDL3\include;..\thirdparty\SDL3_image\include;..\thirdparty\SDL3_ttf\include;..\thirdparty\SDL3_gfx\include;..\thirdparty\SDL3_mixer\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\thirdparty\SDL3\include;..\thirdparty\SDL3_image\include;..\thirdparty\SDL3_ttf\include;..\thirdparty\SDL3_gfx\include;..\thirdparty\SDL3_mixer\include;..\thirdparty\RVO2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\thirdparty\SDL3\lib\x64;..\thirdparty\SDL3_gfx\lib;..\thirdparty\SDL3_image\lib\x64;..\thirdparty\SDL3_ttf\lib\x64;..\thirdparty\SDL3_mixer\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SDL3.lib;SDL3_ttf.lib;SDL3_gfx.lib;SDL3_image.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\thirdparty\SDL3\lib\x64;..\thirdparty\SDL3_gfx\lib;..\thirdparty\SDL3_image\lib\x64;..\thirdparty\SDL3_ttf\lib\x64;..\thirdparty\SDL3_mixer\lib\x64;..\thirdparty\RVO2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>RVO.lib;SDL3.lib;SDL3_ttf.lib;SDL3_gfx.lib;SDL3_image.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -147,6 +147,7 @@
     <ClCompile Include="render_texture.cpp" />
     <ClCompile Include="resources_mgr.cpp" />
     <ClCompile Include="resource_submit_system.cpp" />
+    <ClCompile Include="rvo_adapter.cpp" />
     <ClCompile Include="scene_mgr.cpp" />
     <ClCompile Include="selection_box.cpp" />
     <ClCompile Include="selection_mgr.cpp" />
@@ -179,6 +180,7 @@
     <ClInclude Include="resources_mgr.h" />
     <ClInclude Include="resources_type.h" />
     <ClInclude Include="resource_submit_system.h" />
+    <ClInclude Include="rvo_adapter.h" />
     <ClInclude Include="scene.h" />
     <ClInclude Include="scene_mgr.h" />
     <ClInclude Include="selection_box.h" />

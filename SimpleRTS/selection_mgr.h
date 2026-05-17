@@ -22,6 +22,8 @@ public:
 
     const SelectMode& get_current_mode() const;
 
+    void select_all_unit();
+
     void select_in_area(const CollisionBox& world_area);
 
     bool select_at_point(const Vector2& world_pos);

@@ -25,6 +25,25 @@ void SelectionMgr::clear()
 	selected_object_id_set.clear();
 }
 
+void SelectionMgr::select_all_unit()
+{
+	auto obj_pool = WorldEntityMgr::instance()->get_object_pool();
+	for (auto& [id, obj] : obj_pool)
+	{
+		if (!obj->check_valid())
+			continue;
+
+		auto selectable = obj->get_component<Selectable>();
+		auto unit_type = obj->get_component<UnitType>();
+		auto unit_owner = obj->get_component<Ownership>();
+		if (!selectable || !unit_type || !unit_owner || unit_owner->player_id != local_player_id)
+			continue;
+
+		selectable->is_selected = true;
+		selected_object_id_set.insert(id);
+	}
+}
+
 void SelectionMgr::select_single(GameObject* obj)
 {
 	if (!obj) return;

@@ -4,6 +4,7 @@
 #include "selection_mgr.h"
 #include "resources_mgr.h"
 #include "UI_mgr.h"
+#include "rvo_adapter.h"
 
 #include <chrono>
 
@@ -45,6 +46,8 @@ void GameScene::on_enter()
 {
     int win_w, win_h;
     SDL_GetRenderLogicalPresentation(renderer, &win_w, &win_h, nullptr);
+    RVOAdapter::instance()->init(&game_map);
+    RVOAdapter::instance()->set_fixed_timestep(0.1f);
 
     camera.init((float)win_w, (float)win_h,
         (float)(game_map.get_width() * game_map.get_cell_size()),
@@ -78,7 +81,7 @@ void GameScene::on_enter()
     factory.create_resource_by_type(ResourceEntityType::Wood, 70, 10);
     factory.create_resource_by_type(ResourceEntityType::Berries, 90, 10);
 
-    for (int i = 0;i < 30;i++)
+    for (int i = 0;i < 1;i++)
     {
         float x = 250 + i / 10 * 50;
         float y = 100 + (i % 10) * 50;

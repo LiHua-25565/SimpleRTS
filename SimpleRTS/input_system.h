@@ -23,6 +23,14 @@ public:
     void on_update(float delta);
 
 private:
+    bool left_btn_down = false;
+    bool is_left_minimap_dragging = false;
+    bool right_btn_down = false;
+    bool middle_btn_down = false;
+    bool is_key_ctrl_down = false;
+    bool is_key_alt_down = false;
+
+private:
     int local_player_id = 0;
 
     Camera* camera = nullptr;
@@ -30,15 +38,9 @@ private:
     GameMap* map = nullptr;
     SelectionBox* selection_box = nullptr;
     MoveFeedbackSystem* feedback_system = nullptr;
-
-    bool left_btn_down = false;
-    bool is_left_minimap_dragging = false;
+    
     Vector2 left_minimap_drag_start;
     Vector2 camera_start_pos;
-
-    bool right_btn_down = false;
-
-    bool middle_btn_down = false;
     Vector2 middle_drag_start;
 
     // Ð¡µØÍ¼¸¨Öú

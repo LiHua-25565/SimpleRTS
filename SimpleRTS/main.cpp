@@ -130,6 +130,8 @@ int main(int argc, char* argv[])
         nanoseconds sleep_duration = frame_duration - (steady_clock::now() - frame_start);
         if (sleep_duration > nanoseconds(0))
             std::this_thread::sleep_for(sleep_duration);
+        else
+            SDL_Log("outoftime\n");
     }
 
     SDL_DestroyRenderer(renderer);

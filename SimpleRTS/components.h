@@ -59,18 +59,21 @@ enum class MoveMode
 // 移动组件
 struct Movable : public Component {
     float speed = 60.0f;
-    Vector2 target = { -1.0f, -1.0f };  // 个人精确停止点
-    Vector2 flow_target = { -1.0f, -1.0f };  // 流场导航目标（命令中心）
+    Vector2 target = { -1.0f, -1.0f };   // 个人精确停止点
+    Vector2 flow_target = { -1.0f, -1.0f };   // 流场导航目标（命令中心）
     Vector2 velocity = { 0.0f, 0.0f };
     MoveMode move_mode = MoveMode::Land;
 
-    // 新增：让路撤离状态
-    bool is_evading = false;
-    Vector2 evade_target = { 0.0f, 0.0f };
-    float evade_time_left = 0.0f;       // 撤离剩余时间（秒）
+    // 排列状态（到达目标附近后使用）
+    bool is_arranging = false;
+    int  formation_slot = -1;
 
-    bool is_moving() const { return target.x >= 0.0f; }
-    void stop() { target = { -1.0f, -1.0f }; flow_target = { -1.0f, -1.0f }; }
+    bool is_moving() const { return target.x >= 0.0f || is_arranging; }
+    void stop() {
+        target = { -1.0f, -1.0f };
+        flow_target = { -1.0f, -1.0f };
+        is_arranging = false;
+    }
 };
 
 // 阵营组件

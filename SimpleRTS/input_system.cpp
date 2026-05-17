@@ -128,9 +128,9 @@ void InputSystem::handle_event(const SDL_Event& event)
 
                         auto* movable = unit->get_component<Movable>();
                         if (movable) {
-                            movable->target = formation_targets[unit];       // 个人精确点
+                            movable->target = building_center;       // 个人精确点
                             movable->flow_target = building_center;          // 共享流场目标，所有单位共用同一流场
-                            feedback_system->add_line_for_unit(unit, formation_targets[unit], 0.5f);
+                            feedback_system->add_line_for_unit(unit, building_center, 0.5f);
                         }
                     }
                     issued_submit = true;  // 标记已处理，不再执行后续移动逻辑
@@ -212,7 +212,9 @@ void InputSystem::handle_event(const SDL_Event& event)
 
     case SDL_EVENT_KEY_DOWN:
     {
-        if (event.key.key == SDLK_S)
+        switch (event.key.key)
+        {
+        case SDLK_S:
         {
             const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
             for (uint64_t id : id_set)
@@ -225,8 +227,49 @@ void InputSystem::handle_event(const SDL_Event& event)
                 movable->stop();
             }
         }
-        break;
+            break;
+        case SDLK_A:
+            if (is_key_ctrl_down)
+                SelectionMgr::instance()->select_all_unit();
+            break;
+        case SDLK_LCTRL:
+        case SDLK_RCTRL:
+            is_key_ctrl_down = true;
+            if (!is_key_alt_down)
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
+            else
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
+            break;
+        case SDLK_LALT:
+        case SDLK_RALT:
+            is_key_alt_down = true;
+            if (!is_key_ctrl_down)
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
+            else
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
+            break;
+        }
     }
+    break;
+    case SDL_EVENT_KEY_UP:
+    {
+        switch (event.key.key)
+        {
+        case SDLK_LCTRL:
+        case SDLK_RCTRL:
+            is_key_ctrl_down = false;
+            if (!is_key_alt_down)
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
+            break;
+        case SDLK_LALT:
+        case SDLK_RALT:
+            is_key_alt_down = false;
+            if (!is_key_ctrl_down)
+                SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
+            break;
+        }
+    }
+
     }
 }
 
@@ -237,16 +280,6 @@ void InputSystem::on_update(float delta)
     // 相机方向键移动
     camera_input(keyState);
     camera_controller.on_update(delta);   
-
-    bool ctrl = keyState[SDL_SCANCODE_LCTRL] || keyState[SDL_SCANCODE_RCTRL];
-    bool alt = keyState[SDL_SCANCODE_LALT] || keyState[SDL_SCANCODE_RALT];
-
-    if (ctrl && !alt)
-        SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
-    else if (alt && !ctrl)
-        SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
-    else
-        SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
 }
 
 void InputSystem::camera_input(const bool* keyState)

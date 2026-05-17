@@ -51,6 +51,11 @@ public:
         components.erase(typeid(T));
     }
 
+    void set_position(const Vector2& pos)
+    {
+        this->collision_box.position = pos;
+    }
+
     void set_collision_box(const CollisionBox& collision_box)
     {
         this->collision_box = collision_box;

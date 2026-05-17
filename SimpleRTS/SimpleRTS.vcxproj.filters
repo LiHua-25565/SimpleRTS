@@ -117,6 +117,9 @@
     <ClCompile Include="resource_submit_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="rvo_adapter.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -223,6 +226,9 @@
     </ClInclude>
     <ClInclude Include="building_type.h">
       <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="rvo_adapter.h">
+      <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
