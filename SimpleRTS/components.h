@@ -38,6 +38,7 @@ struct BuildingType :public Component
 struct Renderable : public Component 
 {
     SDL_Texture* texture = nullptr;
+    CollisionBox collision_box;
     Color color = Color::White;                 // 矩形颜色（会被纹理覆盖）
     Color border_color = Color::None;           // 边框颜色
     RenderLayer layer = RenderLayer::Ground;
@@ -54,6 +55,17 @@ enum class MoveMode
 {
     Land,
     Water       // 可走水路，暂未实现
+};
+
+// 近战与采集的撞击动画
+struct ImpactAnimation : public Component {
+    bool is_attacking = false;   // 是否播放中
+    float timer = 0.0f;          // 动画计时器
+    float total_duration = 0.3f; // 动画总时长（秒）
+    float bump_distance = 0.3f;  // 实际撞击距离（边长比例）
+    Vector2 direction;           // 撞击方向（单位向量）
+    float cd_timer = 0.0f;       // 冷却计时器
+    float cd_duration = 1.0f;    // 冷却时长（应与采集间隔一致）
 };
 
 // 移动组件

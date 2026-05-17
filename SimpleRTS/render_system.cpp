@@ -4,7 +4,28 @@
 #include "resources_mgr.h"
 #include "texture_cache.h"
 
-// render_system.cpp
+void RenderSystem::on_update(float delta)
+{
+    // 单位动画更新
+    const auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
+    for (const auto& [id, obj] : obj_pool)
+    {
+        if (!obj->check_valid()) continue;
+
+        auto* renderable = obj->get_component<Renderable>();
+        auto* animation = obj->get_component<ImpactAnimation>();
+        if (!renderable || !animation) continue;
+
+        animation->timer += delta;
+        animation->cd_timer += delta;
+
+        const auto& collider = obj->get_collision_box();
+        const auto& pos = collider.position;
+        float w = collider.width;
+        float h = collider.height;
+    }
+}
+
 void RenderSystem::on_render()
 {
     const auto& pool = WorldEntityMgr::instance()->get_object_pool();
@@ -14,11 +35,14 @@ void RenderSystem::on_render()
     for (const auto& [id, obj] : pool)
     {
         if (!obj->check_valid()) continue;
-
         auto* renderable = obj->get_component<Renderable>();
+        auto* animation = obj->get_component<ImpactAnimation>();
+        if (!animation || !animation->is_attacking)
+            renderable->collision_box = obj->get_collision_box();
+
         if (!renderable) continue;
 
-        const auto& collider = obj->get_collision_box();
+        const auto& collider = renderable->collision_box;
         const auto& pos = collider.position;
         float w = collider.width;
         float h = collider.height;

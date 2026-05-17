@@ -9,6 +9,7 @@
 class RenderSystem
 {
 public:
+	void on_update(float delta);
 	void on_render();
 };
 

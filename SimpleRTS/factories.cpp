@@ -128,6 +128,7 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     }
 
     obj->add_component<Selectable>();
+    obj->add_component<ImpactAnimation>();
 
     auto* movable = obj->add_component<Movable>();
     movable->speed = 60.0f;

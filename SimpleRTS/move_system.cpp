@@ -432,6 +432,10 @@ void MoveSystem::on_update(float delta)
         auto movable = obj->get_component<Movable>();
         if (!movable || !movable->is_moving()) continue;
 
+        auto animation = obj->get_component<ImpactAnimation>();
+        if (animation)
+            animation->is_attacking = false;
+
         Vector2 center_pos = obj->get_collision_box().get_center_position();
         Vector2 dir = movable->target - center_pos;
         float dist = dir.length();

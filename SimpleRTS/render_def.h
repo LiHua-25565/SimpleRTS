@@ -11,6 +11,7 @@ enum class RenderLayer
     Ground,         // 地面、地形
     Unit,           // 单位
     Building,       // 建筑
+    Animation,      // 单位动画
     Projectile,     // 投掷物
     SelectBox,      // 选中框、框选矩形
     FeedbackLine,   // 指令反馈线
