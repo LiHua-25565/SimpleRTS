@@ -5,6 +5,8 @@
 #include "collision_box.h"
 #include <vector>
 
+class GameObject;
+
 enum class TerrainType : uint8_t
 {
     Mud,
@@ -37,6 +39,9 @@ public:
         for (int y = 0; y < block_size; ++y)
             for (int x = 0; x < block_size; ++x)
                 grid[start_y + y][start_x + x] = TerrainType::Water;
+
+        generate_static_obstacle_field();
+        dynamic_obstacle_field.resize(height, std::vector<float>(width, 0.0f));
     }
 
     // 查询某一格子是否可通行
@@ -86,15 +91,23 @@ public:
         grid[y][x] = type;
     }
 
+    void add_object_to_dynamic_obstacle_field(const GameObject* object);
+
+    void remove_object_from_dynamic_obstacle_field(const GameObject* object);
+
 private:
     int cell_size = 10;       // 格子边长
     int width = 0;        // 地图宽度（格子数）
     int height = 0;        // 地图高度（格子数）
 
+    std::vector<std::vector<float>> static_obstacle_field;  // 静态障碍场（水）
+    std::vector<std::vector<float>> dynamic_obstacle_field; // 动态障碍场（建筑,资源）（后续加入实体部队）
     // 格子地形
     std::vector<std::vector<TerrainType>> grid;
 
     CollisionBox world_bounds;
+
+    void generate_static_obstacle_field();
 };
 
 #endif // !_GAME_MAP_H_

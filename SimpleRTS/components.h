@@ -2,6 +2,7 @@
 #define _COMPONENTS_H_
 
 #include "color.h"
+#include "timer.h"
 #include "render_def.h"
 #include "resources_type.h"
 #include "unit_type.h"
@@ -59,13 +60,11 @@ enum class MoveMode
 
 // 近战与采集的撞击动画
 struct ImpactAnimation : public Component {
-    bool is_attacking = false;   // 是否播放中
-    float timer = 0.0f;          // 动画计时器
-    float total_duration = 0.3f; // 动画总时长（秒）
-    float bump_distance = 0.3f;  // 实际撞击距离（边长比例）
-    Vector2 direction;           // 撞击方向（单位向量）
-    float cd_timer = 0.0f;       // 冷却计时器
-    float cd_duration = 1.0f;    // 冷却时长（应与采集间隔一致）
+    bool is_attacking = false;      // 是否播放中
+    float anim_pass_time = 0.0f;    // 动画计时器
+    float anim_wait_time = 0.3f;    // 动画总时长（秒）
+    float impact_distance = 0.8f;   // 实际撞击距离（边长比例）
+    GameObject* target = nullptr;     // 攻击目标
 };
 
 // 移动组件
@@ -84,6 +83,7 @@ struct Movable : public Component {
     void stop() {
         target = { -1.0f, -1.0f };
         flow_target = { -1.0f, -1.0f };
+        velocity = { 0.0f,0.0f };
         is_arranging = false;
     }
 };
@@ -106,15 +106,16 @@ struct Health : public Component
 // 如果还未提交已有资源就开采其他种类资源
 // 原来持有的资源将会消失
 struct Gatherer : public Component {
+    bool can_gather = true;
     float gather_interval = 1.0f;       // 每次采集间隔（秒）
+    float gather_pass_time = 0.0f;      // 采集等待时间
     int gather_amount = 10;             // 每次采集伤害（及获得的基础数量）
 
     // 携带相关
-    ResourceType carried_type = ResourceType::Gold; // 当前携带的资源类型（可设一个None值）
-    int carried_amount = 10;             // 当前已携带数量
+    ResourceType carried_type = ResourceType::None; // 当前携带的资源类型（可设一个None值）
+    int carried_amount = 0;             // 当前已携带数量
     int carry_capacity = 30;            // 最大携带量
 
-    float timer = 0.0f;                // 采集计时器
     GameObject* target_resource = nullptr;   // 采集目标
     GameObject* dropoff_target = nullptr;    // 提交目标建筑
 };

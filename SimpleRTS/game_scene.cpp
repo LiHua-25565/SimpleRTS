@@ -19,7 +19,9 @@ void GameScene::on_update(float delta)
     auto t0 = std::chrono::high_resolution_clock::now();
     input_system.on_update(delta);
     move_system.on_update(delta);
+    harvest_system.on_update(delta);
     resource_submit_system.on_update(delta);
+    render_system.on_update(delta);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     move_feedback_system.on_update(delta);
@@ -79,7 +81,8 @@ void GameScene::on_enter()
     factory.create_resource_by_type(ResourceEntityType::LGold, 30, 10);
     factory.create_resource_by_type(ResourceEntityType::Stone, 50, 10);
     factory.create_resource_by_type(ResourceEntityType::Wood, 70, 10);
-    factory.create_resource_by_type(ResourceEntityType::Berries, 90, 10);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 90, 10);
+    factory.create_resource_by_type(ResourceEntityType::Berries, 120, 10);
 
     for (int i = 0;i < 1;i++)
     {

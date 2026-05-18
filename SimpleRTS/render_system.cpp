@@ -6,23 +6,52 @@
 
 void RenderSystem::on_update(float delta)
 {
-    // 单位动画更新
-    const auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
-    for (const auto& [id, obj] : obj_pool)
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool)
     {
         if (!obj->check_valid()) continue;
 
         auto* renderable = obj->get_component<Renderable>();
-        auto* animation = obj->get_component<ImpactAnimation>();
-        if (!renderable || !animation) continue;
+        auto* anim = obj->get_component<ImpactAnimation>();
+        if (!renderable || !anim) continue;
 
-        animation->timer += delta;
-        animation->cd_timer += delta;
+        if (!anim->is_attacking)
+            continue;
 
-        const auto& collider = obj->get_collision_box();
-        const auto& pos = collider.position;
-        float w = collider.width;
-        float h = collider.height;
+        // 推进动画时间
+        anim->anim_pass_time += delta;
+
+        // 动画结束，自动关闭并复位渲染框
+        if (anim->anim_pass_time >= anim->anim_wait_time)
+        {
+            anim->is_attacking = false;
+            anim->anim_pass_time = 0.0f;
+            renderable->collision_box = obj->get_collision_box();
+            continue;
+        }
+
+        // 计算三角形波偏移量
+        float half = anim->anim_wait_time * 0.5f;
+        float progress = (anim->anim_pass_time <= half)
+            ? anim->anim_pass_time / half
+            : 1.0f - (anim->anim_pass_time - half) / half;
+
+        const auto& logic_box = obj->get_collision_box();
+        float offset = progress * anim->impact_distance * logic_box.height; // 正方形单位
+
+        // 方向保护（外部设置时已保证非零，此处兜底）
+        GameObject* target = anim->target;
+        Vector2 dir;
+        if(!target) dir = { 1.0f, 0.0f };
+        else dir = target->get_collision_box().get_center_position() - obj->get_collision_box().get_center_position();
+
+        if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
+        else dir = dir.normalize();
+
+        CollisionBox anim_box = logic_box;
+        anim_box.position.x += dir.x * offset;
+        anim_box.position.y += dir.y * offset;
+        renderable->collision_box = anim_box;
     }
 }
 
@@ -49,11 +78,12 @@ void RenderSystem::on_render()
 
         SDL_Texture* tex = nullptr;
         auto* gatherer = obj->get_component<Gatherer>();
-        if (gatherer) {
+        auto* unit_type = obj->get_component<UnitType>();
+        if (gatherer && unit_type) {
             // 农民类单位，根据携带资源决定纹理
             ResourceType carried = gatherer->carried_type; // 可能为 None
             SDL_Color color = to_sdl_color(renderable->color); // 阵营色
-            tex = TextureCache::instance()->get_carrying_unit_texture(obj->add_component<UnitType>()->type, color, (int)collider.width, (int)collider.height, carried);
+            tex = TextureCache::instance()->get_carrying_unit_texture(unit_type->type, color, (int)collider.width, (int)collider.height, carried);
         }
         else {
             tex = renderable->texture; // 普通纹理（可能已经生成过）

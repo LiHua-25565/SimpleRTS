@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -136,6 +136,7 @@
     <ClCompile Include="cursor_mgr.cpp" />
     <ClCompile Include="game_map.cpp" />
     <ClCompile Include="game_scene.cpp" />
+    <ClCompile Include="harvest_system.cpp" />
     <ClCompile Include="input_system.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="factories.cpp" />
@@ -154,6 +155,7 @@
     <ClCompile Include="selector_scene.cpp" />
     <ClCompile Include="texture_cache.cpp" />
     <ClCompile Include="UI_mgr.cpp" />
+    <ClCompile Include="util.cpp" />
     <ClCompile Include="world_entitiy_mgr.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -168,6 +170,7 @@
     <ClInclude Include="game_map.h" />
     <ClInclude Include="game_object.h" />
     <ClInclude Include="game_scene.h" />
+    <ClInclude Include="harvest_system.h" />
     <ClInclude Include="input_system.h" />
     <ClInclude Include="menu_scene.h" />
     <ClInclude Include="move_feedback_system.h" />

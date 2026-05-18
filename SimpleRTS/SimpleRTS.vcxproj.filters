@@ -120,6 +120,12 @@
     <ClCompile Include="rvo_adapter.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="harvest_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>头文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -228,6 +234,9 @@
       <Filter>头文件\Content\Objects</Filter>
     </ClInclude>
     <ClInclude Include="rvo_adapter.h">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="harvest_system.h">
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
   </ItemGroup>

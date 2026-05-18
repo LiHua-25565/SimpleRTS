@@ -13,6 +13,7 @@
 #include "move_feedback_system.h"
 #include "input_system.h"
 #include "resource_submit_system.h"
+#include "harvest_system.h"
 
 #include <vector>
 
@@ -52,6 +53,7 @@ private:
 	MoveFeedbackSystem move_feedback_system;
 	InputSystem input_system;
 	ResourceSubmitSystem resource_submit_system;
+	HarvestSystem harvest_system;
 
 	RenderTexture map_bake_tex;  // 地形烘焙大图
 	bool map_baked = false;      // 是否已经烘焙过

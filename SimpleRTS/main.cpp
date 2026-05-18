@@ -100,7 +100,8 @@ int main(int argc, char* argv[])
                 // ESC ¼ü
                 if (event.key.key == SDLK_ESCAPE)
                 {
-                    // ´ò¿ª²Ëµ¥
+                    is_fullscreen = false;
+                    SDL_SetWindowFullscreen(window, is_fullscreen);
                 }
             }
 

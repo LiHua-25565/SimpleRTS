@@ -5,7 +5,7 @@
 
 bool GameMap::is_cell_passable(int x, int y) const {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    return grid[y][x] == TerrainType::Mud;
+    return static_obstacle_field[y][x] >= 0.0f || dynamic_obstacle_field[y][x] >= 0.0f;
 }
 
 std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& world_goal, float radius) const
@@ -355,6 +355,44 @@ Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const
         }
     }
     return world_goal; // 全图无路，保持原值
+}
+
+void GameMap::generate_static_obstacle_field()
+{   
+    static_obstacle_field.resize(height, std::vector<float>(width, 0.0f));
+    for (int x = 0; x < width;x++)
+        for (int y = 0;y < height;y++)
+            static_obstacle_field[y][x] = -1.0f;
+}
+
+void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object)
+{
+    if (!object || !object->check_valid()) return;
+    const CollisionBox& box = object->get_collision_box();
+
+    int minx = std::max(0, (int)(box.position.x / cell_size));
+    int miny = std::max(0, (int)(box.position.y / cell_size));
+    int maxx = std::min(width - 1, (int)((box.position.x + box.width) / cell_size));
+    int maxy = std::min(height - 1, (int)((box.position.y + box.height) / cell_size));
+
+    for (int y = miny; y <= maxy; ++y)
+        for (int x = minx; x <= maxx; ++x)
+            dynamic_obstacle_field[y][x] = -1.0f;
+}
+
+void GameMap::remove_object_from_dynamic_obstacle_field(const GameObject* object)
+{
+    if (!object) return;
+    const CollisionBox& box = object->get_collision_box();
+
+    int minx = std::max(0, (int)(box.position.x / cell_size));
+    int miny = std::max(0, (int)(box.position.y / cell_size));
+    int maxx = std::min(width - 1, (int)((box.position.x + box.width) / cell_size));
+    int maxy = std::min(height - 1, (int)((box.position.y + box.height) / cell_size));
+
+    for (int y = miny; y <= maxy; ++y)
+        for (int x = minx; x <= maxx; ++x)
+            dynamic_obstacle_field[y][x] = 0.0f;
 }
 
 // 后续地图文件化...输入和读取

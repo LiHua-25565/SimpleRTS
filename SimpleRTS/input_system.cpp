@@ -138,6 +138,50 @@ void InputSystem::handle_event(const SDL_Event& event)
                 if (issued_submit) break; // 只响应第一个有效建筑
             }
 
+            if (!issued_submit) {
+                for (auto* obj : hit_objects) {
+                    if (!obj->check_valid()) continue;
+                    auto* harvestable = obj->get_component<Harvestable>();
+                    if (!harvestable) continue;
+                    // 精确碰撞：点击点必须在建筑碰撞盒内
+                    const auto& cb = obj->get_collision_box();
+                    if (world_click.x < cb.position.x || world_click.x > cb.position.x + cb.width ||
+                        world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height) continue;
+
+                    const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                    if (id_set.empty()) break;
+
+                    for (uint64_t id : id_set) {
+                        GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
+                        if (!unit) continue;
+                        auto* gatherer = unit->get_component<Gatherer>();
+                        if (!gatherer) continue;
+                        auto* ownership = unit->get_component<Ownership>();
+                        if (!ownership || ownership->player_id != local_player_id) continue;
+
+                        // 设置采集目标
+                        gatherer->target_resource = obj;
+
+                        // 设置移动目标到资源旁边
+                        auto* movable = unit->get_component<Movable>();
+                        if (movable) {
+                            Vector2 res_center = obj->get_collision_box().get_center_position();
+                            Vector2 unit_center = unit->get_collision_box().get_center_position();
+                            Vector2 dir = (unit_center - res_center);
+                            if (dir.length() < 0.01f) dir = { 1, 0 };
+                            dir = dir.normalize();
+                            float dist = unit->get_collision_box().width * 0.5f +
+                                obj->get_collision_box().width * 0.5f + 10.0f;
+                            movable->target = res_center + dir * dist;
+                            movable->flow_target = movable->target;
+                            feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                        }
+                        issued_submit = true;
+                    }
+                    if (issued_submit) break; // 只处理第一个有效资源
+                }
+            }
+
             // 2. 如果没有发生提交，则执行原有编队移动
             if (!issued_submit)
             {
@@ -170,6 +214,11 @@ void InputSystem::handle_event(const SDL_Event& event)
                             movable->target = formation_targets[obj];
                             movable->flow_target = world_target;
                             feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
+
+                            auto* gatherer = obj->get_component<Gatherer>();
+                            if (!gatherer) continue;
+                            gatherer->target_resource = nullptr;
+                            gatherer->dropoff_target = nullptr;
                         }
                     }
                 }
@@ -228,6 +277,26 @@ void InputSystem::handle_event(const SDL_Event& event)
             }
         }
             break;
+        case SDLK_Q:
+        {
+            const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+            for (uint64_t id : id_set)
+            {
+                GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+                if (!obj || !obj->check_valid()) continue;
+
+                // 只对己方单位生效
+                auto* ownership = obj->get_component<Ownership>();
+                if (!ownership || ownership->player_id != local_player_id) continue;
+
+                auto* anim = obj->get_component<ImpactAnimation>();
+                if (!anim || anim->is_attacking) continue;
+
+                // 触发动画
+                anim->is_attacking = true;
+            }
+            break;
+        }
         case SDLK_A:
             if (is_key_ctrl_down)
                 SelectionMgr::instance()->select_all_unit();

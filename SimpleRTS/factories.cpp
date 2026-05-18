@@ -34,11 +34,11 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
     Color color;
 
     switch (type) {
-    case ResourceEntityType::Wood:    size_cells = 2;  health = 100;  output = ResourceType::Wood;  color = Color::Green;  break;
+    case ResourceEntityType::Wood:    size_cells = 4;  health = 20;  output = ResourceType::Wood;  color = Color::Green;  break;
     case ResourceEntityType::SGold:   size_cells = 10; health = 3000; output = ResourceType::Gold;  color = Color::Yellow; break;
     case ResourceEntityType::LGold:   size_cells = 15; health = 8000; output = ResourceType::Gold;  color = Color::Yellow; break;
     case ResourceEntityType::Stone:   size_cells = 10; health = 3000; output = ResourceType::Stone; color = Color::Gray;   break;
-    case ResourceEntityType::Berries: size_cells = 4;  health = 50;   output = ResourceType::Food;  color = Color::Orange; break;
+    case ResourceEntityType::Berries: size_cells = 5;  health = 500;   output = ResourceType::Food;  color = Color::Orange; break;
     default: return nullptr;
     }
 
@@ -82,6 +82,7 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
     obj->add_component<Selectable>();
 
     WorldEntityMgr::instance()->insert_object(obj);
+    map->add_object_to_dynamic_obstacle_field(obj);
     return obj;
 }
 
@@ -185,31 +186,31 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     SDL_Color sdl_color = to_sdl_color(tc_color);
     SDL_Texture* tex = TextureCache::instance()->get_building_texture(
         BuildingEntityType::TownCenter, sdl_color, (int)w, (int)h);
-    if (tex) {
+    if (tex)
         render->texture = tex;
 
-        // 建筑结构标记
-        obj->add_component<Structure>();
-        // 资源交付能力
-        auto* dropoff = obj->add_component<ResourceDropoff>();
-        dropoff->accept_mask = ALL_MASK;
+    // 建筑结构标记
+    obj->add_component<Structure>();
+    // 资源交付能力
+    auto* dropoff = obj->add_component<ResourceDropoff>();
+    dropoff->accept_mask = ALL_MASK;
 
-        // 可选中
-        obj->add_component<Selectable>();
+    // 可选中
+    obj->add_component<Selectable>();
 
-        // 所有权
-        auto* ownership = obj->add_component<Ownership>();
-        ownership->player_id = current_player_id;
-        ownership->team_id = 0;
+    // 所有权
+    auto* ownership = obj->add_component<Ownership>();
+    ownership->player_id = current_player_id;
+    ownership->team_id = 0;
 
-        // 生命值
-        auto* health = obj->add_component<Health>();
-        health->max_health = 1000;
-        health->current_health = 1000;
+    // 生命值
+    auto* health = obj->add_component<Health>();
+    health->max_health = 1000;
+    health->current_health = 1000;
 
-        WorldEntityMgr::instance()->insert_object(obj);
-        return obj;
-    }
+    WorldEntityMgr::instance()->insert_object(obj);
+    map->add_object_to_dynamic_obstacle_field(obj);
+    return obj;
 }
 
 Color ObjectFactory::get_player_color(int player_id)
