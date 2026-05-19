@@ -67,6 +67,16 @@ struct ImpactAnimation : public Component {
     GameObject* target = nullptr;     // 攻击目标
 };
 
+// 闪烁组件
+struct FlashComponent : public Component {
+    float flash_timer = 0.0f;       // 当前闪烁计时（倒计时）
+    float flash_duration = 0.5f;    // 总闪烁时间（秒）
+    bool flash_active = false;      // 是否正在闪烁
+    float blink_interval = 0.1f;    // 闪烁间隔（亮/暗切换）
+    float blink_timer = 0.0f;       // 当前间隔计时
+    bool blink_on = true;           // 当前是否为亮状态
+};
+
 // 移动组件
 struct Movable : public Component {
     float speed = 60.0f;
@@ -100,6 +110,16 @@ struct Health : public Component
 {
     int current_health = 100;
     int max_health = 100;
+};
+
+struct Attack : public Component {
+    bool can_attack = true;
+    float attack_interval = 1.0f;   // 攻击间隔（秒）
+    float attack_pass_time = 0.0f;      // 当前冷却计时
+    int damage = 10;                // 每次攻击伤害
+    float range = 30.0f;            // 攻击范围（像素），近战约 30，远程 200+
+    bool is_ranged = false;         // 是否远程攻击（影响距离检测方式）
+    GameObject* target = nullptr;   // 攻击目标
 };
 
 // 采集单位组件

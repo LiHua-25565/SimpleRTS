@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="attack_system.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="camera_controller.cpp" />
     <ClCompile Include="cursor_mgr.cpp" />
@@ -159,6 +160,7 @@
     <ClCompile Include="world_entitiy_mgr.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="attack_system.h" />
     <ClInclude Include="building_type.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="camera_controller.h" />

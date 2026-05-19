@@ -82,7 +82,6 @@ void HarvestSystem::on_update(float delta)
 			// 资源枯竭：拿走所有剩余血量
 			gatherer->carried_amount += resource_health->current_health;
 			resource_health->current_health = 0;
-			target_resource->set_valid(false);
 			
 			// 搜索同类型新资源
 			float search_radius = 20.0f;

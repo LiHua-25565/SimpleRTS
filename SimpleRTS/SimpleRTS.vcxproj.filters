@@ -126,6 +126,9 @@
     <ClCompile Include="util.cpp">
       <Filter>头文件</Filter>
     </ClCompile>
+    <ClCompile Include="attack_system.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -237,6 +240,9 @@
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
     <ClInclude Include="harvest_system.h">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="attack_system.h">
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
   </ItemGroup>

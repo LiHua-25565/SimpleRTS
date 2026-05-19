@@ -78,7 +78,6 @@ void InputSystem::handle_event(const SDL_Event& event)
         {
             right_btn_down = false;
 
-            // 1. 检查是否点击了己方可提交资源建筑（精确碰撞）
             Vector2 world_click;
             if (is_point_in_minimap(mx, my))
                 world_click = minimap_to_world(mx, my);
@@ -89,101 +88,133 @@ void InputSystem::handle_event(const SDL_Event& event)
             std::vector<GameObject*> hit_objects;
             WorldEntityMgr::instance()->query_area(click_area, hit_objects);
 
-            bool issued_submit = false;
+            bool issued_command = false;
+
+            // 一次遍历，按优先级：提交建筑 > 资源采集 > 攻击目标
             for (auto* obj : hit_objects)
             {
                 if (!obj->check_valid()) continue;
-                auto* dropoff = obj->get_component<ResourceDropoff>();
-                if (!dropoff) continue;
-                auto* owner = obj->get_component<Ownership>();
-                if (!owner || owner->player_id != local_player_id) continue;
-
-                // 精确碰撞：点击点必须在建筑碰撞盒内
                 const auto& cb = obj->get_collision_box();
+
+                // 精确碰撞：点击点必须在碰撞盒内
                 if (world_click.x < cb.position.x || world_click.x > cb.position.x + cb.width ||
-                    world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height) continue;
+                    world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height)
+                    continue;
 
-                // 为每个携带资源的采集单位设置提交目标
-                std::vector<GameObject*> submit_units;
-                const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
-                std::vector<GameObject*> collectors;
-                for (uint64_t id : id_set) {
-                    GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
-                    if (!unit) continue;
-                    auto* gatherer = unit->get_component<Gatherer>();
-                    if (!gatherer || gatherer->carried_amount <= 0) continue;
-                    auto* ownership = unit->get_component<Ownership>();
-                    if (!ownership || ownership->player_id != local_player_id) continue;
-                    collectors.push_back(unit);
-                }
-
-                if (!collectors.empty()) {
-                    Vector2 building_center = obj->get_collision_box().get_center_position();
-                    // 2. 使用编队目标函数，以建筑中心为命令中心，为单位们分配环绕建筑的精确目标点
-                    auto formation_targets = compute_formation_targets(collectors, building_center, map);
-
-                    for (GameObject* unit : collectors) {
-                        auto* gatherer = unit->get_component<Gatherer>();
-                        gatherer->dropoff_target = obj;   // 记录提交目标建筑
-
-                        auto* movable = unit->get_component<Movable>();
-                        if (movable) {
-                            movable->target = building_center;       // 个人精确点
-                            movable->flow_target = building_center;          // 共享流场目标，所有单位共用同一流场
-                            feedback_system->add_line_for_unit(unit, building_center, 0.5f);
-                        }
-                    }
-                    issued_submit = true;  // 标记已处理，不再执行后续移动逻辑
-                }
-                if (issued_submit) break; // 只响应第一个有效建筑
-            }
-
-            if (!issued_submit) {
-                for (auto* obj : hit_objects) {
-                    if (!obj->check_valid()) continue;
-                    auto* harvestable = obj->get_component<Harvestable>();
-                    if (!harvestable) continue;
-                    // 精确碰撞：点击点必须在建筑碰撞盒内
-                    const auto& cb = obj->get_collision_box();
-                    if (world_click.x < cb.position.x || world_click.x > cb.position.x + cb.width ||
-                        world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height) continue;
-
+                // ---- 1. 己方可提交建筑 ----
+                auto* dropoff = obj->get_component<ResourceDropoff>();
+                auto* owner = obj->get_component<Ownership>();
+                if (dropoff && owner && owner->player_id == local_player_id)
+                {
                     const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
-                    if (id_set.empty()) break;
+                    for (uint64_t id : id_set)
+                    {
+                        GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
+                        if (!unit) continue;
+                        auto* gatherer = unit->get_component<Gatherer>();
+                        if (!gatherer || gatherer->carried_amount <= 0) continue;
+                        auto* unit_owner = unit->get_component<Ownership>();
+                        if (!unit_owner || unit_owner->player_id != local_player_id) continue;
 
-                    for (uint64_t id : id_set) {
+                        gatherer->dropoff_target = obj;
+
+                        // 计算建筑外围目标点（与采集资源一致）
+                        auto* movable = unit->get_component<Movable>();
+                        if (movable)
+                        {
+                            Vector2 unit_center = unit->get_collision_box().get_center_position();
+                            Vector2 build_center = obj->get_collision_box().get_center_position();
+                            Vector2 dir_to_build = (unit_center - build_center);
+                            if (dir_to_build.length() < 0.01f) dir_to_build = { 1, 0 };
+                            dir_to_build = dir_to_build.normalize();
+                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 10.0f;
+                            movable->target = build_center + dir_to_build * dist;
+                            movable->flow_target = movable->target;
+                            feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                        }
+                        issued_command = true;
+                        obj->start_flash();
+                    }
+                    if (issued_command) break;
+                }
+
+                // ---- 2. 资源采集 ----
+                auto* harvestable = obj->get_component<Harvestable>();
+                if (harvestable && !issued_command)
+                {
+                    const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                    for (uint64_t id : id_set)
+                    {
                         GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
                         if (!unit) continue;
                         auto* gatherer = unit->get_component<Gatherer>();
                         if (!gatherer) continue;
-                        auto* ownership = unit->get_component<Ownership>();
-                        if (!ownership || ownership->player_id != local_player_id) continue;
+                        auto* unit_owner = unit->get_component<Ownership>();
+                        if (!unit_owner || unit_owner->player_id != local_player_id) continue;
 
-                        // 设置采集目标
                         gatherer->target_resource = obj;
 
-                        // 设置移动目标到资源旁边
                         auto* movable = unit->get_component<Movable>();
-                        if (movable) {
+                        if (movable)
+                        {
                             Vector2 res_center = obj->get_collision_box().get_center_position();
                             Vector2 unit_center = unit->get_collision_box().get_center_position();
-                            Vector2 dir = (unit_center - res_center);
-                            if (dir.length() < 0.01f) dir = { 1, 0 };
-                            dir = dir.normalize();
-                            float dist = unit->get_collision_box().width * 0.5f +
-                                obj->get_collision_box().width * 0.5f + 10.0f;
-                            movable->target = res_center + dir * dist;
+                            Vector2 dir_to_res = (unit_center - res_center);
+                            if (dir_to_res.length() < 0.01f) dir_to_res = { 1, 0 };
+                            dir_to_res = dir_to_res.normalize();
+                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 10.0f;
+                            movable->target = res_center + dir_to_res * dist;
                             movable->flow_target = movable->target;
                             feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                         }
-                        issued_submit = true;
+                        issued_command = true;
+                        obj->start_flash();
                     }
-                    if (issued_submit) break; // 只处理第一个有效资源
+                    if (issued_command) break;
+                }
+
+                // ---- 3. 攻击目标（非己方且有血量） ----
+                auto* health_comp = obj->get_component<Health>();
+                if (health_comp && !issued_command)
+                {
+                    if (owner && owner->player_id == local_player_id)
+                        continue; // 不能攻击己方
+
+                    const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
+                    for (uint64_t id : id_set)
+                    {
+                        GameObject* unit = WorldEntityMgr::instance()->get_object_by_id(id);
+                        if (!unit) continue;
+                        auto* attack = unit->get_component<Attack>();
+                        if (!attack) continue;
+                        auto* u_own = unit->get_component<Ownership>();
+                        if (!u_own || u_own->player_id != local_player_id) continue;
+
+                        attack->target = obj;
+
+                        // 近战单位移动到目标旁边
+                        auto* movable = unit->get_component<Movable>();
+                        if (movable)
+                        {
+                            Vector2 target_center = obj->get_collision_box().get_center_position();
+                            Vector2 unit_center = unit->get_collision_box().get_center_position();
+                            Vector2 dir_to_move = (unit_center - target_center);
+                            if (dir_to_move.length() < 0.01f) dir_to_move = { 1, 0 };
+                            dir_to_move = dir_to_move.normalize();
+                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 5.0f;
+                            movable->target = target_center + dir_to_move * dist;
+                            movable->flow_target = movable->target;
+                            feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                        }
+                        issued_command = true;
+                        obj->start_flash();
+                    }
+                    if (issued_command) break;
                 }
             }
 
-            // 2. 如果没有发生提交，则执行原有编队移动
-            if (!issued_submit)
+            // 4. 如果以上命令都未触发，执行编队移动
+            if (!issued_command)
             {
                 const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
                 if (!id_set.empty())
@@ -215,10 +246,16 @@ void InputSystem::handle_event(const SDL_Event& event)
                             movable->flow_target = world_target;
                             feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
 
+                            // 移动命令会清除采集/攻击状态（符合 RTS 常规）
                             auto* gatherer = obj->get_component<Gatherer>();
-                            if (!gatherer) continue;
-                            gatherer->target_resource = nullptr;
-                            gatherer->dropoff_target = nullptr;
+                            if (gatherer) {
+                                gatherer->target_resource = nullptr;
+                                gatherer->dropoff_target = nullptr;
+                            }
+                            auto* attack = obj->get_component<Attack>();
+                            if (attack) {
+                                attack->target = nullptr;
+                            }
                         }
                     }
                 }

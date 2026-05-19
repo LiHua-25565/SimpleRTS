@@ -47,6 +47,11 @@ void WorldEntityMgr::on_update()
 	{
 		GameObject* object = it->second;
 
+		// 如果对象血量为0，就设置为失效
+		auto* health = object->get_component<Health>();
+		if (health && health->current_health <= 0)
+			object->set_valid(false);
+
 		// 如果对象失效就删除
 		if (!object->check_valid())
 		{

@@ -11,6 +11,21 @@ void RenderSystem::on_update(float delta)
     {
         if (!obj->check_valid()) continue;
 
+        // 更新闪烁
+        auto* flash = obj->get_component<FlashComponent>();
+        if (flash && flash->flash_active) {
+            flash->flash_timer -= delta;
+            if (flash->flash_timer <= 0.0f) {
+                flash->flash_active = false;
+                flash->flash_timer = 0.0f;
+            }
+            flash->blink_timer -= delta;
+            if (flash->blink_timer <= 0.0f) {
+                flash->blink_timer += flash->blink_interval;
+                flash->blink_on = !flash->blink_on;
+            }
+        }
+
         auto* renderable = obj->get_component<Renderable>();
         auto* anim = obj->get_component<ImpactAnimation>();
         if (!renderable || !anim) continue;
@@ -102,15 +117,19 @@ void RenderSystem::on_render()
         int player_id = ownership ? ownership->player_id : 0;
         bool is_local = (player_id == local_player_id);
 
-        if (is_selected)
+        // ---- 边框处理（闪烁 > 选中 > 阵营） ----
+        auto* flash = obj->get_component<FlashComponent>();
+        if (flash && flash->flash_active && flash->blink_on)
         {
-            // 选中状态：边框亮白且加粗
+            // 闪烁状态：亮白加粗
             cmd.border_width = 2;
             cmd.border_color = to_sdl_color(Color::White);
-
-            // 己方单位选中时纹理变亮（可选，这里通过纹理染色实现）
-            if (is_local)
-                cmd.color = to_sdl_color(Color::White);  // 保持原色即可
+        }
+        else if (is_selected)
+        {
+            // 选中状态：亮白加粗
+            cmd.border_width = 2;
+            cmd.border_color = to_sdl_color(Color::White);
         }
         else
         {

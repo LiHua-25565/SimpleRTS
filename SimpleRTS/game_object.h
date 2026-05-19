@@ -97,6 +97,15 @@ public:
         is_valid = flag;
     }
 
+    void start_flash() {
+        auto* flash = get_component<FlashComponent>();
+        if (!flash) flash = add_component<FlashComponent>();
+        flash->flash_active = true;
+        flash->flash_timer = 0.5f;
+        flash->blink_timer = 0.0f;
+        flash->blink_on = true;
+    }
+
 protected:
     uint64_t id = 0;
     CollisionBox collision_box;

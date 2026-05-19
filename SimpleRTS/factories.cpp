@@ -71,6 +71,8 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
         render->color = color;
     }
 
+    obj->add_component<FlashComponent>();
+
     auto* harvestable = obj->add_component<Harvestable>();
     harvestable->entity_type = type;
     harvestable->output_type = output;
@@ -130,6 +132,7 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
 
     obj->add_component<Selectable>();
     obj->add_component<ImpactAnimation>();
+    obj->add_component<FlashComponent>();
 
     auto* movable = obj->add_component<Movable>();
     movable->speed = 60.0f;
@@ -146,6 +149,9 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     auto* health = obj->add_component<Health>();
     health->max_health = 50;
     health->current_health = 50;
+
+    auto* attack = obj->add_component<Attack>();
+    attack->damage = 10;
 
     // 所有权
     auto* ownership = obj->add_component<Ownership>();
@@ -191,6 +197,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
 
     // 建筑结构标记
     obj->add_component<Structure>();
+    obj->add_component<FlashComponent>();
     // 资源交付能力
     auto* dropoff = obj->add_component<ResourceDropoff>();
     dropoff->accept_mask = ALL_MASK;

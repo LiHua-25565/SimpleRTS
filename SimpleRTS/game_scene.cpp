@@ -20,6 +20,7 @@ void GameScene::on_update(float delta)
     input_system.on_update(delta);
     move_system.on_update(delta);
     harvest_system.on_update(delta);
+    attack_system.on_update(delta);
     resource_submit_system.on_update(delta);
     render_system.on_update(delta);
     auto t1 = std::chrono::high_resolution_clock::now();
