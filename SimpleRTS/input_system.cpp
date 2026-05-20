@@ -1,8 +1,10 @@
 #include "input_system.h"
 #include "move_system.h"
 #include "selection_mgr.h"
+#include "resources_mgr.h"
 #include "world_entity_mgr.h"
 #include "render_mgr.h"
+#include "util.h"
 #include <cmath>
 #include <algorithm>
 
@@ -13,6 +15,7 @@ void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeed
     this->selection_box = selBox;
     this->feedback_system = feedback;
     this->local_player_id = id;
+    local_team_id = ResourcesMgr::instance()->get_team_id(local_player_id);
     camera_controller.set_camera(camera);
 }
 
@@ -89,6 +92,7 @@ void InputSystem::handle_event(const SDL_Event& event)
             WorldEntityMgr::instance()->query_area(click_area, hit_objects);
 
             bool issued_command = false;
+            const int local_team_id = ResourcesMgr::instance()->get_team_id(local_player_id);
 
             // 一次遍历，按优先级：提交建筑 > 资源采集 > 攻击目标
             for (auto* obj : hit_objects)
@@ -96,7 +100,7 @@ void InputSystem::handle_event(const SDL_Event& event)
                 if (!obj->check_valid()) continue;
                 const auto& cb = obj->get_collision_box();
 
-                // 精确碰撞：点击点必须在碰撞盒内
+                // 精确碰撞
                 if (world_click.x < cb.position.x || world_click.x > cb.position.x + cb.width ||
                     world_click.y < cb.position.y || world_click.y > cb.position.y + cb.height)
                     continue;
@@ -116,19 +120,18 @@ void InputSystem::handle_event(const SDL_Event& event)
                         auto* unit_owner = unit->get_component<Ownership>();
                         if (!unit_owner || unit_owner->player_id != local_player_id) continue;
 
-                        gatherer->dropoff_target = obj;
+                        gatherer->dropoff_target_id = obj->get_id();
 
-                        // 计算建筑外围目标点（与采集资源一致）
                         auto* movable = unit->get_component<Movable>();
                         if (movable)
                         {
-                            Vector2 unit_center = unit->get_collision_box().get_center_position();
-                            Vector2 build_center = obj->get_collision_box().get_center_position();
-                            Vector2 dir_to_build = (unit_center - build_center);
-                            if (dir_to_build.length() < 0.01f) dir_to_build = { 1, 0 };
-                            dir_to_build = dir_to_build.normalize();
-                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 10.0f;
-                            movable->target = build_center + dir_to_build * dist;
+                            movable->target = compute_outer_target(
+                                unit->get_collision_box().get_center_position(),
+                                obj->get_collision_box().get_center_position(),
+                                unit->get_collision_box(),
+                                cb,
+                                10.0f
+                            );
                             movable->flow_target = movable->target;
                             feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                         }
@@ -152,18 +155,18 @@ void InputSystem::handle_event(const SDL_Event& event)
                         auto* unit_owner = unit->get_component<Ownership>();
                         if (!unit_owner || unit_owner->player_id != local_player_id) continue;
 
-                        gatherer->target_resource = obj;
+                        gatherer->target_resource_id = obj->get_id();
 
                         auto* movable = unit->get_component<Movable>();
                         if (movable)
                         {
-                            Vector2 res_center = obj->get_collision_box().get_center_position();
-                            Vector2 unit_center = unit->get_collision_box().get_center_position();
-                            Vector2 dir_to_res = (unit_center - res_center);
-                            if (dir_to_res.length() < 0.01f) dir_to_res = { 1, 0 };
-                            dir_to_res = dir_to_res.normalize();
-                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 10.0f;
-                            movable->target = res_center + dir_to_res * dist;
+                            movable->target = compute_outer_target(
+                                unit->get_collision_box().get_center_position(),
+                                obj->get_collision_box().get_center_position(),
+                                unit->get_collision_box(),
+                                cb,
+                                10.0f
+                            );
                             movable->flow_target = movable->target;
                             feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                         }
@@ -177,8 +180,8 @@ void InputSystem::handle_event(const SDL_Event& event)
                 auto* health_comp = obj->get_component<Health>();
                 if (health_comp && !issued_command)
                 {
-                    if (owner && owner->player_id == local_player_id)
-                        continue; // 不能攻击己方
+                    if (owner && owner->team_id == local_team_id)
+                        continue;
 
                     const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
                     for (uint64_t id : id_set)
@@ -190,21 +193,43 @@ void InputSystem::handle_event(const SDL_Event& event)
                         auto* u_own = unit->get_component<Ownership>();
                         if (!u_own || u_own->player_id != local_player_id) continue;
 
-                        attack->target = obj;
+                        attack->target_id = obj->get_id();
+                        attack->auto_attack = true;
 
-                        // 近战单位移动到目标旁边
                         auto* movable = unit->get_component<Movable>();
                         if (movable)
                         {
-                            Vector2 target_center = obj->get_collision_box().get_center_position();
                             Vector2 unit_center = unit->get_collision_box().get_center_position();
-                            Vector2 dir_to_move = (unit_center - target_center);
-                            if (dir_to_move.length() < 0.01f) dir_to_move = { 1, 0 };
-                            dir_to_move = dir_to_move.normalize();
-                            float dist = unit->get_collision_box().width * 0.5f + cb.width * 0.5f + 5.0f;
-                            movable->target = target_center + dir_to_move * dist;
-                            movable->flow_target = movable->target;
-                            feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                            Vector2 target_center = obj->get_collision_box().get_center_position();
+
+                            if (attack->is_ranged)
+                            {
+                                float dist_to_target = (target_center - unit_center).length();
+                                if (dist_to_target > attack->range)
+                                {
+                                    movable->target = compute_ranged_outer_target(
+                                        unit_center,
+                                        target_center,
+                                        unit->get_collision_box(),
+                                        attack->range,
+                                        5.0f
+                                    );
+                                    movable->flow_target = movable->target;
+                                    feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                                }
+                            }
+                            else
+                            {
+                                movable->target = compute_outer_target(
+                                    unit_center,
+                                    target_center,
+                                    unit->get_collision_box(),
+                                    cb,
+                                    5.0f
+                                );
+                                movable->flow_target = movable->target;
+                                feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
+                            }
                         }
                         issued_command = true;
                         obj->start_flash();
@@ -213,7 +238,7 @@ void InputSystem::handle_event(const SDL_Event& event)
                 }
             }
 
-            // 4. 如果以上命令都未触发，执行编队移动
+            // 4. 编队移动（未触发任何命令）
             if (!issued_command)
             {
                 const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
@@ -246,15 +271,16 @@ void InputSystem::handle_event(const SDL_Event& event)
                             movable->flow_target = world_target;
                             feedback_system->add_line_for_unit(obj, formation_targets[obj], 0.5f);
 
-                            // 移动命令会清除采集/攻击状态（符合 RTS 常规）
+                            // 清除采集/攻击状态
                             auto* gatherer = obj->get_component<Gatherer>();
                             if (gatherer) {
-                                gatherer->target_resource = nullptr;
-                                gatherer->dropoff_target = nullptr;
+                                gatherer->target_resource_id = 0;
+                                gatherer->dropoff_target_id = 0;
                             }
                             auto* attack = obj->get_component<Attack>();
                             if (attack) {
-                                attack->target = nullptr;
+                                attack->target_id = 0;
+                                attack->auto_attack = false;
                             }
                         }
                     }
@@ -311,9 +337,15 @@ void InputSystem::handle_event(const SDL_Event& event)
                 auto* ownership = obj->get_component<Ownership>();
                 if (!movable || !ownership || ownership->player_id != local_player_id) continue;
                 movable->stop();
+
+                auto* attack = obj->get_component<Attack>();
+                if (attack) {
+                    attack->target_id = 0;
+                    attack->auto_attack = false;
+                }
             }
-        }
             break;
+        }
         case SDLK_Q:
         {
             const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
@@ -322,15 +354,14 @@ void InputSystem::handle_event(const SDL_Event& event)
                 GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
                 if (!obj || !obj->check_valid()) continue;
 
-                // 只对己方单位生效
                 auto* ownership = obj->get_component<Ownership>();
                 if (!ownership || ownership->player_id != local_player_id) continue;
 
                 auto* anim = obj->get_component<ImpactAnimation>();
                 if (!anim || anim->is_attacking) continue;
 
-                // 触发动画
                 anim->is_attacking = true;
+                // 动画方向由 RenderSystem 根据速度或默认方向处理，这里不设 target_id
             }
             break;
         }
@@ -355,8 +386,8 @@ void InputSystem::handle_event(const SDL_Event& event)
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
             break;
         }
+        break;
     }
-    break;
     case SDL_EVENT_KEY_UP:
     {
         switch (event.key.key)
@@ -374,8 +405,8 @@ void InputSystem::handle_event(const SDL_Event& event)
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
             break;
         }
+        break;
     }
-
     }
 }
 

@@ -44,11 +44,19 @@ public:
     // 获取某个玩家关注的资源类型列表
     const std::vector<ResourceType>& get_player_resource_types(int player_id) const;
 
+    // 设置玩家对应的队伍 ID
+    void set_player_team(int player_id, int team_id);
+    // 获取玩家的队伍 ID（默认与 player_id 相同）
+    int get_team_id(int player_id) const;
+
+
 private:
     ResourcesMgr() = default;
+    ~ResourcesMgr() = default;
     std::vector<ResourceBag> player_resources;   // 按玩家 ID 索引
     std::vector<std::vector<ResourceType>> player_resource_types;
     int local_player_id = -1;                     // 当前玩家
+    std::unordered_map<int, int> player_team_map;
     std::function<void(int player_id, ResourceType type, int new_value)> on_resource_changed;
 };
 

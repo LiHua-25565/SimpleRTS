@@ -11,17 +11,18 @@ void ResourceSubmitSystem::on_update(float delta)
         if (!obj->check_valid()) continue;
 
         auto* gatherer = obj->get_component<Gatherer>();
-        if (!gatherer || !gatherer->dropoff_target || gatherer->carried_amount <= 0) 
+        if (!gatherer || gatherer->dropoff_target_id == 0 || gatherer->carried_amount <= 0)
             continue;
 
-        auto* building = gatherer->dropoff_target;
-        if (!building->check_valid()) {
-            gatherer->dropoff_target = nullptr;
+        // 通过 ID 获取提交目标建筑
+        auto* building = WorldEntityMgr::instance()->get_object_by_id(gatherer->dropoff_target_id);
+        if (!building || !building->check_valid()) {
+            gatherer->dropoff_target_id = 0;
             continue;
         }
         auto* dropoff = building->get_component<ResourceDropoff>();
         if (!dropoff) {
-            gatherer->dropoff_target = nullptr;
+            gatherer->dropoff_target_id = 0;
             continue;
         }
 
@@ -51,7 +52,7 @@ void ResourceSubmitSystem::on_update(float delta)
         // 检查掩码
         uint8_t mask = 1 << (static_cast<int>(gatherer->carried_type) - 1);
         if (!(dropoff->accept_mask & mask)) {
-            gatherer->dropoff_target = nullptr;
+            gatherer->dropoff_target_id = 0;
             continue;
         }
 
@@ -62,19 +63,31 @@ void ResourceSubmitSystem::on_update(float delta)
         ResourcesMgr::instance()->add_resource(player_id, gatherer->carried_type, gatherer->carried_amount);
         gatherer->carried_amount = 0;
         gatherer->carried_type = ResourceType::None;
+        gatherer->dropoff_target_id = 0; // 提交后清除建筑目标
 
         // 如果单位有目标资源，那么移动并采集
-        GameObject* target_resource = gatherer->target_resource;
-        if (target_resource)
+        if (gatherer->target_resource_id != 0)
         {
-            const auto& res_box = target_resource->get_collision_box();
-            Vector2 res_center = res_box.get_center_position();
-            Vector2 dir_to_res = (unit_center - res_center);
-            if (dir_to_res.length() < 0.01f) dir_to_res = { 1.0f, 0.0f };
-            dir_to_res = dir_to_res.normalize();
-            float dist = unit_box.width * 0.5f + res_box.width * 0.5f + 10.0f;
-            movable->target = res_center + dir_to_res * dist;
-            movable->flow_target = movable->target;
+            auto* target_resource = WorldEntityMgr::instance()->get_object_by_id(gatherer->target_resource_id);
+            if (target_resource && target_resource->check_valid())
+            {
+                movable->target = compute_outer_target(
+                    unit_center,
+                    target_resource->get_collision_box().get_center_position(),
+                    unit_box,
+                    target_resource->get_collision_box(),
+                    10.0f
+                );
+                movable->flow_target = movable->target;
+            }
+            else
+            {
+                // 资源已无效，停止移动
+                gatherer->target_resource_id = 0;
+                movable->target = { -1.0f, -1.0f };
+                movable->flow_target = { -1.0f, -1.0f };
+                movable->velocity = { 0.0f, 0.0f };
+            }
         }
         else
         {
@@ -83,6 +96,5 @@ void ResourceSubmitSystem::on_update(float delta)
             movable->flow_target = { -1.0f, -1.0f };
             movable->velocity = { 0.0f, 0.0f };
         }
-        
     }
 }

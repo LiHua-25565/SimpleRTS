@@ -32,6 +32,7 @@ private:
 
 private:
     int local_player_id = 0;
+    int local_team_id = 0;
 
     Camera* camera = nullptr;
     CameraController camera_controller;

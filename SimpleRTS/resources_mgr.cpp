@@ -72,3 +72,15 @@ const std::vector<ResourceType>& ResourcesMgr::get_player_resource_types(int pla
 	if (player_id < 0 || player_id >= (int)player_resource_types.size()) return empty;
 	return player_resource_types[player_id];
 }
+
+void ResourcesMgr::set_player_team(int player_id, int team_id) {
+	player_team_map[player_id] = team_id;
+}
+
+int ResourcesMgr::get_team_id(int player_id) const {
+	auto it = player_team_map.find(player_id);
+	if (it != player_team_map.end())
+		return it->second;
+	// 默认情况下，没有设置映射的队伍 ID = player_id
+	return player_id;
+}

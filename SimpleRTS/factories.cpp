@@ -1,5 +1,6 @@
 #include "factories.h"
 #include "texture_cache.h"
+#include "resources_mgr.h"
 
 void ObjectFactory::init(GameMap* map) {
 
@@ -93,6 +94,8 @@ GameObject* ObjectFactory::create_unit_by_type(UnitEntityType type, const Collis
     switch (type) {
     case UnitEntityType::Villager:
         return create_villager(box, allow_overlap);
+    case UnitEntityType::Archer:
+        return create_archer(box, allow_overlap);
         // 未来添加：
         // case UnitEntityType::Cavalry: return create_cavalry(box, allow_overlap);
         // ...
@@ -156,7 +159,62 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     // 所有权
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
-    ownership->team_id = 0;
+    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
+
+    WorldEntityMgr::instance()->insert_object(obj);
+    return obj;
+}
+
+GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_overlap)
+{
+    if (!map) return nullptr;
+
+    // 检查可通行性
+    int cx = (int)(box.position.x / map->get_cell_size());
+    int cy = (int)(box.position.y / map->get_cell_size());
+    if (!map->is_cell_passable(cx, cy)) return nullptr;
+
+    // 检查重叠
+    if (!allow_overlap && check_overlap(box)) return nullptr;
+
+    auto* obj = new GameObject(box);
+
+    // 纹理（阵营色）
+    auto* render = obj->add_component<Renderable>();
+    Color unit_color = get_player_color(current_player_id);
+    render->color = unit_color;
+    SDL_Color sdl_color = to_sdl_color(unit_color);
+    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(
+        UnitEntityType::Archer, sdl_color, (int)box.width, (int)box.height);
+    if (tex) {
+        render->texture = tex;
+    }
+
+    obj->add_component<Selectable>();
+    obj->add_component<ImpactAnimation>();
+
+    auto* movable = obj->add_component<Movable>();
+    movable->speed = 60.0f; // 远程单位速度可能慢一点
+
+    auto* unitType = obj->add_component<UnitType>();
+    unitType->type = UnitEntityType::Archer;
+
+    // 攻击组件（远程）
+    auto* attack = obj->add_component<Attack>();
+    attack->damage = 8;
+    attack->attack_interval = 1.5f;  // 稍慢
+    attack->range = 200.0f;          // 远程射程
+    attack->is_ranged = true;
+
+    // 生命值
+    auto* health = obj->add_component<Health>();
+    health->max_health = 40;         // 弓兵血量较低
+    health->current_health = 40;
+
+    // 所有权
+    auto* ownership = obj->add_component<Ownership>();
+    ownership->player_id = current_player_id;
+    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
 
     WorldEntityMgr::instance()->insert_object(obj);
     return obj;
@@ -208,7 +266,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     // 所有权
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
-    ownership->team_id = 0;
+    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
 
     // 生命值
     auto* health = obj->add_component<Health>();

@@ -7,7 +7,7 @@
 void RenderSystem::on_update(float delta)
 {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id, obj] : pool)
+    for (auto& [entityId, obj] : pool) // 避免与 target_id 变量名混淆，这里改为 entityId
     {
         if (!obj->check_valid()) continue;
 
@@ -54,11 +54,26 @@ void RenderSystem::on_update(float delta)
         const auto& logic_box = obj->get_collision_box();
         float offset = progress * anim->impact_distance * logic_box.height; // 正方形单位
 
-        // 方向保护（外部设置时已保证非零，此处兜底）
-        GameObject* target = anim->target;
+        // 方向：根据目标ID获取目标实体，计算朝向
         Vector2 dir;
-        if(!target) dir = { 1.0f, 0.0f };
-        else dir = target->get_collision_box().get_center_position() - obj->get_collision_box().get_center_position();
+        uint64_t targetId = anim->target_id;
+        if (targetId != 0)
+        {
+            GameObject* target = WorldEntityMgr::instance()->get_object_by_id(targetId);
+            if (target && target->check_valid())
+            {
+                Vector2 target_center = target->get_collision_box().get_center_position();
+                dir = target_center - obj->get_collision_box().get_center_position();
+            }
+            else
+            {
+                dir = { 1.0f, 0.0f }; // 目标无效，使用默认方向
+            }
+        }
+        else
+        {
+            dir = { 1.0f, 0.0f }; // 无目标，使用默认方向
+        }
 
         if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
         else dir = dir.normalize();

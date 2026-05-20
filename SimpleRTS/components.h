@@ -64,7 +64,7 @@ struct ImpactAnimation : public Component {
     float anim_pass_time = 0.0f;    // 动画计时器
     float anim_wait_time = 0.3f;    // 动画总时长（秒）
     float impact_distance = 0.8f;   // 实际撞击距离（边长比例）
-    GameObject* target = nullptr;     // 攻击目标
+    uint64_t target_id = 0;  // 攻击/采集目标的实体 ID
 };
 
 // 闪烁组件
@@ -119,7 +119,9 @@ struct Attack : public Component {
     int damage = 10;                // 每次攻击伤害
     float range = 30.0f;            // 攻击范围（像素），近战约 30，远程 200+
     bool is_ranged = false;         // 是否远程攻击（影响距离检测方式）
-    GameObject* target = nullptr;   // 攻击目标
+    uint64_t target_id = 0;  // 攻击目标的实体 ID
+
+    bool auto_attack = false;   // 是否自动索敌（右键攻击后为 true，移动/停止后为 false）
 };
 
 // 采集单位组件
@@ -136,8 +138,8 @@ struct Gatherer : public Component {
     int carried_amount = 0;             // 当前已携带数量
     int carry_capacity = 30;            // 最大携带量
 
-    GameObject* target_resource = nullptr;   // 采集目标
-    GameObject* dropoff_target = nullptr;    // 提交目标建筑
+    uint64_t target_resource_id = 0;   // 采集目标实体 ID
+    uint64_t dropoff_target_id = 0;    // 提交目标建筑实体 ID
 };
 
 // 标记建筑实体

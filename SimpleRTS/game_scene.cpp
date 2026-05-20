@@ -68,6 +68,10 @@ void GameScene::on_enter()
     SDL_Log("on_enter: renderer=%p, font=%p", renderer, font);
     ResourcesMgr::instance()->init(3);
     ResourcesMgr::instance()->set_local_player_id(local_player_id);
+    ResourcesMgr::instance()->set_player_team(0, 0); // 中立
+    ResourcesMgr::instance()->set_player_team(1, 1);
+    ResourcesMgr::instance()->set_player_team(2, 2);
+
     SelectionMgr::instance()->set_local_player_id(local_player_id);
     TextureCache::instance()->init(renderer, font);
     factory.init(&game_map);
@@ -95,8 +99,15 @@ void GameScene::on_enter()
         factory.create_unit_by_type(UnitEntityType::Villager,collision_box);
     }
 
+    // 示例：创建几个弓兵
+    for (int i = 0; i < 3; ++i) {
+        CollisionBox box{ {500.0f, 400.0f + i * 50.0f}, 32, 32 };
+        factory.create_archer(box);
+    }
+
     factory.set_player_id(0);
     factory.create_unit_by_type(UnitEntityType::Villager, { {300.0f,300.0f},32.0f,32.0f });
+    factory.create_unit_by_type(UnitEntityType::Villager, { {350.0f,350.0f},32.0f,32.0f });
 
 }
 

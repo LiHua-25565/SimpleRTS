@@ -54,6 +54,7 @@ public:
     void set_position(const Vector2& pos)
     {
         this->collision_box.position = pos;
+        is_dirty = true;
     }
 
     void set_collision_box(const CollisionBox& collision_box)

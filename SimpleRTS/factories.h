@@ -18,6 +18,7 @@ public:
     GameObject* create_unit_by_type(UnitEntityType type, const CollisionBox& box, bool allow_overlap = false);
 
     GameObject* create_villager(const CollisionBox& box, bool allow_overlap = false);   // 快捷创建（农民）
+    GameObject* create_archer(const CollisionBox& box, bool allow_overlap = false);      
 
     GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
 
