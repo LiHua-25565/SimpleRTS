@@ -122,26 +122,49 @@ void AttackSystem::on_update(float delta)
 
         attack->can_attack = false;
 
-        // 播放动画（存储目标 ID）
-        auto* animation = obj->get_component<ImpactAnimation>();
-        if (animation && !animation->is_attacking)
+        if (attack->is_ranged)
         {
-            animation->is_attacking = true;
-            animation->target_id = target->get_id();
+            // 生成投射物
+            int player_id = 0;
+            auto* own = obj->get_component<Ownership>();
+            if (own) player_id = own->player_id;
+            factory->set_player_id(player_id);
+            factory->create_projectile_by_type(ProjectileType::Arrow, unit_center, target_center, attack->damage, target->get_id());
+            // 触发反向 ImpactAnimation 模拟后坐力
+            auto* anim = obj->get_component<ImpactAnimation>();
+            if (anim && !anim->is_attacking) {
+                anim->is_attacking = true;
+                anim->anim_pass_time = 0.0f;
+                anim->direction = (unit_center - target_center).normalize(); // 向后
+                anim->impact_distance = 0.3f;  // 后坐力较小
+                anim->anim_wait_time = 0.2f;   // 更快
+            }
         }
-
-        // 造成伤害
-        if (target_health)
+        else
         {
+            // 近战逻辑不变
             if (target_health->current_health <= attack->damage)
             {
                 target_health->current_health = 0;
-                // 目标死亡，下一帧会自动索敌
+                attack->target_id = 0;
             }
             else
             {
                 target_health->current_health -= attack->damage;
             }
+
+            // 触发撞击动画
+            auto* anim = obj->get_component<ImpactAnimation>();
+            if (anim && !anim->is_attacking)
+            {
+                anim->is_attacking = true;
+                anim->direction = dir; // dir 是单位指向资源的方向
+            }
         }
     }
+}
+
+void AttackSystem::set_factory(ObjectFactory* factory)
+{
+    this->factory = factory;
 }

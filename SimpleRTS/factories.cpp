@@ -278,6 +278,42 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     return obj;
 }
 
+// factories.cpp
+uint64_t ObjectFactory::create_projectile_by_type(ProjectileType type, const Vector2& start, const Vector2& target, int damage, uint64_t target_id)
+{
+    switch (type) {
+    case ProjectileType::Arrow:
+        return create_arrow(start, target, damage, target_id);
+    default:
+        return 0;
+    }
+}
+
+// factories.cpp
+uint64_t ObjectFactory::create_arrow(const Vector2& start, const Vector2& target, int damage, uint64_t target_id)
+{
+    float w = 12.0f, h = 4.0f;
+    CollisionBox box{ {start.x - w / 2, start.y - h / 2}, w, h };
+    auto* obj = new GameObject(box);
+
+    auto* render = obj->add_component<Renderable>();
+    Color arrow_color = get_player_color(current_player_id);   // 使用当前玩家颜色
+    render->color = arrow_color;
+
+    auto* proj = obj->add_component<Projectile>();
+    proj->speed = 600.0f;
+    proj->target_id = target_id;
+    proj->damage = damage;
+
+    auto* movable = obj->add_component<Movable>();
+    Vector2 dir = (target - start).normalize();
+    movable->velocity = dir * proj->speed;
+    movable->target = { -1, -1 };
+
+    WorldEntityMgr::instance()->insert_object(obj);
+    return obj->get_id();
+}
+
 Color ObjectFactory::get_player_color(int player_id)
 {
     switch (player_id) {

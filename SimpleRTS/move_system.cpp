@@ -425,17 +425,64 @@ void MoveSystem::move_units() {
 
 void MoveSystem::on_update(float delta)
 {
-    auto obj_pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id,obj] : obj_pool)
+    auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
+    float map_w = (float)map->get_width() * map->get_cell_size();
+    float map_h = (float)map->get_height() * map->get_cell_size();
+
+    for (auto& [id, obj] : obj_pool)
     {
         if (!obj->check_valid()) continue;
-        auto movable = obj->get_component<Movable>();
+
+        // ---- 投射物优先处理 ----
+        if (auto* proj = obj->get_component<Projectile>())
+        {
+            auto* target = WorldEntityMgr::instance()->get_object_by_id(proj->target_id);
+            if (!target || !target->check_valid())
+            {
+                obj->set_valid(false);
+                continue;
+            }
+
+            auto* movable = obj->get_component<Movable>();
+            if (movable)
+            {
+                Vector2 new_pos = obj->get_collision_box().position + movable->velocity * delta;
+                obj->set_position(new_pos);
+
+                // 边界检查：超出地图则失效
+                const auto& box = obj->get_collision_box();
+                if (new_pos.x < -box.width - 100.0f || new_pos.y < -box.height - 100.0f ||
+                    new_pos.x > map_w + box.width + 100.0f || new_pos.y > map_h + box.height + 100.0f)
+                {
+                    obj->set_valid(false);
+                    continue;
+                }
+            }
+
+            if (obj->get_collision_box().intersects(target->get_collision_box()))
+            {
+                auto* target_health = target->get_component<Health>();
+                if (target_health)
+                {
+                    target_health->current_health -= proj->damage;
+                    if (target_health->current_health <= 0)
+                        target_health->current_health = 0;
+                }
+                WorldEntityMgr::instance()->destroy_object(obj);
+                continue;
+            }
+            continue; // 跳过普通单位移动
+        }
+
+        // ---- 普通单位移动 ----
+        auto* movable = obj->get_component<Movable>();
         if (!movable || !movable->is_moving()) continue;
 
         Vector2 center_pos = obj->get_collision_box().get_center_position();
         Vector2 dir = movable->target - center_pos;
         float dist = dir.length();
-        if (dist < 1.0f) {
+        if (dist < 1.0f)
+        {
             movable->stop();
             continue;
         }
@@ -446,6 +493,12 @@ void MoveSystem::on_update(float delta)
         Vector2 pos = obj->get_collision_box().position;
         movable->velocity = dir.normalize() * step;
         pos += movable->velocity;
+
+        // 边界钳位
+        if (pos.x < 0.0f) pos.x = 0.0f;
+        if (pos.y < 0.0f) pos.y = 0.0f;
+        if (pos.x > map_w - obj->get_collision_box().width)  pos.x = map_w - obj->get_collision_box().width;
+        if (pos.y > map_h - obj->get_collision_box().height) pos.y = map_h - obj->get_collision_box().height;
 
         obj->set_position(pos);
     }

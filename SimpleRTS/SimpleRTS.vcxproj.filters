@@ -245,5 +245,8 @@
     <ClInclude Include="attack_system.h">
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
+    <ClInclude Include="projectile_type.h">
+      <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

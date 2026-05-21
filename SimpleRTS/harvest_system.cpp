@@ -72,11 +72,11 @@ void HarvestSystem::on_update(float delta)
             need_to_find_dropoff = true;
 
         // 播放动画（存储目标 ID）
-        auto* animation = obj->get_component<ImpactAnimation>();
-        if (!need_to_find_dropoff && animation && !animation->is_attacking)
+        auto* anim = obj->get_component<ImpactAnimation>();
+        if (!need_to_find_dropoff && anim && !anim->is_attacking)
         {
-            animation->is_attacking = true;
-            animation->target_id = res_id;    // 改为 ID
+            anim->is_attacking = true;
+            anim->direction = dir; // dir 是单位指向目标的方向
         }
 
         int gather_amount = std::min(gatherer->gather_amount, gatherer->carry_capacity - gatherer->carried_amount);

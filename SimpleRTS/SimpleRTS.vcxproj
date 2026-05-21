@@ -177,6 +177,7 @@
     <ClInclude Include="menu_scene.h" />
     <ClInclude Include="move_feedback_system.h" />
     <ClInclude Include="move_system.h" />
+    <ClInclude Include="projectile_type.h" />
     <ClInclude Include="quad_tree.h" />
     <ClInclude Include="render_def.h" />
     <ClInclude Include="render_mgr.h" />

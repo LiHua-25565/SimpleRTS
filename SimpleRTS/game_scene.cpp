@@ -76,6 +76,7 @@ void GameScene::on_enter()
     TextureCache::instance()->init(renderer, font);
     factory.init(&game_map);
     move_system.set_map(&game_map);
+    attack_system.set_factory(&factory);
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system, local_player_id);
     update_ui_layout();
 

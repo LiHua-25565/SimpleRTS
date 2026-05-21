@@ -7,6 +7,7 @@
 #include "resources_type.h"
 #include "unit_type.h"
 #include "building_type.h"
+#include "projectile_type.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -64,7 +65,7 @@ struct ImpactAnimation : public Component {
     float anim_pass_time = 0.0f;    // 动画计时器
     float anim_wait_time = 0.3f;    // 动画总时长（秒）
     float impact_distance = 0.8f;   // 实际撞击距离（边长比例）
-    uint64_t target_id = 0;  // 攻击/采集目标的实体 ID
+    Vector2 direction = { 1.0f, 0.0f }; // 冲击方向（单位向量），默认向右
 };
 
 // 闪烁组件
@@ -159,9 +160,11 @@ struct Harvestable : public Component {
 };
 
 // 抛射物实体
-struct Projectile : public Component
-{
-    // 抛射物实体
+struct Projectile : public Component {
+    float speed = 400.0f;            // 飞行速度（像素/秒）
+    uint64_t target_id = 0;         // 目标实体 ID
+    int damage = 0;                 // 命中伤害
+    int attacker_team_id = 0;       // 攻击方队伍 ID（暂未用，可预留）
 };
 
 #endif // !_COMPONENTS_H_

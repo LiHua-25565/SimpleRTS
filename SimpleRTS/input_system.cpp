@@ -170,9 +170,18 @@ void InputSystem::handle_event(const SDL_Event& event)
                             movable->flow_target = movable->target;
                             feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                         }
-                        issued_command = true;
-                        obj->start_flash();
+
+                        // Çå³ý¹¥»÷×´Ì¬
+                        auto* attack = unit->get_component<Attack>();
+                        if (attack) {
+                            attack->target_id = 0;
+                            attack->auto_attack = false;
+                        }
                     }
+
+                    issued_command = true;
+                    obj->start_flash();
+
                     if (issued_command) break;
                 }
 
@@ -217,6 +226,10 @@ void InputSystem::handle_event(const SDL_Event& event)
                                     movable->flow_target = movable->target;
                                     feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                                 }
+                                else
+                                {
+                                    movable->stop();
+                                }
                             }
                             else
                             {
@@ -230,7 +243,15 @@ void InputSystem::handle_event(const SDL_Event& event)
                                 movable->flow_target = movable->target;
                                 feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                             }
+
+                            // Çå³ý²É¼¯×´Ì¬
+                            auto* gatherer = unit->get_component<Gatherer>();
+                            if (gatherer) {
+                                gatherer->target_resource_id = 0;
+                                gatherer->dropoff_target_id = 0;
+                            }
                         }
+                        
                         issued_command = true;
                         obj->start_flash();
                     }

@@ -22,6 +22,9 @@ public:
 
     GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
 
+    uint64_t create_projectile_by_type(ProjectileType type, const Vector2& start, const Vector2& target, int damage, uint64_t target_id);
+    uint64_t create_arrow(const Vector2& start, const Vector2& target, int damage, uint64_t target_id);
+
     // 新增：设置玩家ID（用于阵营纹理）
     void set_player_id(int playerId) { current_player_id = playerId; }
     GameObject* check_overlap(const CollisionBox& box) const;
