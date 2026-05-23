@@ -1,11 +1,16 @@
 #ifndef _UI_MGR_H_
 #define _UI_MGR_H_
 
-#include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
+#include "ui_label.h"
+#include "ui_panel.h"
+#include "resources_mgr.h"
+
 #include <string>
 #include <vector>
-#include "resources_mgr.h"
+#include <memory>
+
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 class UIMgr
 {
@@ -17,6 +22,7 @@ public:
     void update_layout(int screen_w, int screen_h);
     void update_content();
     void on_render();
+    void build_resource_panel();
 
 private:
     UIMgr() = default;
@@ -25,6 +31,9 @@ private:
     SDL_Renderer* renderer = nullptr;
     TTF_Font* font = nullptr;
     int font_size = 18;
+
+    std::unique_ptr<UIComponent> ui_root;   // UI 组件树根节点
+    ui_label* resource_labels[4] = { nullptr };   // 快速更新资源数值的指针
 
     // 资源面板相关
     std::vector<ResourceType> displayed_types;

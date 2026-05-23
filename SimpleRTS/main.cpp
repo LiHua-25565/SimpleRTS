@@ -65,10 +65,6 @@ int main(int argc, char* argv[])
 
     bool is_fullscreen = false;
 
-    RenderMgr::instance()->set_world_size(8000, 8000);
-    RenderMgr::instance()->set_minimap_position(20, 20);
-    RenderMgr::instance()->set_minimap_size(160, 160);
-
     // ÉèÖÃÂß¼­·Ö±æÂÊ
     SDL_SetRenderLogicalPresentation(
         renderer,

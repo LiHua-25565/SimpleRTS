@@ -129,6 +129,15 @@
     <ClCompile Include="attack_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="ui_component.cpp">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_panel.cpp">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_label.cpp">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -247,6 +256,15 @@
     </ClInclude>
     <ClInclude Include="projectile_type.h">
       <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_component.h">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_panel.h">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_label.h">
+      <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

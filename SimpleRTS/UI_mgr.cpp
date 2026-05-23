@@ -75,19 +75,11 @@ void UIMgr::update_content()
 {
     auto* res = ResourcesMgr::instance();
     int player = res->get_local_player_id();
-    int count = static_cast<int>(displayed_types.size());
-    bool changed = false;
-
-    for (int i = 0; i < count; ++i) {
-        ResourceType type = displayed_types[i];
+    for (int i = 0; i < 4; ++i) {
+        ResourceType type = static_cast<ResourceType>(i + 1); // 跳过 None
         int val = res->get_resource(player, type);
-        if (val != resource_values[i]) {
-            resource_values[i] = val;
-            changed = true;
-        }
-    }
-    if (changed) {
-        rebuild_resource_textures();
+        if (resource_labels[i])
+            resource_labels[i]->set_text(std::to_string(val));
     }
 }
 
@@ -157,4 +149,35 @@ void UIMgr::destroy_resource_textures()
         if (tex) SDL_DestroyTexture(tex);
     }
     resource_textures.clear();
+}
+
+void UIMgr::build_resource_panel()
+{
+    // 根面板：透明，位于左下角
+    auto root = std::make_unique<ui_panel>(SDL_Color{ 0, 0, 0, 0 });
+    root->set_anchor(UIAnchor::BottomLeft);
+    root->set_size_percent(0.12f, 0.16f);    // 宽 12%，高 16%
+    root->set_offset(10, -10);                // 左间距 10，底间距 10
+
+    // 四个资源条：金、木、肉、石，垂直排列
+    for (int i = 0; i < 4; ++i)
+    {
+        auto bar = root->add_child<ui_panel>(SDL_Color{ 30, 30, 30, 255 });
+        bar->set_anchor(UIAnchor::TopLeft);
+        bar->set_size_percent(1.0f, 0.25f);
+        bar->set_offset(0, i * root->get_rect().h * 0.25f);
+
+        // 资源名称标签（固定在左侧）
+        auto name_label = bar->add_child<ui_label>(font, resource_names[i], SDL_Color{ 255, 215, 0, 255 });
+        name_label->set_anchor(UIAnchor::MiddleLeft);
+        name_label->set_offset(5, 0);
+
+        // 资源数值标签（靠右显示，动态更新）
+        auto value_label = bar->add_child<ui_label>(font, "0", SDL_Color{ 255, 215, 0, 255 });
+        value_label->set_anchor(UIAnchor::MiddleRight);
+        value_label->set_offset(-5, 0);
+        resource_labels[i] = value_label;
+    }
+
+    ui_root = std::move(root);
 }

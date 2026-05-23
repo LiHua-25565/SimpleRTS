@@ -39,16 +39,17 @@ void GameScene::on_update(float delta)
     auto ms3 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1000.0;
 
     static int frame_counter = 0;
-    if (++frame_counter % 60 == 0) {  // 每60帧输出一次，避免刷屏
-        SDL_Log("FrameTimings: Systems=%.3fms, Feedback&ui=%.3fms, WorldUpdate=%.3fms",
-            ms1, ms2, ms3);
-    }
+    //if (++frame_counter % 60 == 0) {  // 每60帧输出一次，避免刷屏
+    //    SDL_Log("FrameTimings: Systems=%.3fms, Feedback&ui=%.3fms, WorldUpdate=%.3fms",
+    //        ms1, ms2, ms3);
+    //}
 }
 
 void GameScene::on_enter()
 {
     int win_w, win_h;
-    SDL_GetRenderLogicalPresentation(renderer, &win_w, &win_h, nullptr);
+    win_w = 1280;  
+    win_h = 720;
     RVOAdapter::instance()->init(&game_map);
     RVOAdapter::instance()->set_fixed_timestep(0.1f);
 

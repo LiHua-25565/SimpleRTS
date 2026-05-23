@@ -155,7 +155,10 @@
     <ClCompile Include="selection_mgr.cpp" />
     <ClCompile Include="selector_scene.cpp" />
     <ClCompile Include="texture_cache.cpp" />
+    <ClCompile Include="ui_component.cpp" />
+    <ClCompile Include="ui_label.cpp" />
     <ClCompile Include="UI_mgr.cpp" />
+    <ClCompile Include="ui_panel.cpp" />
     <ClCompile Include="util.cpp" />
     <ClCompile Include="world_entitiy_mgr.cpp" />
   </ItemGroup>
@@ -194,7 +197,10 @@
     <ClInclude Include="selector_scene.h" />
     <ClInclude Include="texture_cache.h" />
     <ClInclude Include="timer.h" />
+    <ClInclude Include="ui_component.h" />
+    <ClInclude Include="ui_label.h" />
     <ClInclude Include="UI_mgr.h" />
+    <ClInclude Include="ui_panel.h" />
     <ClInclude Include="unit_type.h" />
     <ClInclude Include="util.h" />
     <ClInclude Include="vector2.h" />
