@@ -233,6 +233,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
 
     obj->add_component<Structure>();
     obj->add_component<FlashComponent>();
+    obj->add_component<BuildingType>()->type = BuildingEntityType::TownCenter;
 
     auto* dropoff = obj->add_component<ResourceDropoff>();
     dropoff->accept_mask = ALL_MASK;

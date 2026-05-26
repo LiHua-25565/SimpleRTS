@@ -15,12 +15,16 @@ public:
     InputSystem() = default;
 
     // 在 GameScene::on_enter 中调用，设置依赖
-    void init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback, int local_player_id);
+    void init(Camera* cam, GameMap* map, SelectionBox* sel_box, MoveFeedbackSystem* feedback,
+        int player_id, SDL_Window* window);
 
     // 处理所有输入事件
     void handle_event(const SDL_Event& event);
 
     void on_update(float delta);
+
+    void toggle_fullscreen();
+    void exit_fullscreen();
 
 private:
     bool ui_captured_mouse = false;
@@ -30,6 +34,10 @@ private:
     bool middle_btn_down = false;
     bool is_key_ctrl_down = false;
     bool is_key_alt_down = false;
+
+private:
+    SDL_Window* window = nullptr;
+    bool is_fullscreen = false;
 
 private:
     int local_player_id = 0;

@@ -249,6 +249,19 @@ uint32_t TextureCache::get_resource_texture(ResourceEntityType type, int width, 
     return id;
 }
 
+bool TextureCache::get_texture_size(uint32_t id, float& w, float& h) const
+{
+    SDL_Texture* tex = get_texture_by_id(id);
+    if (!tex) return false;
+    float fw, fh;
+    if (SDL_GetTextureSize(tex, &fw, &fh)) {
+        w = fw;
+        h = fh;
+        return true;
+    }
+    return false;
+}
+
 SDL_Texture* TextureCache::create_resource_texture(ResourceEntityType type, int width, int height)
 {
     if (!renderer || !base_font) return nullptr;

@@ -162,6 +162,7 @@ void AttackSystem::on_update(float delta)
             }
         }
     }
+
 }
 
 void AttackSystem::set_factory(ObjectFactory* factory)

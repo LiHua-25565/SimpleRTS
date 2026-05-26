@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
     if (!font) {
         SDL_Log("FATAL: TTF_OpenFont failed: %s", SDL_GetError());
     }
-    UIMgr::instance()->init(renderer, font);
+    UIMgr::instance()->init();
 
     auto game_scene = new GameScene();
     game_scene->set_font(font);

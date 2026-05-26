@@ -26,6 +26,7 @@ public:
 
     // ---- 文字纹理（返回纹理 ID） ----
     uint32_t get_text_texture(const std::string& text, SDL_Color color, int font_size);
+    bool get_texture_size(uint32_t id, float& w, float& h) const;
 
     // ---- 纹理 ID 操作 ----
     SDL_Texture* get_texture_by_id(uint32_t id) const;   // 通过 ID 获取裸指针（仅渲染时使用）

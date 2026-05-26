@@ -2,7 +2,6 @@
 #define _UI_MGR_H_
 
 #include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
 #include <vector>
 #include <string>
 #include <functional>
@@ -34,7 +33,7 @@ enum class PanelAnchor {
     TopRight
 };
 
-// ---------- 面板（一组区域） ----------
+// ---------- 面板 ----------
 struct ui_panel {
     std::string name;
     PanelAnchor anchor = PanelAnchor::BottomLeft;
@@ -60,7 +59,7 @@ class UIMgr {
 public:
     static UIMgr* instance();
 
-    void init(SDL_Renderer* renderer, TTF_Font* font);
+    void init();                                    // 不再需要任何参数
     void shutdown();
     void update_layout(int screen_w, int screen_h);
     void update_content();
@@ -81,13 +80,10 @@ private:
     void update_selection_panel();
     void init_attribute_rows();
 
-    SDL_Renderer* renderer = nullptr;
-    TTF_Font* font = nullptr;
-    int font_size = 18;
+    int font_size = 18;                             // 当前字号，仅用于传递
 
     std::vector<ui_panel> panels;
 
-    // 缓存，避免重复重建
     uint64_t last_selected_id = 0;
     std::vector<int> last_resource_value_cache;
 

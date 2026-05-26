@@ -9,13 +9,15 @@
 #include <cmath>
 #include <algorithm>
 
-void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* selBox, MoveFeedbackSystem* feedback, int id)
+void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* sel_box,
+    MoveFeedbackSystem* feedback, int player_id, SDL_Window* win)
 {
-    this->camera = cam;
+    camera = cam;
     this->map = map;
-    this->selection_box = selBox;
-    this->feedback_system = feedback;
-    this->local_player_id = id;
+    selection_box = sel_box;
+    feedback_system = feedback;
+    local_player_id = player_id;
+    window = win; 
     local_team_id = ResourcesMgr::instance()->get_team_id(local_player_id);
     camera_controller.set_camera(camera);
 }
@@ -261,7 +263,7 @@ void InputSystem::handle_event(const SDL_Event& event)
                                 gatherer->dropoff_target_id = 0;
                             }
                         }
-                        
+
                         issued_command = true;
                         obj->start_flash();
                     }
@@ -360,6 +362,28 @@ void InputSystem::handle_event(const SDL_Event& event)
     {
         switch (event.key.key)
         {
+            // ---------- 全屏切换 ----------
+        case SDLK_F11:
+        {
+            toggle_fullscreen();
+            break;
+        }
+
+        case SDLK_ESCAPE:
+        {
+            exit_fullscreen();
+            break;
+        }
+
+        case SDLK_RETURN:   // Enter
+            // 利用维护的 is_key_alt_down 状态来判断组合键
+        {
+            if (is_key_alt_down)
+                toggle_fullscreen();
+            break;
+        }
+
+            // ---------- 游戏控制 ----------
         case SDLK_S:
         {
             const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
@@ -395,33 +419,41 @@ void InputSystem::handle_event(const SDL_Event& event)
                 if (!anim || anim->is_attacking) continue;
 
                 anim->is_attacking = true;
-                // 动画方向由 RenderSystem 根据速度或默认方向处理，这里不设 target_id
             }
             break;
         }
         case SDLK_A:
+        {
             if (is_key_ctrl_down)
                 SelectionMgr::instance()->select_all_unit();
             break;
+        }
+
         case SDLK_LCTRL:
         case SDLK_RCTRL:
+        {
             is_key_ctrl_down = true;
             if (!is_key_alt_down)
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
             else
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
             break;
+        }
+
         case SDLK_LALT:
         case SDLK_RALT:
+        {
             is_key_alt_down = true;
             if (!is_key_ctrl_down)
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Remove);
             else
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Add);
-            break;
+        }
+        break;
         }
         break;
     }
+
     case SDL_EVENT_KEY_UP:
     {
         switch (event.key.key)
@@ -432,6 +464,7 @@ void InputSystem::handle_event(const SDL_Event& event)
             if (!is_key_alt_down)
                 SelectionMgr::instance()->set_select_mode(SelectionMgr::SelectMode::Normal);
             break;
+
         case SDLK_LALT:
         case SDLK_RALT:
             is_key_alt_down = false;
@@ -500,4 +533,20 @@ void InputSystem::move_camera_to_minimap(float x, float y)
     new_cam_pos.x = world.x - camera->get_screen_w() / 2.0f / camera->get_scale();
     new_cam_pos.y = world.y - camera->get_screen_h() / 2.0f / camera->get_scale();
     camera->set_position(new_cam_pos);
+}
+
+void InputSystem::toggle_fullscreen()
+{
+    is_fullscreen = !is_fullscreen;
+    if (window)
+        SDL_SetWindowFullscreen(window, is_fullscreen);
+}
+
+void InputSystem::exit_fullscreen()
+{
+    if (is_fullscreen)
+    {
+        is_fullscreen = false;
+        SDL_SetWindowFullscreen(window, false);
+    }
 }

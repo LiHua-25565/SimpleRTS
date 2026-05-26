@@ -48,9 +48,7 @@ void GameScene::on_update(float delta)
 
 void GameScene::on_enter()
 {
-    int win_w, win_h;
-    win_w = 1280;  
-    win_h = 720;
+    int win_w = 1280, win_h = 720;
     RVOAdapter::instance()->init(&game_map);
     RVOAdapter::instance()->set_fixed_timestep(0.1f);
 
@@ -65,12 +63,11 @@ void GameScene::on_enter()
         (float)(game_map.get_width() * game_map.get_cell_size()),
         (float)(game_map.get_height() * game_map.get_cell_size()));
     bake_terrain();
-    RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture_id());
+    RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture_id()); // 纹理 ID
 
-    SDL_Log("on_enter: renderer=%p, font=%p", renderer, font);
     ResourcesMgr::instance()->init(3);
     ResourcesMgr::instance()->set_local_player_id(local_player_id);
-    ResourcesMgr::instance()->set_player_team(0, 0); // 中立
+    ResourcesMgr::instance()->set_player_team(0, 0);
     ResourcesMgr::instance()->set_player_team(1, 1);
     ResourcesMgr::instance()->set_player_team(2, 2);
 
@@ -79,7 +76,12 @@ void GameScene::on_enter()
     factory.init(&game_map);
     move_system.set_map(&game_map);
     attack_system.set_factory(&factory);
-    input_system.init(&camera, &game_map, &selection_box, &move_feedback_system, local_player_id);
+
+    // ★ 获取窗口并初始化输入系统
+    SDL_Window* win = SDL_GetRenderWindow(renderer);  // SDL3 通过渲染器获取窗口
+    input_system.init(&camera, &game_map, &selection_box, &move_feedback_system,
+        local_player_id, win);           // 传入窗口
+
     update_ui_layout();
 
     factory.set_player_id(local_player_id);
@@ -92,26 +94,22 @@ void GameScene::on_enter()
     factory.create_resource_by_type(ResourceEntityType::Wood, 90, 10);
     factory.create_resource_by_type(ResourceEntityType::Berries, 120, 10);
 
-    for (int i = 0;i < 1;i++)
-    {
+    for (int i = 0; i < 1; i++) {
         float x = 250 + i / 10 * 50;
         float y = 100 + (i % 10) * 50;
-        float w = 32;
-        float h = 32;
-        CollisionBox collision_box{ {x,y},w,h };
-        factory.create_unit_by_type(UnitEntityType::Villager,collision_box);
+        float w = 32, h = 32;
+        CollisionBox collision_box{ {x, y}, w, h };
+        factory.create_unit_by_type(UnitEntityType::Villager, collision_box);
     }
 
-    // 示例：创建几个弓兵
     for (int i = 0; i < 3; ++i) {
         CollisionBox box{ {500.0f, 400.0f + i * 50.0f}, 32, 32 };
         factory.create_archer(box);
     }
 
     factory.set_player_id(0);
-    factory.create_unit_by_type(UnitEntityType::Villager, { {300.0f,300.0f},32.0f,32.0f });
-    factory.create_unit_by_type(UnitEntityType::Villager, { {350.0f,350.0f},32.0f,32.0f });
-
+    factory.create_unit_by_type(UnitEntityType::Villager, { {300.0f, 300.0f}, 32.0f, 32.0f });
+    factory.create_unit_by_type(UnitEntityType::Villager, { {350.0f, 350.0f}, 32.0f, 32.0f });
 }
 
 void GameScene::on_exit()
