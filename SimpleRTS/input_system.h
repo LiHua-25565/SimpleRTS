@@ -23,6 +23,7 @@ public:
     void on_update(float delta);
 
 private:
+    bool ui_captured_mouse = false;
     bool left_btn_down = false;
     bool is_left_minimap_dragging = false;
     bool right_btn_down = false;

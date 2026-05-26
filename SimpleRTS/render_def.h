@@ -26,7 +26,7 @@ struct RenderCmd
     bool is_line = false;
 
     // ¾ØÐÎ
-    SDL_Texture* texture = nullptr;
+    uint32_t texture_id = 0;
     Vector2 position;
     float w = 0;
     float h = 0;

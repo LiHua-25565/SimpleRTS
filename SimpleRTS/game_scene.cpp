@@ -26,6 +26,7 @@ void GameScene::on_update(float delta)
     auto t1 = std::chrono::high_resolution_clock::now();
 
     move_feedback_system.on_update(delta);
+    UIMgr::instance()->update_layout(screen_w_, screen_h_);
     UIMgr::instance()->update_content();
     auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -64,7 +65,7 @@ void GameScene::on_enter()
         (float)(game_map.get_width() * game_map.get_cell_size()),
         (float)(game_map.get_height() * game_map.get_cell_size()));
     bake_terrain();
-    RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture());
+    RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture_id());
 
     SDL_Log("on_enter: renderer=%p, font=%p", renderer, font);
     ResourcesMgr::instance()->init(3);

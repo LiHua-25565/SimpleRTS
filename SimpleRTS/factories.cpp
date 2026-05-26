@@ -3,7 +3,6 @@
 #include "resources_mgr.h"
 
 void ObjectFactory::init(GameMap* map) {
-
     this->map = map;
 }
 
@@ -13,12 +12,11 @@ GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const
     WorldEntityMgr::instance()->query_area(box, candidates);
 
     for (auto* obj : candidates) {
-        if (!obj->check_valid()) continue;  // 跳过即将销毁的
-        // 跳过投射物等临时实体（如果你有 Projectile 组件，可在此过滤）
-        if (obj->get_component<Projectile>()) continue; // 假设有 Projectile 组件
+        if (!obj->check_valid()) continue;
+        if (obj->get_component<Projectile>()) continue;
 
         if (obj->get_collision_box().intersects(box)) {
-            return obj;   // 发现重叠
+            return obj;
         }
     }
     return nullptr;
@@ -50,23 +48,21 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
 
     CollisionBox box{ {x, y}, w, h };
 
-    // 检查整个资源区域是否全部可通行（不能有水）
     for (int row = 0; row < size_cells; ++row)
         for (int col = 0; col < size_cells; ++col)
             if (!map->is_cell_passable(grid_x + col, grid_y + row))
                 return nullptr;
 
-    // 如果不允许重叠，检查实体遮挡
     if (!allow_overlap && check_overlap(box))
         return nullptr;
 
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    SDL_Texture* tex = TextureCache::instance()->get_resource_texture( type, (int)w, (int)h);
-    if (tex) {
-        render->texture = tex;
-        render->color = color;
+    uint32_t tex_id = TextureCache::instance()->get_resource_texture(type, (int)w, (int)h);
+    if (tex_id) {
+        render->texture_id = tex_id;
+        render->color = color;          // 备份色在纹理失效时使用
     }
     else {
         render->color = color;
@@ -96,9 +92,6 @@ GameObject* ObjectFactory::create_unit_by_type(UnitEntityType type, const Collis
         return create_villager(box, allow_overlap);
     case UnitEntityType::Archer:
         return create_archer(box, allow_overlap);
-        // 未来添加：
-        // case UnitEntityType::Cavalry: return create_cavalry(box, allow_overlap);
-        // ...
     default:
         return nullptr;
     }
@@ -108,29 +101,23 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
 {
     if (!map) return nullptr;
 
-    // 检查可通行性
     int cx = (int)(box.position.x / map->get_cell_size());
     int cy = (int)(box.position.y / map->get_cell_size());
     if (!map->is_cell_passable(cx, cy)) return nullptr;
 
-    // 检查重叠
     if (!allow_overlap && check_overlap(box)) return nullptr;
 
     auto* obj = new GameObject(box);
 
-    // 纹理
     auto* render = obj->add_component<Renderable>();
-
-    // 1. 设置单位的自身颜色（阵营颜色）
     Color unit_color = get_player_color(current_player_id);
     render->color = unit_color;
 
-    // 2. 获取纹理时传入 SDL_Color
     SDL_Color sdl_color = to_sdl_color(unit_color);
-    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(
+    uint32_t tex_id = TextureCache::instance()->get_unit_texture(
         UnitEntityType::Villager, sdl_color, (int)box.width, (int)box.height);
-    if (tex) {
-        render->texture = tex;
+    if (tex_id) {
+        render->texture_id = tex_id;
     }
 
     obj->add_component<Selectable>();
@@ -143,12 +130,10 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     auto* unitType = obj->add_component<UnitType>();
     unitType->type = UnitEntityType::Villager;
 
-    // 采集组件
     auto* gatherer = obj->add_component<Gatherer>();
     gatherer->gather_amount = 10;
     gatherer->gather_interval = 1.0f;
 
-    // 生命值
     auto* health = obj->add_component<Health>();
     health->max_health = 50;
     health->current_health = 50;
@@ -156,7 +141,6 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     auto* attack = obj->add_component<Attack>();
     attack->damage = 10;
 
-    // 所有权
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
     ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
@@ -169,49 +153,44 @@ GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_ove
 {
     if (!map) return nullptr;
 
-    // 检查可通行性
     int cx = (int)(box.position.x / map->get_cell_size());
     int cy = (int)(box.position.y / map->get_cell_size());
     if (!map->is_cell_passable(cx, cy)) return nullptr;
 
-    // 检查重叠
     if (!allow_overlap && check_overlap(box)) return nullptr;
 
     auto* obj = new GameObject(box);
 
-    // 纹理（阵营色）
     auto* render = obj->add_component<Renderable>();
     Color unit_color = get_player_color(current_player_id);
     render->color = unit_color;
+
     SDL_Color sdl_color = to_sdl_color(unit_color);
-    SDL_Texture* tex = TextureCache::instance()->get_unit_texture(
+    uint32_t tex_id = TextureCache::instance()->get_unit_texture(
         UnitEntityType::Archer, sdl_color, (int)box.width, (int)box.height);
-    if (tex) {
-        render->texture = tex;
+    if (tex_id) {
+        render->texture_id = tex_id;
     }
 
     obj->add_component<Selectable>();
     obj->add_component<ImpactAnimation>();
 
     auto* movable = obj->add_component<Movable>();
-    movable->speed = 60.0f; // 远程单位速度可能慢一点
+    movable->speed = 60.0f;
 
     auto* unitType = obj->add_component<UnitType>();
     unitType->type = UnitEntityType::Archer;
 
-    // 攻击组件（远程）
     auto* attack = obj->add_component<Attack>();
     attack->damage = 8;
-    attack->attack_interval = 1.5f;  // 稍慢
-    attack->range = 200.0f;          // 远程射程
+    attack->attack_interval = 1.5f;
+    attack->range = 200.0f;
     attack->is_ranged = true;
 
-    // 生命值
     auto* health = obj->add_component<Health>();
-    health->max_health = 40;         // 弓兵血量较低
+    health->max_health = 40;
     health->current_health = 40;
 
-    // 所有权
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
     ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
@@ -232,7 +211,6 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     float y = (float)(grid_y * cell_size);
     CollisionBox box{ {x, y}, w, h };
 
-    // 可通行性检查
     for (int row = 0; row < size_cells; ++row)
         for (int col = 0; col < size_cells; ++col)
             if (!map->is_cell_passable(grid_x + col, grid_y + row))
@@ -242,33 +220,29 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
 
     auto* obj = new GameObject(box);
 
-    // 渲染组件：使用建筑纹理
     auto* render = obj->add_component<Renderable>();
     Color tc_color = get_player_color(current_player_id);
     render->color = tc_color;
 
     SDL_Color sdl_color = to_sdl_color(tc_color);
-    SDL_Texture* tex = TextureCache::instance()->get_building_texture(
+    uint32_t tex_id = TextureCache::instance()->get_building_texture(
         BuildingEntityType::TownCenter, sdl_color, (int)w, (int)h);
-    if (tex)
-        render->texture = tex;
+    if (tex_id) {
+        render->texture_id = tex_id;
+    }
 
-    // 建筑结构标记
     obj->add_component<Structure>();
     obj->add_component<FlashComponent>();
-    // 资源交付能力
+
     auto* dropoff = obj->add_component<ResourceDropoff>();
     dropoff->accept_mask = ALL_MASK;
 
-    // 可选中
     obj->add_component<Selectable>();
 
-    // 所有权
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
     ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
 
-    // 生命值
     auto* health = obj->add_component<Health>();
     health->max_health = 1000;
     health->current_health = 1000;
@@ -278,7 +252,6 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     return obj;
 }
 
-// factories.cpp
 uint64_t ObjectFactory::create_projectile_by_type(ProjectileType type, const Vector2& start, const Vector2& target, int damage, uint64_t target_id)
 {
     switch (type) {
@@ -289,7 +262,6 @@ uint64_t ObjectFactory::create_projectile_by_type(ProjectileType type, const Vec
     }
 }
 
-// factories.cpp
 uint64_t ObjectFactory::create_arrow(const Vector2& start, const Vector2& target, int damage, uint64_t target_id)
 {
     float w = 12.0f, h = 4.0f;
@@ -297,8 +269,8 @@ uint64_t ObjectFactory::create_arrow(const Vector2& start, const Vector2& target
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color arrow_color = get_player_color(current_player_id);   // 使用当前玩家颜色
-    render->color = arrow_color;
+    Color arrow_color = get_player_color(current_player_id);
+    render->color = arrow_color;   // 箭矢无纹理，纯色
 
     auto* proj = obj->add_component<Projectile>();
     proj->speed = 600.0f;

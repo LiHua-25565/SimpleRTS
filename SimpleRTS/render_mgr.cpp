@@ -1,18 +1,19 @@
 #include "render_mgr.h"
 #include "color.h"
+#include "texture_cache.h"   // 新增：用于纹理 ID 查询
 
 #include <algorithm>
 
 RenderMgr* RenderMgr::instance()
 {
     static RenderMgr mgr;
-	return &mgr;
+    return &mgr;
 }
 
 void RenderMgr::begin_frame()
 {
-	main_cmd_list.clear();
-	minimap_cmd_list.clear();
+    main_cmd_list.clear();
+    minimap_cmd_list.clear();
 }
 
 void RenderMgr::push_cmd(const RenderCmd& cmd)
@@ -23,23 +24,22 @@ void RenderMgr::push_cmd(const RenderCmd& cmd)
 
 void RenderMgr::push_main_cmd(const RenderCmd& cmd)
 {
-	main_cmd_list.push_back(cmd);
+    main_cmd_list.push_back(cmd);
 }
 
 void RenderMgr::push_minimap_cmd(const RenderCmd& cmd)
 {
-	minimap_cmd_list.push_back(cmd);
+    minimap_cmd_list.push_back(cmd);
 }
 
 void RenderMgr::end_frame(SDL_Renderer* renderer)
 {
     if (!renderer) return;
-	sort_cmds();
+    sort_cmds();
 
     render_main(renderer);
     render_minimap(renderer);
 
-    // 清空本帧所有指令
     main_cmd_list.clear();
     minimap_cmd_list.clear();
 }
@@ -69,31 +69,33 @@ void RenderMgr::render_main(SDL_Renderer* renderer)
             cmd.h *= camera->get_scale();
         }
 
-        // 构建绘制矩形
         SDL_FRect dst_rect;
         dst_rect.x = cmd.position.x;
         dst_rect.y = cmd.position.y;
         dst_rect.w = cmd.w;
         dst_rect.h = cmd.h;
 
-        // 有纹理 → 渲染贴图
-        if (cmd.texture)
-        {
-            SDL_SetTextureColorMod(cmd.texture, 255, 255, 255);
-            SDL_SetTextureAlphaMod(cmd.texture, cmd.color.a);
-            SDL_RenderTexture(renderer, cmd.texture, nullptr, &dst_rect);
+        // 有纹理 → 通过 ID 获取临时指针并渲染
+        if (cmd.texture_id) {
+            SDL_Texture* tex = TextureCache::instance()->get_texture_by_id(cmd.texture_id);
+            if (tex) {
+                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(tex, cmd.color.a);
+                SDL_RenderTexture(renderer, tex, nullptr, &dst_rect);
+            }
         }
-        // 无纹理 → 渲染纯色矩形（框选、小地图、选中框）
+        // 无纹理 → 渲染纯色矩形
         else if (cmd.color.a != 0)
         {
             SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
             SDL_RenderFillRect(renderer, &dst_rect);
         }
 
+        // 边框绘制
         if (cmd.border_width > 0 && cmd.border_color.a > 0)
         {
             SDL_SetRenderDrawColor(renderer, cmd.border_color.r, cmd.border_color.g, cmd.border_color.b, cmd.border_color.a);
-            for (int i = 0;i < cmd.border_width;i++)
+            for (int i = 0; i < cmd.border_width; i++)
             {
                 SDL_RenderRect(renderer, &dst_rect);
                 dst_rect.x--, dst_rect.y--;
@@ -107,53 +109,45 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
 {
     if (world_w <= 0 || world_h <= 0) return;
 
-    // 整个小地图方形区域（背景）
     SDL_FRect full_rect = { minimap_pos.x, minimap_pos.y, minimap_w, minimap_h };
     SDL_Color bg = to_sdl_color(Color::Black);
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &full_rect);
 
-    // 直接使用已缓存的内容矩形，不再重复计算
     SDL_FRect map_rect = minimap_content_rect;
 
-    // 绘制地形纹理
-    if (minimap_terrain)
-        SDL_RenderTexture(renderer, minimap_terrain, nullptr, &map_rect);
+    // 小地图地形纹理（仍为裸指针，后续可改为 ID）
+    if (minimap_terrain_id)
+    {
+        SDL_Texture* tex = TextureCache::instance()->get_texture_by_id(minimap_terrain_id);
+        if (tex) SDL_RenderTexture(renderer, tex, nullptr, &map_rect);
+    }
     else {
         SDL_Color color = to_sdl_color(Color::DarkGray);
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderFillRect(renderer, &map_rect);
     }
 
-    // 小地图边框（画在完整方形区域上）
     SDL_Color border = to_sdl_color(Color::Gray);
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderRect(renderer, &full_rect);
 
-    // 绘制单位点（基于 map_rect 映射）
+    // 单位点绘制（纯色，无纹理）
     for (const auto& cmd : minimap_cmd_list)
     {
         float mm_x = map_rect.x + (cmd.position.x / world_w) * map_rect.w;
         float mm_y = map_rect.y + (cmd.position.y / world_h) * map_rect.h;
         float h = cmd.h;
         float w = cmd.w;
-        if (h >= (float)8.0f * cell_size && w >= (float)8.0 * cell_size)
-        {
-            float dot_size = cmd.is_selected ? 6.0f : 5.0f;
-            SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
-            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
-            SDL_RenderFillRect(renderer, &dot);
-        }
-        else
-        {
-            float dot_size = cmd.is_selected ? 5.0f : 3.0f;
-            SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
-            SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
-            SDL_RenderFillRect(renderer, &dot);
-        }
+        float dot_size = cmd.is_selected ? 5.0f : 3.0f;
+        if (h >= 8.0f * cell_size && w >= 8.0f * cell_size)
+            dot_size = cmd.is_selected ? 6.0f : 5.0f;
+
+        SDL_FRect dot = { mm_x - dot_size / 2.0f, mm_y - dot_size / 2.0f, dot_size, dot_size };
+        SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
+        SDL_RenderFillRect(renderer, &dot);
     }
 
-    // 绘制相机视野框
     if (camera)
     {
         Vector2 cam_pos = camera->get_position();
@@ -239,9 +233,9 @@ float RenderMgr::get_minimap_height() const
     return minimap_h;
 }
 
-void RenderMgr::set_minimap_terrain(SDL_Texture* tex)
+void RenderMgr::set_minimap_terrain(uint32_t tex_id) 
 {
-    minimap_terrain = tex;
+    minimap_terrain_id = tex_id;
 }
 
 const Vector2& RenderMgr::get_minimap_position() const

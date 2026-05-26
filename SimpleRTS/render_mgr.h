@@ -26,7 +26,7 @@ public:
     void set_minimap_size(float w, float h);
     float get_minimap_width() const;
     float get_minimap_height() const;
-    void set_minimap_terrain(SDL_Texture* tex);
+    void set_minimap_terrain(uint32_t tex_id);
     const Vector2& get_minimap_position() const;
 
     void set_minimap_content_rect(const SDL_FRect& rect);
@@ -43,7 +43,7 @@ private:
     void update_minimap_content_rect();
 
     Camera* camera = nullptr;
-    SDL_Texture* minimap_terrain = nullptr;
+    uint32_t minimap_terrain_id = 0;
     SDL_FRect minimap_content_rect = { 0 };
     std::vector<RenderCmd> main_cmd_list;
     std::vector<RenderCmd> minimap_cmd_list;

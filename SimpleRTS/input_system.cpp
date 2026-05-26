@@ -4,6 +4,7 @@
 #include "resources_mgr.h"
 #include "world_entity_mgr.h"
 #include "render_mgr.h"
+#include "UI_mgr.h"
 #include "util.h"
 #include <cmath>
 #include <algorithm>
@@ -30,6 +31,9 @@ void InputSystem::handle_event(const SDL_Event& event)
 
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            if (UIMgr::instance()->handle_mouse_down(mx, my))
+                return;
+
             left_btn_down = true;
             if (is_point_in_minimap(mx, my))
             {
@@ -61,6 +65,9 @@ void InputSystem::handle_event(const SDL_Event& event)
 
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            if (left_btn_down == false)
+                return;
+
             left_btn_down = false;
 
             if (is_left_minimap_dragging)
@@ -79,6 +86,9 @@ void InputSystem::handle_event(const SDL_Event& event)
         }
         else if (event.button.button == SDL_BUTTON_RIGHT)
         {
+            if (right_btn_down == false)
+                return;
+
             right_btn_down = false;
 
             Vector2 world_click;
@@ -310,6 +320,9 @@ void InputSystem::handle_event(const SDL_Event& event)
         }
         else if (event.button.button == SDL_BUTTON_MIDDLE)
         {
+            if (middle_btn_down == false)
+                return;
+
             middle_btn_down = false;
         }
         break;

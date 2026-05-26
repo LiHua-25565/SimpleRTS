@@ -39,7 +39,7 @@ struct BuildingType :public Component
 
 struct Renderable : public Component 
 {
-    SDL_Texture* texture = nullptr;
+    uint32_t texture_id = 0;
     CollisionBox collision_box;
     Color color = Color::White;                 // 矩形颜色（会被纹理覆盖）
     Color border_color = Color::None;           // 边框颜色

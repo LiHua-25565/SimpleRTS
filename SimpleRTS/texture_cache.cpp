@@ -1,9 +1,8 @@
 #include "texture_cache.h"
 #include "color.h"
-#include <string>
 #include <algorithm>
 
-// 辅助函数：字数大于3自动分两行
+// 辅助：UTF-8 字符计数
 static int utf8_char_count(const std::string& str)
 {
     int count = 0;
@@ -11,27 +10,155 @@ static int utf8_char_count(const std::string& str)
         unsigned char c = str[i];
         if (c < 0x80) i += 1;
         else if (c < 0xE0) i += 2;
-        else if (c < 0xF0) i += 3;   // 中文占 3 字节
+        else if (c < 0xF0) i += 3;
         else i += 4;
         ++count;
     }
     return count;
 }
 
-SDL_Surface* TextureCache::render_text_multiline(const std::string& text,
-    SDL_Color color,
-    int width, int height)
+// 资源背景色（静态）
+static SDL_Color get_resource_bg_color(ResourceEntityType type)
 {
-    if (!font || width <= 0 || height <= 0) return nullptr;
+    switch (type) {
+    case ResourceEntityType::SGold:
+    case ResourceEntityType::LGold:  return to_sdl_color(Color::DarkGold);
+    case ResourceEntityType::Stone:  return to_sdl_color(Color::MediumGray);
+    case ResourceEntityType::Wood:   return to_sdl_color(Color::DarkGreen);
+    case ResourceEntityType::Berries:return to_sdl_color(Color::LightGreen);
+    default:                         return to_sdl_color(Color::DarkGray);
+    }
+}
 
-    // 内边距比例：文字最大宽度/高度为矩形的 85%
+// 资源文字色（静态）
+static SDL_Color get_resource_text_color(ResourceEntityType type)
+{
+    switch (type) {
+    case ResourceEntityType::SGold:
+    case ResourceEntityType::LGold:  return to_sdl_color(Color::Gold);
+    case ResourceEntityType::Stone:  return to_sdl_color(Color::Silver);
+    case ResourceEntityType::Wood:   return to_sdl_color(Color::LeafGreen);
+    case ResourceEntityType::Berries:return to_sdl_color(Color::Crimson);
+    default:                         return to_sdl_color(Color::White);
+    }
+}
+
+// 携带资源标记色（静态）
+static SDL_Color get_resource_carry_color(ResourceType res_type)
+{
+    switch (res_type) {
+    case ResourceType::Wood:  return to_sdl_color(Color::LeafGreen);
+    case ResourceType::Food:  return to_sdl_color(Color::Crimson);
+    case ResourceType::Gold:  return to_sdl_color(Color::Gold);
+    case ResourceType::Stone: return to_sdl_color(Color::Silver);
+    default:                  return to_sdl_color(Color::None);
+    }
+}
+
+TextureCache* TextureCache::instance()
+{
+    static TextureCache mgr;
+    return &mgr;
+}
+
+void TextureCache::init(SDL_Renderer* r, TTF_Font* f)
+{
+    renderer = r;
+    base_font = f;
+}
+
+void TextureCache::shutdown()
+{
+    // 销毁所有纹理
+    for (auto& [id, tex] : texture_map) {
+        if (tex) SDL_DestroyTexture(tex);
+    }
+    texture_map.clear();
+
+    // 清空所有缓存（只存 ID，不需要额外销毁）
+    resource_cache.clear();
+    unit_cache.clear();
+    carry_cache.clear();
+    building_cache.clear();
+    text_cache.clear();
+
+    // 释放所有字体缓存（避免关闭 base_font 两次）
+    for (auto& [size, f] : font_cache) {
+        if (f && f != base_font) TTF_CloseFont(f);
+    }
+    font_cache.clear();
+    if (base_font) {
+        TTF_CloseFont(base_font);
+        base_font = nullptr;
+    }
+    renderer = nullptr;
+}
+
+// ---- 纹理 ID 管理 ----
+uint32_t TextureCache::register_texture(SDL_Texture* tex)
+{
+    if (!tex) return 0;
+    uint32_t id = next_texture_id++;
+    texture_map[id] = tex;
+    return id;
+}
+
+SDL_Texture* TextureCache::get_texture_by_id(uint32_t id) const
+{
+    auto it = texture_map.find(id);
+    return (it != texture_map.end()) ? it->second : nullptr;
+}
+
+void TextureCache::release_texture(uint32_t id)
+{
+    auto it = texture_map.find(id);
+    if (it != texture_map.end()) {
+        if (it->second) SDL_DestroyTexture(it->second);
+        texture_map.erase(it);
+    }
+    // 从所有缓存中删除对应的 ID
+    auto erase_id = [id](auto& cache) {
+        for (auto iter = cache.begin(); iter != cache.end(); ++iter) {
+            if (iter->second == id) {
+                cache.erase(iter);
+                return;
+            }
+        }
+        };
+    erase_id(resource_cache);
+    erase_id(unit_cache);
+    erase_id(carry_cache);
+    erase_id(building_cache);
+    erase_id(text_cache);
+}
+
+// ---- 字体管理 ----
+TTF_Font* TextureCache::get_font(int size)
+{
+    if (size <= 0) return base_font;
+    auto it = font_cache.find(size);
+    if (it != font_cache.end() && it->second)
+        return it->second;
+
+    TTF_Font* new_font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", size);
+    if (new_font) {
+        font_cache[size] = new_font;
+        return new_font;
+    }
+    return base_font;
+}
+
+// ---- 多行文字渲染（内部使用） ----
+SDL_Surface* TextureCache::render_text_multiline(const std::string& text, SDL_Color color, int width, int height)
+{
+    if (!base_font || width <= 0 || height <= 0) return nullptr;
+
     const float inner_scale = 0.85f;
     int inner_w = (int)(width * inner_scale);
     int inner_h = (int)(height * inner_scale);
     if (inner_w < 1) inner_w = 1;
     if (inner_h < 1) inner_h = 1;
 
-    // 创建最终表面（透明背景）
     SDL_Surface* canvas = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA8888);
     if (!canvas) return nullptr;
     SDL_PixelFormat fmt = canvas->format;
@@ -51,7 +178,6 @@ SDL_Surface* TextureCache::render_text_multiline(const std::string& text,
         if (!sized_font) continue;
 
         if (two_lines) {
-            // 分两行
             int line1_chars = (char_count + 1) / 2;
             std::string line1, line2;
             const char* p = text.c_str();
@@ -79,7 +205,6 @@ SDL_Surface* TextureCache::render_text_multiline(const std::string& text,
             int total_h = s1->h + s2->h + 4;
             int max_w = std::max(s1->w, s2->w);
             if (max_w <= inner_w && total_h <= inner_h) {
-                // 居中放置（基于原始宽高）
                 int y1 = (height - total_h) / 2;
                 int y2 = y1 + s1->h + 4;
                 SDL_Rect dst1 = { (width - s1->w) / 2, y1, s1->w, s1->h };
@@ -94,13 +219,10 @@ SDL_Surface* TextureCache::render_text_multiline(const std::string& text,
             SDL_DestroySurface(s2);
         }
         else {
-            // 单行
             SDL_Surface* text_surf = TTF_RenderText_Blended(sized_font, text.c_str(), 0, color);
             if (!text_surf) continue;
             if (text_surf->w <= inner_w && text_surf->h <= inner_h) {
-                SDL_Rect dst = { (width - text_surf->w) / 2,
-                                 (height - text_surf->h) / 2,
-                                 text_surf->w, text_surf->h };
+                SDL_Rect dst = { (width - text_surf->w) / 2, (height - text_surf->h) / 2, text_surf->w, text_surf->h };
                 SDL_BlitSurface(text_surf, nullptr, canvas, &dst);
                 SDL_DestroySurface(text_surf);
                 return canvas;
@@ -108,100 +230,44 @@ SDL_Surface* TextureCache::render_text_multiline(const std::string& text,
             SDL_DestroySurface(text_surf);
         }
     }
-
     SDL_DestroySurface(canvas);
     return nullptr;
 }
 
-// 辅助函数：根据资源类型返回暗色背景
-static SDL_Color get_resource_bg_color(ResourceEntityType type)
+// ---- 资源纹理 ----
+uint32_t TextureCache::get_resource_texture(ResourceEntityType type, int width, int height)
 {
-    switch (type) {
-    case ResourceEntityType::SGold:
-    case ResourceEntityType::LGold:  return to_sdl_color(Color::DarkGold);
-    case ResourceEntityType::Stone:  return to_sdl_color(Color::MediumGray);
-    case ResourceEntityType::Wood:   return to_sdl_color(Color::DarkGreen);
-    case ResourceEntityType::Berries:return to_sdl_color(Color::LightGreen);
-    default:                         return to_sdl_color(Color::DarkGray);
-    }
-}
-
-// 根据资源类型返回文字颜色
-static SDL_Color get_resource_text_color(ResourceEntityType type) {
-    switch (type) {
-    case ResourceEntityType::SGold:
-    case ResourceEntityType::LGold:  return to_sdl_color(Color::Gold);
-    case ResourceEntityType::Stone:  return to_sdl_color(Color::Silver);
-    case ResourceEntityType::Wood:   return to_sdl_color(Color::LeafGreen);
-    case ResourceEntityType::Berries:return to_sdl_color(Color::Crimson);
-    default:                         return to_sdl_color(Color::White);
-    }
-}
-
-TextureCache* TextureCache::instance()
-{
-	static TextureCache mgr;
-	return &mgr;
-}
-
-void TextureCache::init(SDL_Renderer* r, TTF_Font* f)
-{
-	renderer = r;
-	font = f;
-}
-
-void TextureCache::shutdown()
-{
-    for (auto& [key, tex] : resource_cache)
-        SDL_DestroyTexture(tex);
-    resource_cache.clear();
-    for (auto& [key, tex] : unit_cache)
-        SDL_DestroyTexture(tex);
-    unit_cache.clear();
-    for (auto& [k, tex] : carry_cache) 
-        SDL_DestroyTexture(tex);
-    carry_cache.clear();
-
-    font_cache.clear();
-
-    renderer = nullptr;
-    font = nullptr;
-}
-
-SDL_Texture* TextureCache::get_resource_texture(ResourceEntityType type, int width, int height)
-{
-    ResourceKey key{ type,width, height };
+    ResourceKey key{ type, width, height };
     auto it = resource_cache.find(key);
-    if (it != resource_cache.end())
-        return it->second;
-
+    if (it != resource_cache.end()) {
+        if (get_texture_by_id(it->second)) return it->second;
+        resource_cache.erase(it);
+    }
     SDL_Texture* tex = create_resource_texture(type, width, height);
-    if (tex)
-        resource_cache[key] = tex;
-    return tex;
+    uint32_t id = register_texture(tex);
+    if (id) resource_cache[key] = id;
+    return id;
 }
 
 SDL_Texture* TextureCache::create_resource_texture(ResourceEntityType type, int width, int height)
 {
-    if (!renderer || !font) return nullptr;
+    if (!renderer || !base_font) return nullptr;
     if (width <= 0 || height <= 0) return nullptr;
 
-    // 1. 创建背景表面
     SDL_Surface* bg = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA8888);
     if (!bg) return nullptr;
     SDL_PixelFormat fmt = bg->format;
     const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
     SDL_Rect full_rect = { 0, 0, width, height };
+
     SDL_Color bg_color = get_resource_bg_color(type);
     Uint32 bg_pixel = SDL_MapRGBA(details, nullptr, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
     SDL_FillSurfaceRects(bg, &full_rect, 1, bg_pixel);
 
-    // 2. 生成多行文字表面
     std::string text = get_resource_name(type);
     SDL_Color text_color = get_resource_text_color(type);
     SDL_Surface* text_surf = render_text_multiline(text, text_color, width, height);
     if (text_surf) {
-        // 文字表面已是居中透明背景，直接 blit 到背景上
         SDL_Rect dst = { 0, 0, width, height };
         SDL_BlitSurface(text_surf, nullptr, bg, &dst);
         SDL_DestroySurface(text_surf);
@@ -224,6 +290,35 @@ std::string TextureCache::get_resource_name(ResourceEntityType type) const
     }
 }
 
+// ---- 单位纹理 ----
+uint32_t TextureCache::get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+{
+    UnitKey key{ type, color.r | (color.g << 8) | (color.b << 16) | (color.a << 24), width, height };
+    auto it = unit_cache.find(key);
+    if (it != unit_cache.end()) {
+        if (get_texture_by_id(it->second)) return it->second;
+        unit_cache.erase(it);
+    }
+    SDL_Texture* tex = create_unit_texture(type, color, width, height);
+    uint32_t id = register_texture(tex);
+    if (id) unit_cache[key] = id;
+    return id;
+}
+
+SDL_Texture* TextureCache::create_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+{
+    if (!renderer || !base_font) return nullptr;
+    if (width <= 0 || height <= 0) return nullptr;
+
+    std::string text = get_unit_name(type);
+    SDL_Surface* surf = render_text_multiline(text, color, width, height);
+    if (!surf) return nullptr;
+
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    SDL_DestroySurface(surf);
+    return tex;
+}
+
 std::string TextureCache::get_unit_name(UnitEntityType type) const
 {
     switch (type) {
@@ -236,56 +331,88 @@ std::string TextureCache::get_unit_name(UnitEntityType type) const
     }
 }
 
-// 获取单位纹理（带缓存）
-SDL_Texture* TextureCache::get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+// ---- 携带资源单位纹理 ----
+uint32_t TextureCache::get_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type)
 {
-    UnitKey key{ type, color.r | (color.g << 8) | (color.b << 16) | (color.a << 24), width, height };
-    auto it = unit_cache.find(key);
-    if (it != unit_cache.end()) return it->second;
-
-    SDL_Texture* tex = create_unit_texture(type, color, width, height);
-    if (tex) unit_cache[key] = tex;
-    return tex;
+    CarryKey key{ type, color, width, height, res_type };
+    auto it = carry_cache.find(key);
+    if (it != carry_cache.end()) {
+        if (get_texture_by_id(it->second)) return it->second;
+        carry_cache.erase(it);
+    }
+    SDL_Texture* tex = create_carrying_unit_texture(type, color, width, height, res_type);
+    uint32_t id = register_texture(tex);
+    if (id) carry_cache[key] = id;
+    return id;
 }
 
-// 创建单位纹理（透明底 + 阵营色边框 + 阵营色居中文字）
-SDL_Texture* TextureCache::create_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
+SDL_Texture* TextureCache::create_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type)
 {
-    if (!renderer || !font) return nullptr;
+    if (!renderer || !base_font) return nullptr;
     if (width <= 0 || height <= 0) return nullptr;
 
-    std::string text = get_unit_name(type);
-    SDL_Surface* surf = render_text_multiline(text, color, width, height);
+    SDL_Surface* surf = render_text_multiline(get_unit_name(type), color, width, height);
     if (!surf) return nullptr;
+
+    if (res_type != ResourceType::None) {
+        SDL_Color mark_color = get_resource_carry_color(res_type);
+        SDL_PixelFormat fmt = surf->format;
+        const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
+        Uint32 pixel = SDL_MapRGBA(details, nullptr, mark_color.r, mark_color.g, mark_color.b, mark_color.a);
+        SDL_Rect mark_rect = {
+            width - width / 4, height - height / 4,
+            width / 4, height / 4
+        };
+        SDL_FillSurfaceRects(surf, &mark_rect, 1, pixel);
+    }
 
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_DestroySurface(surf);
     return tex;
 }
 
-SDL_Color get_resource_color(ResourceType res_type) {
-    // 返回资源对应的背景色（用于右下角填充）
-    switch (res_type) {
-    case ResourceType::Wood:  return to_sdl_color(Color::LeafGreen);   // 亮绿
-    case ResourceType::Food:  return to_sdl_color(Color::Crimson);     // 红
-    case ResourceType::Gold:  return to_sdl_color(Color::Gold);        // 金色
-    case ResourceType::Stone: return to_sdl_color(Color::Silver);      // 亮灰
-    default:                  return to_sdl_color(Color::None);
+// ---- 建筑纹理 ----
+uint32_t TextureCache::get_building_texture(BuildingEntityType type, SDL_Color color, int width, int height)
+{
+    BuildingKey key{ type, color, width, height };
+    auto it = building_cache.find(key);
+    if (it != building_cache.end()) {
+        if (get_texture_by_id(it->second)) return it->second;
+        building_cache.erase(it);
     }
+    SDL_Texture* tex = create_building_texture(type, color, width, height);
+    uint32_t id = register_texture(tex);
+    if (id) building_cache[key] = id;
+    return id;
 }
 
-TTF_Font* TextureCache::get_font(int size)
+SDL_Texture* TextureCache::create_building_texture(BuildingEntityType type, SDL_Color color, int width, int height)
 {
-    auto it = font_cache.find(size);
-    if (it != font_cache.end() && it->second)
-        return it->second;
+    if (!renderer || !base_font) return nullptr;
+    if (width <= 0 || height <= 0) return nullptr;
 
-    TTF_Font* new_font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", size);
-    if (new_font) {
-        font_cache[size] = new_font;
-        return new_font;
+    SDL_Surface* bg = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA8888);
+    if (!bg) return nullptr;
+    SDL_PixelFormat fmt = bg->format;
+    const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
+    Uint8 dr = (Uint8)(color.r * 0.4f);
+    Uint8 dg = (Uint8)(color.g * 0.4f);
+    Uint8 db = (Uint8)(color.b * 0.4f);
+    Uint32 bg_pixel = SDL_MapRGBA(details, nullptr, dr, dg, db, 255);
+    SDL_Rect full = { 0, 0, width, height };
+    SDL_FillSurfaceRects(bg, &full, 1, bg_pixel);
+
+    std::string text = get_building_name(type);
+    SDL_Surface* text_surf = render_text_multiline(text, color, width, height);
+    if (text_surf) {
+        SDL_Rect dst = { 0, 0, width, height };
+        SDL_BlitSurface(text_surf, nullptr, bg, &dst);
+        SDL_DestroySurface(text_surf);
     }
-    return font;  // 回退到默认字体
+
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, bg);
+    SDL_DestroySurface(bg);
+    return tex;
 }
 
 std::string TextureCache::get_building_name(BuildingEntityType type) const
@@ -296,81 +423,36 @@ std::string TextureCache::get_building_name(BuildingEntityType type) const
     }
 }
 
-SDL_Texture* TextureCache::get_building_texture(BuildingEntityType type, SDL_Color color, int width, int height)
+// ---- 文字纹理 ----
+uint32_t TextureCache::get_text_texture(const std::string& text, SDL_Color color, int font_size)
 {
-    // 缓存键：类型 + 颜色 + 尺寸
-    BuildingKey key{ type, color, width, height };
-    auto it = building_cache.find(key);
-    if (it != building_cache.end()) return it->second;
-
-    SDL_Texture* tex = create_building_texture(type, color, width, height);
-    if (tex) building_cache[key] = tex;
-    return tex;
-}
-
-SDL_Texture* TextureCache::create_building_texture(BuildingEntityType type, SDL_Color color, int width, int height)
-{
-    if (!renderer || !font) return nullptr;
-    if (width <= 0 || height <= 0) return nullptr;
-
-    // 1. 创建背景表面，填充阵营暗色
-    SDL_Surface* bg = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA8888);
-    if (!bg) return nullptr;
-
-    SDL_PixelFormat fmt = bg->format;
-    const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
-    Uint8 dr = (Uint8)(color.r * 0.4f);
-    Uint8 dg = (Uint8)(color.g * 0.4f);
-    Uint8 db = (Uint8)(color.b * 0.4f);
-    Uint32 bg_pixel = SDL_MapRGBA(details, nullptr, dr, dg, db, 255);
-    SDL_Rect full = { 0, 0, width, height };
-    SDL_FillSurfaceRects(bg, &full, 1, bg_pixel);
-
-    // 2. 生成多行文字表面（字体自适应，文字居中）
-    std::string text = get_building_name(type);
-    SDL_Surface* text_surf = render_text_multiline(text, color, width, height);
-    if (text_surf) {
-        // 文字表面是透明背景且居中，直接覆盖到背景上
-        SDL_Rect dst = { 0, 0, width, height };
-        SDL_BlitSurface(text_surf, nullptr, bg, &dst);
-        SDL_DestroySurface(text_surf);
+    TextKey key{ text, color, font_size };
+    auto it = text_cache.find(key);
+    if (it != text_cache.end()) {
+        if (get_texture_by_id(it->second)) return it->second;
+        text_cache.erase(it);
     }
-
-    // 3. 转换为纹理
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, bg);
-    SDL_DestroySurface(bg);
-    return tex;
+    SDL_Texture* tex = create_text_texture(text, color, font_size);
+    uint32_t id = register_texture(tex);
+    if (id) text_cache[key] = id;
+    return id;
 }
 
-SDL_Texture* TextureCache::get_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type) {
-    CarryKey key{ type, color, width, height, res_type };
-    auto it = carry_cache.find(key);
-    if (it != carry_cache.end()) return it->second;
-    SDL_Texture* tex = create_carrying_unit_texture(type, color, width, height, res_type);
-    if (tex) carry_cache[key] = tex;
-    return tex;
-}
-
-SDL_Texture* TextureCache::create_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type)
+uint32_t TextureCache::register_external_texture(SDL_Texture* tex)
 {
-    if (!renderer || !font) return nullptr;
-    if (width <= 0 || height <= 0) return nullptr;
+    if (!tex) return 0;
+    uint32_t id = next_texture_id++;
+    texture_map[id] = tex;
+    return id;
+}
 
-    SDL_Surface* surf = render_text_multiline(get_unit_name(type), color, width, height);
+SDL_Texture* TextureCache::create_text_texture(const std::string& text, SDL_Color color, int font_size)
+{
+    TTF_Font* sized_font = get_font(font_size);
+    if (!sized_font) return nullptr;
+
+    SDL_Surface* surf = TTF_RenderText_Blended(sized_font, text.c_str(), 0, color);
     if (!surf) return nullptr;
-
-    // 如果有携带资源，绘制右下角四分之一区域
-    if (res_type != ResourceType::None) {
-        SDL_Color mark_color = get_resource_color(res_type);
-        SDL_PixelFormat fmt = surf->format;
-        const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(fmt);
-        Uint32 pixel = SDL_MapRGBA(details, nullptr, mark_color.r, mark_color.g, mark_color.b, mark_color.a);
-        SDL_Rect mark_rect = {
-            width - width / 4, height - height / 4,
-            width / 4, height / 4
-        };
-        SDL_FillSurfaceRects(surf, &mark_rect, 1, pixel);
-    }
 
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_DestroySurface(surf);

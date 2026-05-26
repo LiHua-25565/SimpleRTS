@@ -21,13 +21,11 @@ public:
     // 绘制这张整张贴图到屏幕
     void render();
 
-    SDL_Texture* get_texture() const
-    {
-        return tex;
-    }
+    // 返回 ID，不再返回裸指针
+    uint32_t get_texture_id() const { return tex_id; }   
 
 private:
-    SDL_Texture* tex = nullptr;
+    uint32_t tex_id = 0;          // 替代 SDL_Texture* tex
     int tex_w = 0;
     int tex_h = 0;
 };

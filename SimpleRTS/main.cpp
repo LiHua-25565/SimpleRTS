@@ -2,6 +2,7 @@
 #include "scene_mgr.h"
 #include "render_mgr.h"
 #include "selection_mgr.h"
+#include "texture_cache.h"
 #include "UI_mgr.h"
 #include "game_scene.h"
 #include "menu_scene.h"
@@ -31,6 +32,7 @@ void init()
 void quit()
 {
     UIMgr::instance()->shutdown();
+    TextureCache::instance()->shutdown();
     SDL_Quit();
     TTF_Quit();
     MIX_Quit();
@@ -127,8 +129,8 @@ int main(int argc, char* argv[])
         nanoseconds sleep_duration = frame_duration - (steady_clock::now() - frame_start);
         if (sleep_duration > nanoseconds(0))
             std::this_thread::sleep_for(sleep_duration);
-        else
-            SDL_Log("outoftime\n");
+        /*else
+            SDL_Log("outoftime\n");*/
     }
 
     SDL_DestroyRenderer(renderer);

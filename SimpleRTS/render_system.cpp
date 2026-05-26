@@ -3,11 +3,12 @@
 #include "selection_mgr.h"
 #include "resources_mgr.h"
 #include "texture_cache.h"
+#include "components.h"
 
 void RenderSystem::on_update(float delta)
 {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [entityId, obj] : pool) // 避免与 target_id 变量名混淆，这里改为 entityId
+    for (auto& [entityId, obj] : pool)
     {
         if (!obj->check_valid()) continue;
 
@@ -30,13 +31,10 @@ void RenderSystem::on_update(float delta)
         auto* anim = obj->get_component<ImpactAnimation>();
         if (!renderable || !anim) continue;
 
-        if (!anim->is_attacking)
-            continue;
+        if (!anim->is_attacking) continue;
 
-        // 推进动画时间
         anim->anim_pass_time += delta;
 
-        // 动画结束，自动关闭并复位渲染框
         if (anim->anim_pass_time >= anim->anim_wait_time)
         {
             anim->is_attacking = false;
@@ -45,14 +43,13 @@ void RenderSystem::on_update(float delta)
             continue;
         }
 
-        // 计算三角形波偏移量
         float half = anim->anim_wait_time * 0.5f;
         float progress = (anim->anim_pass_time <= half)
             ? anim->anim_pass_time / half
             : 1.0f - (anim->anim_pass_time - half) / half;
 
         const auto& logic_box = obj->get_collision_box();
-        float offset = progress * anim->impact_distance * logic_box.height; // 正方形单位
+        float offset = progress * anim->impact_distance * logic_box.height;
 
         Vector2 dir = anim->direction;
         if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
@@ -62,9 +59,6 @@ void RenderSystem::on_update(float delta)
         anim_box.position.x += dir.x * offset;
         anim_box.position.y += dir.y * offset;
         renderable->collision_box = anim_box;
-
-        if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
-        else dir = dir.normalize();
     }
 }
 
@@ -78,35 +72,34 @@ void RenderSystem::on_render()
     {
         if (!obj->check_valid()) continue;
         auto* renderable = obj->get_component<Renderable>();
+        if (!renderable) continue;
+
         auto* animation = obj->get_component<ImpactAnimation>();
         if (!animation || !animation->is_attacking)
             renderable->collision_box = obj->get_collision_box();
-
-        if (!renderable) continue;
 
         const auto& collider = renderable->collision_box;
         const auto& pos = collider.position;
         float w = collider.width;
         float h = collider.height;
 
-        SDL_Texture* tex = nullptr;
+        // 基础纹理 ID（建筑、资源、普通单位）
+        uint32_t tex_id = renderable->texture_id;
         auto* gatherer = obj->get_component<Gatherer>();
         auto* unit_type = obj->get_component<UnitType>();
         if (gatherer && unit_type) {
-            // 农民类单位，根据携带资源决定纹理
-            ResourceType carried = gatherer->carried_type; // 可能为 None
-            SDL_Color color = to_sdl_color(renderable->color); // 阵营色
-            tex = TextureCache::instance()->get_carrying_unit_texture(unit_type->type, color, (int)collider.width, (int)collider.height, carried);
-        }
-        else {
-            tex = renderable->texture; // 普通纹理（可能已经生成过）
+            // 携带资源的采集单位纹理
+            ResourceType carried = gatherer->carried_type;
+            SDL_Color color = to_sdl_color(renderable->color);
+            tex_id = TextureCache::instance()->get_carrying_unit_texture(
+                unit_type->type, color, (int)collider.width, (int)collider.height, carried);
         }
 
         RenderCmd cmd{};
         cmd.position = pos;
         cmd.w = w;
         cmd.h = h;
-        if (tex) cmd.texture = tex;
+        cmd.texture_id = tex_id;
         cmd.layer = RenderLayer::Unit;
         cmd.color = to_sdl_color(renderable->color);
 
@@ -115,30 +108,26 @@ void RenderSystem::on_render()
         int player_id = ownership ? ownership->player_id : 0;
         bool is_local = (player_id == local_player_id);
 
-        // ---- 边框处理（闪烁 > 选中 > 阵营） ----
         auto* flash = obj->get_component<FlashComponent>();
         if (flash && flash->flash_active && flash->blink_on)
         {
-            // 闪烁状态：亮白加粗
             cmd.border_width = 2;
             cmd.border_color = to_sdl_color(Color::White);
         }
         else if (is_selected)
         {
-            // 选中状态：亮白加粗
             cmd.border_width = 2;
             cmd.border_color = to_sdl_color(Color::White);
         }
         else
         {
-            // 未选中状态：根据阵营显示边框颜色
             cmd.border_width = 1;
             if (is_local)
-                cmd.border_color = to_sdl_color(Color::SoftBlue);  // 淡蓝（己方）
+                cmd.border_color = to_sdl_color(Color::SoftBlue);
             else if (player_id == 0)
-                cmd.border_color = to_sdl_color(Color::Gray);  // 灰色（中立）
+                cmd.border_color = to_sdl_color(Color::Gray);
             else
-                cmd.border_color = to_sdl_color(Color::SoftRed);  // 淡红（敌方示例）
+                cmd.border_color = to_sdl_color(Color::SoftRed);
         }
 
         RenderMgr::instance()->push_cmd(cmd);
