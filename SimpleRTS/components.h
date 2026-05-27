@@ -3,9 +3,11 @@
 
 #include "color.h"
 #include "timer.h"
+#include "collision_box.h"
 #include "render_def.h"
 #include "resources_type.h"
 #include "unit_type.h"
+#include "armor_type.h"
 #include "building_type.h"
 #include "projectile_type.h"
 
@@ -113,16 +115,25 @@ struct Health : public Component
     int max_health = 100;
 };
 
+// 攻击组件
 struct Attack : public Component {
     bool can_attack = true;
-    float attack_interval = 1.0f;   // 攻击间隔（秒）
+    float attack_interval = 1.0f;       // 攻击间隔（秒）
     float attack_pass_time = 0.0f;      // 当前冷却计时
-    int damage = 10;                // 每次攻击伤害
-    float range = 30.0f;            // 攻击范围（像素），近战约 30，远程 200+
-    bool is_ranged = false;         // 是否远程攻击（影响距离检测方式）
-    uint64_t target_id = 0;  // 攻击目标的实体 ID
+    int damage = 10;                    // 每次攻击伤害
+    float range = 30.0f;                // 攻击范围（像素），近战约 30，远程 200+
+    bool is_ranged = false;             // 是否远程攻击（影响距离检测方式）
+    uint64_t target_id = 0;             // 攻击目标的实体 ID
 
-    bool auto_attack = false;   // 是否自动索敌（右键攻击后为 true，移动/停止后为 false）
+    bool auto_attack = false;           // 是否自动索敌（右键攻击后为 true，移动/停止后为 false）
+
+    int armor_penetration[static_cast<int>(ArmorType::Count)] = { 0 };  // 护甲穿透
+};
+
+// 护甲组件
+struct Armor : public Component {
+    ArmorType type = ArmorType::None;
+    int armor_value = 0;   // 基础护甲值，可由具体实体覆盖
 };
 
 // 采集单位组件

@@ -21,6 +21,54 @@ static bool is_cell_passable_ignore(const GameMap* map, int x, int y, const Game
     return true;
 }
 
+// 计算一个点 (px, py) 到矩形 (rect_x, rect_y, rect_w, rect_h) 的最短距离
+float rect_closest_distance(const Vector2& point, const CollisionBox& rect)
+{
+    float dx = 0.0f;
+    float dy = 0.0f;
+
+    if (point.x < rect.position.x)
+        dx = rect.position.x - point.x;
+    else if (point.x > rect.position.x + rect.width)
+        dx = point.x - (rect.position.x + rect.width);
+
+    if (point.y < rect.position.y)
+        dy = rect.position.y - point.y;
+    else if (point.y > rect.position.y + rect.height)
+        dy = point.y - (rect.position.y + rect.height);
+
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+// 将一个点钳制到矩形的最近边缘外（以膨胀后的矩形为基准）
+static Vector2 clamp_to_rect_edge(const Vector2& point, const CollisionBox& inflated)
+{
+    // 先钳制到矩形内部
+    Vector2 closest;
+    closest.x = std::clamp(point.x, inflated.position.x, inflated.position.x + inflated.width);
+    closest.y = std::clamp(point.y, inflated.position.y, inflated.position.y + inflated.height);
+
+    // 如果已经在内部，推到最近边
+    if (closest.x == point.x && closest.y == point.y)
+    {
+        float dx_min = point.x - inflated.position.x;
+        float dx_max = inflated.position.x + inflated.width - point.x;
+        float dy_min = point.y - inflated.position.y;
+        float dy_max = inflated.position.y + inflated.height - point.y;
+        float min_dist = std::min({ dx_min, dx_max, dy_min, dy_max });
+
+        if (min_dist == dx_min)
+            closest.x = inflated.position.x;
+        else if (min_dist == dx_max)
+            closest.x = inflated.position.x + inflated.width;
+        else if (min_dist == dy_min)
+            closest.y = inflated.position.y;
+        else
+            closest.y = inflated.position.y + inflated.height;
+    }
+    return closest;
+}
+
 // 直线路径是否完全可通行（可选择忽略某个实体）
 bool is_line_passable(const Vector2& start, const Vector2& end, const GameObject* ignore) {
     GameMap* map = WorldEntityMgr::instance()->get_map();
@@ -282,32 +330,48 @@ Vector2 compute_outer_target(const Vector2& unit_center,
     const CollisionBox& target_box,
     float extra_margin)
 {
-    // 从目标中心指向单位中心的方向
-    Vector2 dir = unit_center - target_center;
-    if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
-    dir = dir.normalize();
+    float expand = std::max(unit_box.width, unit_box.height) * 0.5f + extra_margin;
+    CollisionBox inflated = target_box;
+    inflated.position.x -= expand;
+    inflated.position.y -= expand;
+    inflated.width += expand * 2.0f;
+    inflated.height += expand * 2.0f;
 
-    // 距离 = 目标半边长 + 单位半边长 + 额外间距
-    float dist = unit_box.width * 0.5f + target_box.width * 0.5f + extra_margin;
-
-    return target_center + dir * dist;
+    return clamp_to_rect_edge(unit_center, inflated);
 }
 
 // 计算远程单位应停在射程边缘的位置
 Vector2 compute_ranged_outer_target(const Vector2& unit_center,
     const Vector2& target_center,
     const CollisionBox& unit_box,
+    const CollisionBox& target_box,
     float range,
     float extra_margin)
 {
-    Vector2 dir = unit_center - target_center;
-    if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
-    dir = dir.normalize();
-    float dist = range * 0.85f;  // 停在射程的 85% 处，留一点余量
-    if (dist < 0.01f) dist = 1.0f;
-    return target_center + dir * dist;
-}
+    // 计算单位中心到目标矩形最近点的方向
+    float closest_x = std::clamp(unit_center.x, target_box.position.x, target_box.position.x + target_box.width);
+    float closest_y = std::clamp(unit_center.y, target_box.position.y, target_box.position.y + target_box.height);
+    Vector2 closest_point = { closest_x, closest_y };
 
+    // 从目标最近点指向单位中心的方向
+    Vector2 dir = unit_center - closest_point;
+    float dist_to_closest = dir.length();
+
+    // 如果单位已经在最近点附近，使用单位到目标中心的方向（避免零向量）
+    if (dist_to_closest < 0.01f) {
+        dir = unit_center - target_center;
+        if (dir.length() < 0.01f) dir = { 1.0f, 0.0f };
+    }
+    dir = dir.normalize();
+
+    // 目标位置 = 最近点 + 方向 * (射程 - 额外边距)
+    float dist = range * 0.85f;   // 停在射程的 85% 处，留有余量
+    if (dist < 0.01f) dist = 1.0f;
+
+    // 注意：我们希望单位停在距离目标边缘 range 的位置，而不是距离中心 range
+    // 所以直接以 closest_point 为基准，向远离目标的方向移动 range 距离
+    return closest_point + dir * (range - extra_margin);
+}
 
 
 

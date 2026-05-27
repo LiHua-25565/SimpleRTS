@@ -100,7 +100,11 @@ void RenderSystem::on_render()
         cmd.w = w;
         cmd.h = h;
         cmd.texture_id = tex_id;
-        cmd.layer = RenderLayer::Unit;
+        auto* anim = obj->get_component<ImpactAnimation>();
+        if (anim && anim->is_attacking)
+            cmd.layer = RenderLayer::Animation;
+        else
+            cmd.layer = RenderLayer::Unit;
         cmd.color = to_sdl_color(renderable->color);
 
         bool is_selected = selected_ids.count(id) > 0;

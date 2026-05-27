@@ -83,6 +83,9 @@ void SelectionMgr::select_in_area(const CollisionBox& world_area)
 
 	for (auto* obj : result)
 	{
+		if (!obj->check_valid())
+			continue;
+
 		auto* selectable = obj->get_component<Selectable>();
 		if (!selectable) continue;
 

@@ -234,6 +234,8 @@ void UIMgr::update_content() {
 // ---------- 属性行初始化 ----------
 void UIMgr::init_attribute_rows() {
     attribute_rows.clear();
+
+    // HP
     attribute_rows.push_back({
         u8"HP",
         [](GameObject* obj) { return obj->get_component<Health>() != nullptr; },
@@ -242,27 +244,58 @@ void UIMgr::init_attribute_rows() {
             return std::to_string(h->current_health) + "/" + std::to_string(h->max_health);
         }
         });
+
+    // 攻击
     attribute_rows.push_back({
         u8"攻击",
         [](GameObject* obj) { return obj->get_component<Attack>() != nullptr; },
         [](GameObject* obj) {
             auto* a = obj->get_component<Attack>();
-            return std::to_string(a->damage);
+            std::string str = std::to_string(a->damage);
+            int sum = 0;
+            for (int i = 0; i < 4; ++i) sum += a->armor_penetration[i];
+            if (sum > 0) {
+                str += "(";
+                for (int i = 0; i < 4; ++i) {
+                    str += std::to_string(a->armor_penetration[i]);
+                    if (i < 3) str += "/";
+                }
+                str += ")";
+            }
+            return str;
         }
         });
-    // 采集伤害（仅对有 Gatherer 的单位显示）
+
+    // 护甲（新增）
+    attribute_rows.push_back({
+        u8"护甲",
+        [](GameObject* obj) { return obj->get_component<Armor>() != nullptr; },
+        [](GameObject* obj) {
+            auto* armor = obj->get_component<Armor>();
+            if (!armor) return std::string("");
+            std::string type_str;
+            switch (armor->type) {
+                case ArmorType::None:     type_str = u8"无甲"; break;
+                case ArmorType::Light:    type_str = u8"轻甲"; break;
+                case ArmorType::Heavy:    type_str = u8"重甲"; break;
+                case ArmorType::Building: type_str = u8"建筑"; break;
+                default:                  type_str = u8"未知"; break;
+            }
+            return type_str + " " + std::to_string(armor->armor_value);
+        }
+        });
+
+    // 采集
     attribute_rows.push_back({
         u8"采集",
-        [](GameObject* obj) {
-            auto* g = obj->get_component<Gatherer>();
-            return g != nullptr;
-        },
+        [](GameObject* obj) { return obj->get_component<Gatherer>() != nullptr; },
         [](GameObject* obj) {
             auto* g = obj->get_component<Gatherer>();
             return std::to_string(g->gather_amount);
         }
         });
 
+    // 携带
     attribute_rows.push_back({
         u8"携带",
         [](GameObject* obj) {
@@ -440,21 +473,42 @@ void UIMgr::update_selection_panel() {
     icon_region.tex_h = (float)tex_h;
     panel.regions.push_back(icon_region);
 
+    // ==================== 属性列表（先排满第一列，再排第二列） ====================
+    // 收集所有可见属性
+    std::vector<ui_attribute_row*> visible_attrs;
+    for (auto& attr : attribute_rows)
+        if (attr.visible(obj))
+            visible_attrs.push_back(&attr);
+
+    int total_visible = (int)visible_attrs.size();
+    const int max_rows_per_col = 3;               // 每列最大行数
+    int cols = (total_visible > max_rows_per_col) ? 2 : 1;   // 是否需要两列
+
     float attr_start_x = icon_x + icon_size_percent + 0.03f;
+    float second_col_start_x = attr_start_x + 0.5f * 0.8f; // 第二列起始 x
     float attr_y = 0.1f;
     float attr_row_height = 0.25f;
     SDL_Color text_color = to_sdl_color(Color::White);
 
-    for (auto& attr : attribute_rows) {
-        if (!attr.visible(obj)) continue;
+    for (int i = 0; i < total_visible; i++)
+    {
+        int col = i / max_rows_per_col;            // 0：第一列，1：第二列
+        int row = i % max_rows_per_col;            // 该列中的行号
 
+        float label_x = (col == 0) ? attr_start_x : second_col_start_x;
+        float value_x = label_x + 0.15f;
+        float y = attr_y + row * (attr_row_height + 0.02f);
+
+        auto* attr = visible_attrs[i];
+
+        // 标签
         ui_region label_region;
-        label_region.x_percent = attr_start_x;
-        label_region.y_percent = attr_y;
+        label_region.x_percent = label_x;
+        label_region.y_percent = y;
         label_region.w_percent = 0.0f;
         label_region.h_percent = attr_row_height;
         label_region.bg_color = { 0, 0, 0, 0 };
-        uint32_t label_id = TextureCache::instance()->get_text_texture(attr.label, text_color, font_size);
+        uint32_t label_id = TextureCache::instance()->get_text_texture(attr->label, text_color, font_size);
         if (label_id) {
             label_region.texture_id = label_id;
             float tw, th;
@@ -465,10 +519,11 @@ void UIMgr::update_selection_panel() {
         }
         panel.regions.push_back(label_region);
 
-        std::string value_text = attr.text(obj);
+        // 数值
+        std::string value_text = attr->text(obj);
         ui_region value_region;
-        value_region.x_percent = attr_start_x + 0.15f;
-        value_region.y_percent = attr_y;
+        value_region.x_percent = value_x;
+        value_region.y_percent = y;
         value_region.w_percent = 0.0f;
         value_region.h_percent = attr_row_height;
         value_region.bg_color = { 0, 0, 0, 0 };
@@ -482,7 +537,5 @@ void UIMgr::update_selection_panel() {
             }
         }
         panel.regions.push_back(value_region);
-
-        attr_y += attr_row_height + 0.02f;
     }
 }

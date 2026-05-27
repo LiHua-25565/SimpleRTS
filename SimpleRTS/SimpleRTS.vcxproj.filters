@@ -129,6 +129,9 @@
     <ClCompile Include="attack_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="damege_pipeline.cpp">
+      <Filter>头文件\Content\Systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">
@@ -247,6 +250,12 @@
     </ClInclude>
     <ClInclude Include="projectile_type.h">
       <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="armor_type.h">
+      <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="damage_pipeline.h">
+      <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

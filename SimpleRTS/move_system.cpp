@@ -433,23 +433,17 @@ void MoveSystem::on_update(float delta)
     {
         if (!obj->check_valid()) continue;
 
-        // ---- 投射物优先处理 ----
+        // ---- 投射物处理：仅负责移动与边界检查 ----
         if (auto* proj = obj->get_component<Projectile>())
         {
-            auto* target = WorldEntityMgr::instance()->get_object_by_id(proj->target_id);
-            if (!target || !target->check_valid())
-            {
-                obj->set_valid(false);
-                continue;
-            }
-
             auto* movable = obj->get_component<Movable>();
             if (movable)
             {
+                // 根据速度移动投射物
                 Vector2 new_pos = obj->get_collision_box().position + movable->velocity * delta;
                 obj->set_position(new_pos);
 
-                // 边界检查：超出地图则失效
+                // 边界检查：超出地图则标记失效
                 const auto& box = obj->get_collision_box();
                 if (new_pos.x < -box.width - 100.0f || new_pos.y < -box.height - 100.0f ||
                     new_pos.x > map_w + box.width + 100.0f || new_pos.y > map_h + box.height + 100.0f)
@@ -458,20 +452,8 @@ void MoveSystem::on_update(float delta)
                     continue;
                 }
             }
-
-            if (obj->get_collision_box().intersects(target->get_collision_box()))
-            {
-                auto* target_health = target->get_component<Health>();
-                if (target_health)
-                {
-                    target_health->current_health -= proj->damage;
-                    if (target_health->current_health <= 0)
-                        target_health->current_health = 0;
-                }
-                WorldEntityMgr::instance()->destroy_object(obj);
-                continue;
-            }
-            continue; // 跳过普通单位移动
+            // 投射物跳过普通单位的移动逻辑
+            continue;
         }
 
         // ---- 普通单位移动 ----

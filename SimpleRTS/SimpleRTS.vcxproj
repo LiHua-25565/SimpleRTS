@@ -135,6 +135,7 @@
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="camera_controller.cpp" />
     <ClCompile Include="cursor_mgr.cpp" />
+    <ClCompile Include="damege_pipeline.cpp" />
     <ClCompile Include="game_map.cpp" />
     <ClCompile Include="game_scene.cpp" />
     <ClCompile Include="harvest_system.cpp" />
@@ -160,6 +161,7 @@
     <ClCompile Include="world_entitiy_mgr.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="armor_type.h" />
     <ClInclude Include="attack_system.h" />
     <ClInclude Include="building_type.h" />
     <ClInclude Include="camera.h" />
@@ -168,6 +170,7 @@
     <ClInclude Include="color.h" />
     <ClInclude Include="components.h" />
     <ClInclude Include="cursor_mgr.h" />
+    <ClInclude Include="damage_pipeline.h" />
     <ClInclude Include="factories.h" />
     <ClInclude Include="game_map.h" />
     <ClInclude Include="game_object.h" />

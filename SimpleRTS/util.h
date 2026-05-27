@@ -11,6 +11,9 @@ bool ray_intersects_box(const Vector2& origin, const Vector2& dir, float length,
 // 直线路径是否完全可通行（可选择忽略某个实体）
 bool is_line_passable(const Vector2& start, const Vector2& end, const GameObject* ignore = nullptr);
 
+// 计算一个点 (px, py) 到矩形 (rect_x, rect_y, rect_w, rect_h) 的最短距离
+float rect_closest_distance(const Vector2& point, const CollisionBox& rect);
+
 // BFS 计算实际路径距离（像素），限制最大步数 max_range_cells（格子数）
 float bfs_path_distance(const Vector2& start, const Vector2& end, const GameMap* map,
     float max_range_cells, const GameObject* ignore);
@@ -22,10 +25,11 @@ Vector2 compute_outer_target(const Vector2& unit_center,
     const CollisionBox& target_box,
     float extra_margin = 5.0f);
 
-// 计算远程单位应停在射程边缘的位置
+// 计算远程单位应停在射程边缘的位置（基于目标矩形最近点）
 Vector2 compute_ranged_outer_target(const Vector2& unit_center,
     const Vector2& target_center,
     const CollisionBox& unit_box,
+    const CollisionBox& target_box,
     float range,
     float extra_margin = 5.0f);
 

@@ -232,6 +232,7 @@ void InputSystem::handle_event(const SDL_Event& event)
                                         unit_center,
                                         target_center,
                                         unit->get_collision_box(),
+                                        obj->get_collision_box(),
                                         attack->range,
                                         5.0f
                                     );

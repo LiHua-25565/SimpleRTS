@@ -140,6 +140,16 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
 
     auto* attack = obj->add_component<Attack>();
     attack->damage = 10;
+    // 设置农民对各护甲的穿透值
+    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 1;
+    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 1;
+    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 0;
+    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 0;
+
+    // 添加护甲组件（农民为轻甲）
+    auto* armor = obj->add_component<Armor>();
+    armor->type = ArmorType::Light;
+    armor->armor_value = 1;
 
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
@@ -186,6 +196,16 @@ GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_ove
     attack->attack_interval = 1.5f;
     attack->range = 200.0f;
     attack->is_ranged = true;
+    // 设置弓兵对各护甲的穿透值（远程有较高的穿透）
+    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 2;
+    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 3;
+    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 1;
+    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 0;
+
+    // 添加护甲组件（弓兵为无甲）
+    auto* armor = obj->add_component<Armor>();
+    armor->type = ArmorType::None;
+    armor->armor_value = 0;
 
     auto* health = obj->add_component<Health>();
     health->max_health = 40;
