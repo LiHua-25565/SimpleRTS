@@ -5,13 +5,15 @@
 #include "texture_cache.h"
 #include "factories.h"
 #include <algorithm>
-#include <unordered_map>  // 多选面板需要
+#include <unordered_map>
 
+// ========== 单例 ==========
 UIMgr* UIMgr::instance() {
     static UIMgr mgr;
     return &mgr;
 }
 
+// ========== 初始化 / 关闭 ==========
 void UIMgr::init() {
     init_attribute_rows();
 }
@@ -20,6 +22,7 @@ void UIMgr::shutdown() {
     panels.clear();
 }
 
+// ========== 面板管理 ==========
 ui_panel& UIMgr::add_panel(const std::string& name, PanelAnchor anchor,
     float x_percent, float y_percent,
     float w_percent, float h_percent) {
@@ -44,7 +47,7 @@ void UIMgr::remove_panel(const std::string& name) {
         [&](const ui_panel& p) { return p.name == name; }), panels.end());
 }
 
-// ---------- 布局 ----------
+// ========== 布局更新 ==========
 void UIMgr::update_layout(int screen_w, int screen_h) {
     if (screen_w <= 0 || screen_h <= 0) return;
 
@@ -60,6 +63,7 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
 
     update_selection_panel();
 
+    // 将百分比坐标转换为绝对像素坐标
     for (auto& panel : panels) {
         float px = 0.0f, py = 0.0f;
         switch (panel.anchor) {
@@ -88,10 +92,11 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
     }
 }
 
-// ---------- 渲染 ----------
+// ========== 渲染 ==========
 void UIMgr::on_render() {
     for (const auto& panel : panels) {
         for (const auto& region : panel.regions) {
+            // 背景色块
             if (region.bg_color.a > 0) {
                 RenderCmd bg_cmd;
                 bg_cmd.layer = RenderLayer::UI;
@@ -101,6 +106,7 @@ void UIMgr::on_render() {
                 bg_cmd.h = region.abs_rect.h;
                 RenderMgr::instance()->push_main_cmd(bg_cmd);
             }
+            // 纹理
             if (region.texture_id) {
                 RenderCmd tex_cmd;
                 tex_cmd.layer = RenderLayer::UI;
@@ -123,7 +129,7 @@ void UIMgr::on_render() {
     }
 }
 
-// ---------- 点击事件 ----------
+// ========== 点击事件 ==========
 bool UIMgr::handle_mouse_down(float x, float y) {
     for (auto panel_it = panels.rbegin(); panel_it != panels.rend(); ++panel_it) {
         for (auto& region : panel_it->regions) {
@@ -138,7 +144,7 @@ bool UIMgr::handle_mouse_down(float x, float y) {
     return false;
 }
 
-// ---------- 资源面板构建 ----------
+// ========== 资源面板 ==========
 void UIMgr::build_resource_panel() {
     auto* res = ResourcesMgr::instance();
     int player = res->get_local_player_id();
@@ -183,7 +189,7 @@ void UIMgr::build_resource_panel() {
         }
         panel.regions.push_back(name_region);
 
-        // 数值标签（先占位，稍后由 update_content 填充）
+        // 数值占位
         ui_region value_region;
         value_region.x_percent = 1.0f; value_region.y_percent = i * bar_h;
         value_region.w_percent = 0.0f; value_region.h_percent = bar_h;
@@ -193,7 +199,7 @@ void UIMgr::build_resource_panel() {
     update_content(); // 首次填充数值
 }
 
-// ---------- 资源数值更新 ----------
+// ========== 资源数值更新 ==========
 void UIMgr::update_content() {
     auto* res = ResourcesMgr::instance();
     int player = res->get_local_player_id();
@@ -204,7 +210,7 @@ void UIMgr::update_content() {
 
     for (size_t i = 0; i < types.size(); ++i) {
         int val = res->get_resource(player, types[i]);
-        if (val == last_resource_value_cache[i]) continue;  // 无变化跳过
+        if (val == last_resource_value_cache[i]) continue;
         last_resource_value_cache[i] = val;
 
         auto* panel = find_panel("resources");
@@ -231,7 +237,7 @@ void UIMgr::update_content() {
     }
 }
 
-// ---------- 属性行初始化 ----------
+// ========== 属性行初始化 ==========
 void UIMgr::init_attribute_rows() {
     attribute_rows.clear();
 
@@ -266,7 +272,7 @@ void UIMgr::init_attribute_rows() {
         }
         });
 
-    // 护甲（新增）
+    // 护甲
     attribute_rows.push_back({
         u8"护甲",
         [](GameObject* obj) { return obj->get_component<Armor>() != nullptr; },
@@ -311,7 +317,7 @@ void UIMgr::init_attribute_rows() {
         });
 }
 
-// ---------- 选中信息面板 ----------
+// ========== 选中信息面板 ==========
 void UIMgr::update_selection_panel() {
     auto selected_ids = SelectionMgr::instance()->get_selected_object_id_set();
     if (selected_ids.empty()) {
@@ -320,7 +326,7 @@ void UIMgr::update_selection_panel() {
         return;
     }
 
-    // 多选处理
+    // ---------- 多选 ----------
     if (selected_ids.size() > 1) {
         last_selected_id = 0;
         std::unordered_map<UnitEntityType, std::vector<GameObject*>> unit_map;
@@ -348,19 +354,21 @@ void UIMgr::update_selection_panel() {
 
         float info_x = panel_margin_x_percent + panel_w_percent + 0.005f;
         float info_y = -(panel_h_percent + panel_margin_y_percent);
-        float info_w = 0.20f;
+        float info_w = info_multi_panel_w_percent;
         float info_h = panel_h_percent;
 
         remove_panel("selection_info");
         auto& panel = add_panel("selection_info", PanelAnchor::BottomLeft,
             info_x, info_y, info_w, info_h);
 
+        // 背景
         ui_region bg;
         bg.x_percent = 0.0f; bg.y_percent = 0.0f;
         bg.w_percent = 1.0f; bg.h_percent = 1.0f;
         bg.bg_color = { 20, 20, 20, 220 };
         panel.regions.push_back(bg);
 
+        // 图标网格参数
         float icon_size = 0.15f;
         float start_x = 0.05f;
         float start_y = 0.05f;
@@ -394,6 +402,7 @@ void UIMgr::update_selection_panel() {
             icon_region.tex_h = (float)tex_h;
             panel.regions.push_back(icon_region);
 
+            // 数量角标
             if (count > 1) {
                 ui_region count_region;
                 count_region.x_percent = x + icon_size * 0.6f;
@@ -418,7 +427,7 @@ void UIMgr::update_selection_panel() {
         return;
     }
 
-    // 单选处理
+    // ---------- 单选 ----------
     uint64_t id = *selected_ids.begin();
     last_selected_id = id;
 
@@ -430,21 +439,25 @@ void UIMgr::update_selection_panel() {
 
     float info_x = panel_margin_x_percent + panel_w_percent + 0.005f;
     float info_y = -(panel_h_percent + panel_margin_y_percent);
-    float info_w = 0.20f;
+    float info_w = info_single_panel_w_percent;
     float info_h = panel_h_percent;
 
     remove_panel("selection_info");
     auto& panel = add_panel("selection_info", PanelAnchor::BottomLeft,
         info_x, info_y, info_w, info_h);
 
+    // 背景
     ui_region bg;
     bg.x_percent = 0.0f; bg.y_percent = 0.0f;
     bg.w_percent = 1.0f; bg.h_percent = 1.0f;
     bg.bg_color = { 20, 20, 20, 220 };
     panel.regions.push_back(bg);
 
-    float icon_size_percent = 0.35f;
-    float icon_x = 0.03f, icon_y = 0.1f;
+    // 图标区域（使用可调参数）
+    float icon_x = single_icon_x;
+    float icon_size_percent = single_icon_size_percent;
+    float icon_y = single_icon_y;
+
     ui_region icon_region;
     icon_region.x_percent = icon_x;
     icon_region.y_percent = icon_y;
@@ -473,30 +486,28 @@ void UIMgr::update_selection_panel() {
     icon_region.tex_h = (float)tex_h;
     panel.regions.push_back(icon_region);
 
-    // ==================== 属性列表（先排满第一列，再排第二列） ====================
-    // 收集所有可见属性
+    // ---------- 属性列表（先排满第一列，再排第二列） ----------
     std::vector<ui_attribute_row*> visible_attrs;
     for (auto& attr : attribute_rows)
         if (attr.visible(obj))
             visible_attrs.push_back(&attr);
 
     int total_visible = (int)visible_attrs.size();
-    const int max_rows_per_col = 3;               // 每列最大行数
-    int cols = (total_visible > max_rows_per_col) ? 2 : 1;   // 是否需要两列
+    const int max_rows_per_col = single_max_rows_per_col;
+    int cols = (total_visible > max_rows_per_col) ? 2 : 1;
 
-    float attr_start_x = icon_x + icon_size_percent + 0.03f;
-    float second_col_start_x = attr_start_x + 0.5f * 0.8f; // 第二列起始 x
+    float attr_start_x = icon_x + icon_size_percent + single_icon_to_attr_gap;
+    float second_col_start_x = attr_start_x + single_col_offset;
     float attr_y = 0.1f;
-    float attr_row_height = 0.25f;
+    float attr_row_height = single_attr_row_height;
     SDL_Color text_color = to_sdl_color(Color::White);
 
-    for (int i = 0; i < total_visible; i++)
-    {
-        int col = i / max_rows_per_col;            // 0：第一列，1：第二列
-        int row = i % max_rows_per_col;            // 该列中的行号
+    for (int i = 0; i < total_visible; i++) {
+        int col = i / max_rows_per_col;
+        int row = i % max_rows_per_col;
 
         float label_x = (col == 0) ? attr_start_x : second_col_start_x;
-        float value_x = label_x + 0.15f;
+        float value_x = label_x + single_label_value_gap;
         float y = attr_y + row * (attr_row_height + 0.02f);
 
         auto* attr = visible_attrs[i];

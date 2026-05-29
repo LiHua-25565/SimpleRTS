@@ -7,7 +7,7 @@
 #include <functional>
 #include "resources_mgr.h"
 
-// ---------- UI 最小单元 ----------
+// ========== UI 最小单元 ==========
 struct ui_region {
     float x_percent = 0.0f;
     float y_percent = 0.0f;
@@ -23,7 +23,7 @@ struct ui_region {
     std::function<void()> on_click;
 };
 
-// ---------- 锚点枚举 ----------
+// ========== 锚点枚举 ==========
 enum class PanelAnchor {
     BottomLeft,
     BottomCenter,
@@ -33,7 +33,7 @@ enum class PanelAnchor {
     TopRight
 };
 
-// ---------- 面板 ----------
+// ========== 面板 ==========
 struct ui_panel {
     std::string name;
     PanelAnchor anchor = PanelAnchor::BottomLeft;
@@ -46,7 +46,7 @@ struct ui_panel {
     SDL_FRect abs_rect{ 0, 0, 0, 0 };
 };
 
-// ---------- 属性行配置 ----------
+// ========== 属性行配置 ==========
 class GameObject;
 struct ui_attribute_row {
     std::string label;
@@ -54,12 +54,12 @@ struct ui_attribute_row {
     std::function<std::string(GameObject*)> text;
 };
 
-// ---------- UI 管理器 ----------
+// ========== UI 管理器 ==========
 class UIMgr {
 public:
     static UIMgr* instance();
 
-    void init();                                    // 不再需要任何参数
+    void init();
     void shutdown();
     void update_layout(int screen_w, int screen_h);
     void update_content();
@@ -80,7 +80,7 @@ private:
     void update_selection_panel();
     void init_attribute_rows();
 
-    int font_size = 18;                             // 当前字号，仅用于传递
+    int font_size = 18;                             // 当前字号
 
     std::vector<ui_panel> panels;
 
@@ -93,12 +93,26 @@ private:
         "", u8"木", u8"肉", u8"金", u8"石"
     };
 
-    // 布局参数
+    // ========== 布局参数 ==========
     float panel_w_percent = 0.12f;
     float panel_h_percent = 0.16f;
     float panel_margin_x_percent = 0.01f;
     float panel_margin_y_percent = 0.01f;
     float font_size_percent = 0.025f;
+
+    // ========== 信息面板布局参数（可调试） ==========
+    float info_single_panel_w_percent = 0.30f;       // 单选信息面板宽度（原 0.20）
+    float info_multi_panel_w_percent = 0.28f;       // 多选信息面板宽度
+
+    // 单选属性布局
+    float single_icon_x = 0.01f;        // 图标 x 偏移
+    float single_icon_y = 0.17f;        // 图标 y 偏移
+    float single_icon_size_percent = 0.15f;       // 图标占位宽度（原 0.35，太大导致属性列过远）
+    float single_icon_to_attr_gap = 0.05f;        // 图标右侧到属性区域的间距
+    float single_label_value_gap = 0.15f;       // 标签到数值的间距
+    float single_col_offset = 0.50f;       // 第二列相对于第一列的偏移
+    int   single_max_rows_per_col = 3;           // 每列最大行数
+    float single_attr_row_height = 0.25f;       // 属性行高度
 };
 
 #endif // !_UI_MGR_H_
