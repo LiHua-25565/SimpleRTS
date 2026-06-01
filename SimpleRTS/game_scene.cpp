@@ -21,6 +21,7 @@ void GameScene::on_update(float delta)
     move_system.on_update(delta);
     harvest_system.on_update(delta);
     attack_system.on_update(delta);
+    production_system.on_update(delta);
     resource_submit_system.on_update(delta);
     render_system.on_update(delta);
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -76,6 +77,7 @@ void GameScene::on_enter()
     factory.init(&game_map);
     move_system.set_map(&game_map);
     attack_system.set_factory(&factory);
+    production_system.set_factory(&factory);
 
     // ★ 获取窗口并初始化输入系统
     SDL_Window* win = SDL_GetRenderWindow(renderer);  // SDL3 通过渲染器获取窗口

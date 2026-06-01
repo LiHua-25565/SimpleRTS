@@ -15,6 +15,7 @@
 #include "resource_submit_system.h"
 #include "harvest_system.h"
 #include "attack_system.h"
+#include "production_system.h"
 
 #include <vector>
 
@@ -56,6 +57,7 @@ private:
 	ResourceSubmitSystem resource_submit_system;
 	HarvestSystem harvest_system;
 	AttackSystem attack_system;
+	ProductionSystem production_system;
 
 	RenderTexture map_bake_tex;  // 地形烘焙大图
 	bool map_baked = false;      // 是否已经烘焙过

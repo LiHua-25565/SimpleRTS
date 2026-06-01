@@ -549,4 +549,237 @@ void UIMgr::update_selection_panel() {
         }
         panel.regions.push_back(value_region);
     }
+
+    update_production_panel();
+    update_production_queue_display();
+}
+
+// ========== 生产面板构建 ==========
+void UIMgr::build_production_panel() {
+    remove_panel("production");
+    auto& panel = add_panel("production", PanelAnchor::BottomLeft,
+        0, 0, prod_panel_w_percent, prod_panel_h_percent);
+    // 具体位置由 update_production_panel 设置
+}
+void UIMgr::update_production_panel() {
+    auto selected_ids = SelectionMgr::instance()->get_selected_object_id_set();
+    if (selected_ids.size() != 1) {
+        remove_panel("production");
+        current_production_list = nullptr;
+        return;
+    }
+
+    uint64_t id = *selected_ids.begin();
+    GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+    if (!obj || !obj->check_valid()) {
+        remove_panel("production");
+        current_production_list = nullptr;
+        return;
+    }
+
+    auto* building_type = obj->get_component<BuildingType>();
+    if (!building_type) {
+        remove_panel("production");
+        current_production_list = nullptr;
+        return;
+    }
+
+    current_production_list = get_production_list(building_type->type);
+    if (!current_production_list) {
+        remove_panel("production");
+        return;
+    }
+    current_building_type = building_type->type;
+
+    // 位置紧贴信息面板右侧
+    float info_x = panel_margin_x_percent + panel_w_percent + 0.005f;
+    float info_w = info_single_panel_w_percent;
+    float prod_x = info_x + info_w + 0.005f;
+    float prod_y = -(panel_h_percent + panel_margin_y_percent);
+    float prod_w = prod_panel_w_percent;
+    float prod_h = prod_panel_h_percent;
+
+    remove_panel("production");
+    auto& panel = add_panel("production", PanelAnchor::BottomLeft,
+        prod_x, prod_y, prod_w, prod_h);
+
+    // 背景
+    ui_region bg;
+    bg.x_percent = 0.0f; bg.y_percent = 0.0f;
+    bg.w_percent = 1.0f; bg.h_percent = 1.0f;
+    bg.bg_color = { 20, 20, 20, 220 };
+    panel.regions.push_back(bg);
+
+    // ---------- 生产队列横条 ----------
+    ui_region queue_bg;
+    queue_bg.x_percent = 0.02f; queue_bg.y_percent = 0.02f;
+    queue_bg.w_percent = 0.96f; queue_bg.h_percent = prod_queue_bar_height - 0.04f;
+    queue_bg.bg_color = { 30, 30, 30, 200 };
+    panel.regions.push_back(queue_bg);
+
+    // ---------- 生产按钮网格 ----------
+    float btn_area_y = prod_queue_bar_height + 0.02f;
+    float btn_size = prod_button_size_percent;
+    float gap = prod_button_gap;
+    float start_x = 0.02f;
+    int cols = prod_buttons_per_row;
+
+    const auto& list = *current_production_list;
+    SDL_Color text_color = to_sdl_color(Color::White);
+
+    for (size_t i = 0; i < list.size(); ++i) {
+        int col = i % cols;
+        int row = i / cols;
+        float x = start_x + col * (btn_size + gap);
+        float y = btn_area_y + row * (btn_size + gap);
+
+        // 按钮背景
+        ui_region btn_bg;
+        btn_bg.x_percent = x; btn_bg.y_percent = y;
+        btn_bg.w_percent = btn_size; btn_bg.h_percent = btn_size * (prod_w / prod_h);
+        btn_bg.bg_color = { 50, 50, 50, 255 };
+        panel.regions.push_back(btn_bg);
+
+        // 单位图标
+        ui_region icon;
+        icon.x_percent = x + 0.01f; icon.y_percent = y + 0.02f;
+        icon.w_percent = btn_size - 0.02f; icon.h_percent = btn_size * 0.7f;
+        icon.bg_color = { 0,0,0,0 };
+        Color player_color = ObjectFactory::get_player_color(
+            ResourcesMgr::instance()->get_local_player_id());
+        uint32_t tex_id = TextureCache::instance()->get_unit_texture(
+            list[i].unit_type, to_sdl_color(player_color), 32, 32);
+        icon.texture_id = tex_id;
+        icon.tex_w = 32; icon.tex_h = 32;
+        panel.regions.push_back(icon);
+
+        // 点击回调
+        size_t idx = i;
+        btn_bg.on_click = [this, idx]() {
+            if (!current_production_list || idx >= current_production_list->size()) return;
+            const auto& item = (*current_production_list)[idx];
+            int player = ResourcesMgr::instance()->get_local_player_id();
+
+            bool can_afford = true;
+            for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                ResourceType res = static_cast<ResourceType>(r);
+                if (item.cost_amounts[r] > 0) {
+                    if (!ResourcesMgr::instance()->spend_resource(player, res, item.cost_amounts[r])) {
+                        can_afford = false;
+                        break;
+                    }
+                }
+            }
+            if (!can_afford) return;
+
+            auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+            if (sel_ids.size() != 1) return;
+            uint64_t build_id = *sel_ids.begin();
+            GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
+            if (!building) return;
+            auto* queue = building->get_component<ProductionQueue>();
+            if (!queue) queue = building->add_component<ProductionQueue>();
+            queue->queue.push_back({ item.unit_type, 0.0f, item.produce_time });
+            };
+
+        // 按钮文字（取单位名前两字符）
+        ui_region label;
+        label.x_percent = x; label.y_percent = y + btn_size * 0.7f;
+        label.w_percent = btn_size; label.h_percent = btn_size * 0.25f;
+        label.bg_color = { 0,0,0,0 };
+
+        std::string full_name = TextureCache::instance()->get_unit_name(list[i].unit_type);
+        // 截取前两个 UTF-8 字符
+        std::string short_name;
+        int cnt = 0;
+        size_t pos = 0;
+        while (pos < full_name.size() && cnt < 2) {
+            unsigned char c = full_name[pos];
+            size_t len = 1;
+            if (c >= 0xE0 && c < 0xF0) len = 3;
+            else if (c >= 0xF0) len = 4;
+            else if (c >= 0xC0 && c < 0xE0) len = 2;
+            short_name += full_name.substr(pos, len);
+            pos += len;
+            ++cnt;
+        }
+
+        uint32_t label_id = TextureCache::instance()->get_text_texture(short_name, text_color, font_size);
+        if (label_id) {
+            label.texture_id = label_id;
+            float tw, th;
+            if (TextureCache::instance()->get_texture_size(label_id, tw, th)) {
+                label.tex_w = tw;
+                label.tex_h = th;
+            }
+        }
+        panel.regions.push_back(label);
+    }
+
+    update_production_queue_display();
+}
+void UIMgr::update_production_queue_display() {
+    auto* panel = find_panel("production");
+    if (!panel) return;
+
+    // 获取选中建筑的生产队列
+    auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+    if (sel_ids.size() != 1) return;
+    uint64_t id = *sel_ids.begin();
+    GameObject* building = WorldEntityMgr::instance()->get_object_by_id(id);
+    if (!building) return;
+    auto* queue = building->get_component<ProductionQueue>();
+    if (!queue) return;
+
+    // 清除队列区域的旧纹理（region索引1及之后的队列图标，先移除再重建）
+    // 简单做法：保留背景，移除原有队列图标再重新添加
+    // 这里为了方便，我们只保留第0个背景和第1个队列背景，后面的全部移除
+    while (panel->regions.size() > 2) {
+        // 释放纹理
+        if (panel->regions.back().texture_id)
+            TextureCache::instance()->release_texture(panel->regions.back().texture_id);
+        panel->regions.pop_back();
+    }
+
+    // 重新添加队列中的单位图标（小图标 + 进度条）
+    float queue_start_x = 0.05f;
+    float queue_y = 0.04f;
+    float icon_size = 0.12f;
+    float gap = 0.02f;
+    SDL_Color text_color = to_sdl_color(Color::White);
+
+    for (size_t i = 0; i < queue->queue.size(); ++i) {
+        const auto& entry = queue->queue[i];
+        float x = queue_start_x + i * (icon_size + gap);
+
+        // 图标
+        ui_region q_icon;
+        q_icon.x_percent = x; q_icon.y_percent = queue_y;
+        q_icon.w_percent = icon_size; q_icon.h_percent = icon_size * (prod_panel_w_percent / prod_panel_h_percent);
+        q_icon.bg_color = { 0,0,0,0 };
+        Color player_color = ObjectFactory::get_player_color(
+            ResourcesMgr::instance()->get_local_player_id());
+        uint32_t tex_id = TextureCache::instance()->get_unit_texture(
+            entry.unit_type, to_sdl_color(player_color), 24, 24);
+        q_icon.texture_id = tex_id;
+        q_icon.tex_w = 24; q_icon.tex_h = 24;
+        panel->regions.push_back(q_icon);
+
+        // 进度条（简单用色块表示）
+        float bar_h = 0.04f;
+        float bar_y = queue_y + icon_size * (prod_panel_w_percent / prod_panel_h_percent) + 0.01f;
+        // 背景
+        ui_region bar_bg;
+        bar_bg.x_percent = x; bar_bg.y_percent = bar_y;
+        bar_bg.w_percent = icon_size; bar_bg.h_percent = bar_h;
+        bar_bg.bg_color = { 60, 60, 60, 255 };
+        panel->regions.push_back(bar_bg);
+        // 前景（进度）
+        float progress = (entry.total_time > 0) ? (entry.elapsed / entry.total_time) : 0.0f;
+        ui_region bar_fg;
+        bar_fg.x_percent = x; bar_fg.y_percent = bar_y;
+        bar_fg.w_percent = icon_size * progress; bar_fg.h_percent = bar_h;
+        bar_fg.bg_color = { 0, 200, 0, 255 };
+        panel->regions.push_back(bar_fg);
+    }
 }

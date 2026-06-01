@@ -159,6 +159,17 @@ struct Structure : public Component {
     // 标记建筑实体（用于寻路时视为障碍）
 };
 
+// ---------- 生产队列组件（挂载在建筑上） ----------
+struct ProductionQueue : public Component {
+    struct QueueEntry {
+        UnitEntityType unit_type;
+        float elapsed = 0.0f;       // 已生产时间
+        float total_time = 0.0f;    // 总生产时间
+    };
+    std::vector<QueueEntry> queue;  // 队列，最多可配置上限
+    bool frozen_flag = false;       // 当周围无空位时冻结，下一帧继续尝试
+};
+
 // 提交资源建筑组件
 struct ResourceDropoff : public Component {
     uint8_t accept_mask = 0;   // 初始0，通过 | 添加可接受的资源种类

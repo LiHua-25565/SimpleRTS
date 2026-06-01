@@ -46,6 +46,30 @@
     <Filter Include="头文件\Content\Render &amp; UI">
       <UniqueIdentifier>{69260817-7a3a-4426-b543-42a015d20754}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\Content\Systems\attack_system">
+      <UniqueIdentifier>{8d5a8847-3c47-4ecc-be04-a94bf8b19597}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\harvest_sytem">
+      <UniqueIdentifier>{7fd2c0ee-1539-4456-84c9-895f1cc9a024}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\move_feedback_system">
+      <UniqueIdentifier>{56af7638-0ff4-45ea-a03e-b78901e4b446}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\move_system">
+      <UniqueIdentifier>{e9b6b98d-bd71-42b8-a915-c58e4d8c9519}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\input_system">
+      <UniqueIdentifier>{69895dc5-b01b-464f-b9e3-b2bf678ff1c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\render_system">
+      <UniqueIdentifier>{d75d2acc-38ef-49e0-a1c1-c4f5b76231a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\resource_submit_system">
+      <UniqueIdentifier>{9edeb92c-46ac-4e68-86b3-7ccd4a8fd7c9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Content\Systems\production_system">
+      <UniqueIdentifier>{82facace-cd26-4f29-9978-f3351e2e202d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -84,20 +108,11 @@
     <ClCompile Include="factories.cpp">
       <Filter>头文件\Content\Factories</Filter>
     </ClCompile>
-    <ClCompile Include="render_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClCompile>
     <ClCompile Include="render_texture.cpp">
       <Filter>头文件\Content\Map, World And Trees</Filter>
     </ClCompile>
-    <ClCompile Include="move_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClCompile>
     <ClCompile Include="game_map.cpp">
       <Filter>头文件\Content\Map, World And Trees</Filter>
-    </ClCompile>
-    <ClCompile Include="move_feedback_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
     <ClCompile Include="resources_mgr.cpp">
       <Filter>头文件\Content\Resources</Filter>
@@ -105,32 +120,44 @@
     <ClCompile Include="UI_mgr.cpp">
       <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClCompile>
-    <ClCompile Include="input_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClCompile>
     <ClCompile Include="selector_scene.cpp">
       <Filter>头文件\Content\Scenes</Filter>
     </ClCompile>
     <ClCompile Include="texture_cache.cpp">
       <Filter>头文件\Content\Factories</Filter>
     </ClCompile>
-    <ClCompile Include="resource_submit_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClCompile>
     <ClCompile Include="rvo_adapter.cpp">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClCompile>
-    <ClCompile Include="harvest_system.cpp">
       <Filter>头文件\Content\Systems</Filter>
     </ClCompile>
     <ClCompile Include="util.cpp">
       <Filter>头文件</Filter>
     </ClCompile>
     <ClCompile Include="attack_system.cpp">
-      <Filter>头文件\Content\Systems</Filter>
+      <Filter>头文件\Content\Systems\attack_system</Filter>
+    </ClCompile>
+    <ClCompile Include="harvest_system.cpp">
+      <Filter>头文件\Content\Systems\harvest_sytem</Filter>
+    </ClCompile>
+    <ClCompile Include="move_feedback_system.cpp">
+      <Filter>头文件\Content\Systems\move_feedback_system</Filter>
     </ClCompile>
     <ClCompile Include="damege_pipeline.cpp">
-      <Filter>头文件\Content\Systems</Filter>
+      <Filter>头文件\Content\Systems\attack_system</Filter>
+    </ClCompile>
+    <ClCompile Include="move_system.cpp">
+      <Filter>头文件\Content\Systems\move_system</Filter>
+    </ClCompile>
+    <ClCompile Include="input_system.cpp">
+      <Filter>头文件\Content\Systems\input_system</Filter>
+    </ClCompile>
+    <ClCompile Include="render_system.cpp">
+      <Filter>头文件\Content\Systems\render_system</Filter>
+    </ClCompile>
+    <ClCompile Include="resource_submit_system.cpp">
+      <Filter>头文件\Content\Systems\resource_submit_system</Filter>
+    </ClCompile>
+    <ClCompile Include="production_system.cpp">
+      <Filter>头文件\Content\Systems\production_system</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -200,20 +227,11 @@
     <ClInclude Include="components.h">
       <Filter>头文件\Content\Objects</Filter>
     </ClInclude>
-    <ClInclude Include="render_system.h">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClInclude>
     <ClInclude Include="render_texture.h">
       <Filter>头文件\Content\Map, World And Trees</Filter>
     </ClInclude>
-    <ClInclude Include="move_system.h">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClInclude>
     <ClInclude Include="color.h">
       <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="move_feedback_system.h">
-      <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
     <ClInclude Include="resources_mgr.h">
       <Filter>头文件\Content\Resources</Filter>
@@ -221,17 +239,11 @@
     <ClInclude Include="UI_mgr.h">
       <Filter>头文件\Content\Render &amp; UI</Filter>
     </ClInclude>
-    <ClInclude Include="input_system.h">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClInclude>
     <ClInclude Include="resources_type.h">
       <Filter>头文件\Content\Resources</Filter>
     </ClInclude>
     <ClInclude Include="texture_cache.h">
       <Filter>头文件\Content\Factories</Filter>
-    </ClInclude>
-    <ClInclude Include="resource_submit_system.h">
-      <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
     <ClInclude Include="unit_type.h">
       <Filter>头文件\Content\Objects</Filter>
@@ -242,20 +254,41 @@
     <ClInclude Include="rvo_adapter.h">
       <Filter>头文件\Content\Systems</Filter>
     </ClInclude>
-    <ClInclude Include="harvest_system.h">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClInclude>
-    <ClInclude Include="attack_system.h">
-      <Filter>头文件\Content\Systems</Filter>
-    </ClInclude>
     <ClInclude Include="projectile_type.h">
       <Filter>头文件\Content\Objects</Filter>
     </ClInclude>
     <ClInclude Include="armor_type.h">
       <Filter>头文件\Content\Objects</Filter>
     </ClInclude>
+    <ClInclude Include="production_data.h">
+      <Filter>头文件\Content\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="attack_system.h">
+      <Filter>头文件\Content\Systems\attack_system</Filter>
+    </ClInclude>
+    <ClInclude Include="harvest_system.h">
+      <Filter>头文件\Content\Systems\harvest_sytem</Filter>
+    </ClInclude>
+    <ClInclude Include="move_feedback_system.h">
+      <Filter>头文件\Content\Systems\move_feedback_system</Filter>
+    </ClInclude>
     <ClInclude Include="damage_pipeline.h">
-      <Filter>头文件\Content\Systems</Filter>
+      <Filter>头文件\Content\Systems\attack_system</Filter>
+    </ClInclude>
+    <ClInclude Include="move_system.h">
+      <Filter>头文件\Content\Systems\move_system</Filter>
+    </ClInclude>
+    <ClInclude Include="input_system.h">
+      <Filter>头文件\Content\Systems\input_system</Filter>
+    </ClInclude>
+    <ClInclude Include="render_system.h">
+      <Filter>头文件\Content\Systems\render_system</Filter>
+    </ClInclude>
+    <ClInclude Include="resource_submit_system.h">
+      <Filter>头文件\Content\Systems\resource_submit_system</Filter>
+    </ClInclude>
+    <ClInclude Include="production_system.h">
+      <Filter>头文件\Content\Systems\production_system</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

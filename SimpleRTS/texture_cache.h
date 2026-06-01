@@ -38,6 +38,11 @@ public:
     // 注册外部创建的纹理，返回纹理 ID（不负责创建，仅接管生命周期）
     uint32_t register_external_texture(SDL_Texture* tex);
 
+    // 辅助函数
+    std::string get_resource_name(ResourceEntityType type) const;
+    std::string get_unit_name(UnitEntityType type) const;
+    std::string get_building_name(BuildingEntityType type) const;
+
 private:
     TextureCache() = default;
     ~TextureCache() { shutdown(); }
@@ -171,11 +176,7 @@ private:
     SDL_Texture* create_text_texture(const std::string& text, SDL_Color color, int font_size);
 
     // ---- 辅助函数 ----
-    std::string get_resource_name(ResourceEntityType type) const;
-    std::string get_unit_name(UnitEntityType type) const;
-    std::string get_building_name(BuildingEntityType type) const;
     SDL_Color get_player_color(int playerId) const;
-
     SDL_Surface* render_text_multiline(const std::string& text, SDL_Color color, int width, int height);
 };
 

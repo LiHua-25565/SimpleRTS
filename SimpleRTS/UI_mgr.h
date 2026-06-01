@@ -6,6 +6,7 @@
 #include <string>
 #include <functional>
 #include "resources_mgr.h"
+#include "production_data.h"
 
 // ========== UI 最小单元 ==========
 struct ui_region {
@@ -113,6 +114,26 @@ private:
     float single_col_offset = 0.50f;       // 第二列相对于第一列的偏移
     int   single_max_rows_per_col = 3;           // 每列最大行数
     float single_attr_row_height = 0.25f;       // 属性行高度
+
+private:
+    // ========== 生产面板参数 ==========
+    float prod_panel_w_percent = 0.18f;   // 生产面板宽度
+    float prod_panel_h_percent = 0.16f;   // 与资源面板等高
+    float prod_queue_bar_height = 0.30f;   // 生产队列横条占面板高度比例
+    float prod_button_start_y_percent = 0.35f;   // 按钮网格起始 y
+    int   prod_buttons_per_row = 2;       // 每行按钮数
+    float prod_button_size_percent = 0.40f;   // 每个按钮占面板宽度比例
+    float prod_button_gap = 0.03f;   // 按钮间距
+
+    // 生产面板构建与更新
+    void build_production_panel();
+    void update_production_panel();
+    void update_production_queue_display();
+
+    // 当前选中建筑的生产列表引用（缓存）
+    const std::vector<ProductionItem>* current_production_list = nullptr;
+    BuildingEntityType current_building_type = BuildingEntityType::TownCenter;   // 默认
+
 };
 
 #endif // !_UI_MGR_H_
