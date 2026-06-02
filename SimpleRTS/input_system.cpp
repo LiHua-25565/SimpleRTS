@@ -34,7 +34,10 @@ void InputSystem::handle_event(const SDL_Event& event)
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             if (UIMgr::instance()->handle_mouse_down(mx, my))
+            {
+                ui_captured_mouse = true;
                 return;
+            }
 
             left_btn_down = true;
             if (is_point_in_minimap(mx, my))
@@ -67,6 +70,15 @@ void InputSystem::handle_event(const SDL_Event& event)
 
         if (event.button.button == SDL_BUTTON_LEFT)
         {
+            if (ui_captured_mouse) {
+                UIMgr::instance()->handle_mouse_up(mx, my);
+                ui_captured_mouse = false;
+                // 需要手动重置左键状态，避免影响后续逻辑
+                left_btn_down = false;
+                if (is_left_minimap_dragging) is_left_minimap_dragging = false;
+                return;
+            }
+
             if (left_btn_down == false)
                 return;
 

@@ -59,6 +59,7 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
 
     if (panels.empty()) {
         build_resource_panel();
+        build_production_ui();      // 创建空的生产队列面板和按钮面板框架
     }
 
     update_selection_panel();
@@ -131,32 +132,92 @@ void UIMgr::on_render() {
 
 // ========== 点击事件 ==========
 bool UIMgr::handle_mouse_down(float x, float y) {
+    // 清除旧的按下状态
+    if (pressed_region && pressed_panel) {
+        pressed_region->bg_color = pressed_region->original_color;
+        pressed_region->is_pressed = false;
+    }
+    pressed_region = nullptr;
+    pressed_panel = nullptr;
+
+    // 反向遍历面板，保证最上层的面板优先命中
     for (auto panel_it = panels.rbegin(); panel_it != panels.rend(); ++panel_it) {
-        for (auto& region : panel_it->regions) {
-            if (region.on_click &&
-                x >= region.abs_rect.x && x <= region.abs_rect.x + region.abs_rect.w &&
-                y >= region.abs_rect.y && y <= region.abs_rect.y + region.abs_rect.h) {
-                region.on_click();
-                return true;
+        auto& panel = *panel_it;
+        if (x >= panel.abs_rect.x && x <= panel.abs_rect.x + panel.abs_rect.w &&
+            y >= panel.abs_rect.y && y <= panel.abs_rect.y + panel.abs_rect.h) {
+
+            pressed_panel = &panel;
+
+            // 在面板内查找可点击的 region（高亮反馈）
+            for (auto& region : panel.regions) {
+                if (region.on_click &&
+                    x >= region.abs_rect.x && x <= region.abs_rect.x + region.abs_rect.w &&
+                    y >= region.abs_rect.y && y <= region.abs_rect.y + region.abs_rect.h) {
+
+                    SDL_Log("111");
+                    pressed_region = &region;
+                    region.is_pressed = true;
+                    region.original_color = region.bg_color;
+                    region.bg_color = to_sdl_color(Color::White);
+                    break;
+                }
             }
+            return true;  // 命中面板即拦截事件
         }
     }
     return false;
 }
 
-// ========== 资源面板 ==========
+bool UIMgr::handle_mouse_up(float x, float y) {
+    if (!pressed_panel) return false;
+
+    // 恢复高亮
+    if (pressed_region) {
+        pressed_region->bg_color = pressed_region->original_color;
+        pressed_region->is_pressed = false;
+    }
+
+    // 检查释放点是否在之前高亮的 region 内
+    bool triggered = false;
+    if (pressed_region) {
+        if (x >= pressed_region->abs_rect.x &&
+            x <= pressed_region->abs_rect.x + pressed_region->abs_rect.w &&
+            y >= pressed_region->abs_rect.y &&
+            y <= pressed_region->abs_rect.y + pressed_region->abs_rect.h) {
+            if (pressed_region->on_click) {
+                pressed_region->on_click();
+                triggered = true;
+            }
+        }
+    }
+
+    pressed_region = nullptr;
+    pressed_panel = nullptr;
+    return triggered;  // 返回是否实际触发了回调
+}
+
+// ========== 资源面板（始终显示） ==========
 void UIMgr::build_resource_panel() {
     auto* res = ResourcesMgr::instance();
     int player = res->get_local_player_id();
     auto displayed_types = res->get_player_resource_types(player);
-    if (displayed_types.empty()) return;
 
     auto& panel = add_panel("resources", PanelAnchor::BottomLeft,
         panel_margin_x_percent,
         -(panel_h_percent + panel_margin_y_percent),
         panel_w_percent, panel_h_percent);
 
-    int count = static_cast<int>(displayed_types.size());
+    if (displayed_types.empty()) {
+        // 仅显示背景
+        ui_region bg;
+        bg.x_percent = 0.0f; bg.y_percent = 0.0f;
+        bg.w_percent = 1.0f; bg.h_percent = 1.0f;
+        bg.bg_color = { 20, 20, 20, 220 };
+        panel.regions.push_back(bg);
+        return;
+    }
+
+    int count = (int)displayed_types.size();
     float bar_h = 1.0f / count;
     SDL_Color yellow = to_sdl_color(Color::Gold);
 
@@ -196,7 +257,7 @@ void UIMgr::build_resource_panel() {
         value_region.bg_color = { 0, 0, 0, 0 };
         panel.regions.push_back(value_region);
     }
-    update_content(); // 首次填充数值
+    update_content();
 }
 
 // ========== 资源数值更新 ==========
@@ -317,12 +378,26 @@ void UIMgr::init_attribute_rows() {
         });
 }
 
-// ========== 选中信息面板 ==========
+// ========== 选中信息面板（始终显示框架） ==========
 void UIMgr::update_selection_panel() {
     auto selected_ids = SelectionMgr::instance()->get_selected_object_id_set();
+
+    // 未选中任何实体：显示空信息面板框架
     if (selected_ids.empty()) {
         last_selected_id = 0;
         remove_panel("selection_info");
+        auto& panel = add_panel("selection_info", PanelAnchor::BottomLeft,
+            panel_margin_x_percent + panel_w_percent + 0.005f,
+            -(panel_h_percent + panel_margin_y_percent),
+            info_single_panel_w_percent, panel_h_percent);
+        ui_region bg;
+        bg.x_percent = 0.0f; bg.y_percent = 0.0f;
+        bg.w_percent = 1.0f; bg.h_percent = 1.0f;
+        bg.bg_color = { 20, 20, 20, 220 };
+        panel.regions.push_back(bg);
+        // 仍然需要更新生产面板内容（会显示空格子）
+        update_production_panel_content();
+        update_production_queue_display();
         return;
     }
 
@@ -338,8 +413,20 @@ void UIMgr::update_selection_panel() {
             unit_map[unit_type->type].push_back(obj);
         }
 
+        // 即使没有可显示的单位，也保留空面板框架
         if (unit_map.empty()) {
             remove_panel("selection_info");
+            auto& panel = add_panel("selection_info", PanelAnchor::BottomLeft,
+                panel_margin_x_percent + panel_w_percent + 0.005f,
+                -(panel_h_percent + panel_margin_y_percent),
+                info_multi_panel_w_percent, panel_h_percent);
+            ui_region bg;
+            bg.x_percent = 0.0f; bg.y_percent = 0.0f;
+            bg.w_percent = 1.0f; bg.h_percent = 1.0f;
+            bg.bg_color = { 20, 20, 20, 220 };
+            panel.regions.push_back(bg);
+            update_production_panel_content();
+            update_production_queue_display();
             return;
         }
 
@@ -402,7 +489,6 @@ void UIMgr::update_selection_panel() {
             icon_region.tex_h = (float)tex_h;
             panel.regions.push_back(icon_region);
 
-            // 数量角标
             if (count > 1) {
                 ui_region count_region;
                 count_region.x_percent = x + icon_size * 0.6f;
@@ -424,6 +510,8 @@ void UIMgr::update_selection_panel() {
             }
             index++;
         }
+        update_production_panel_content();
+        update_production_queue_display();
         return;
     }
 
@@ -434,6 +522,17 @@ void UIMgr::update_selection_panel() {
     GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
     if (!obj || !obj->check_valid()) {
         remove_panel("selection_info");
+        auto& panel = add_panel("selection_info", PanelAnchor::BottomLeft,
+            panel_margin_x_percent + panel_w_percent + 0.005f,
+            -(panel_h_percent + panel_margin_y_percent),
+            info_single_panel_w_percent, panel_h_percent);
+        ui_region bg;
+        bg.x_percent = 0.0f; bg.y_percent = 0.0f;
+        bg.w_percent = 1.0f; bg.h_percent = 1.0f;
+        bg.bg_color = { 20, 20, 20, 220 };
+        panel.regions.push_back(bg);
+        update_production_panel_content();
+        update_production_queue_display();
         return;
     }
 
@@ -453,7 +552,7 @@ void UIMgr::update_selection_panel() {
     bg.bg_color = { 20, 20, 20, 220 };
     panel.regions.push_back(bg);
 
-    // 图标区域（使用可调参数）
+    // 图标
     float icon_x = single_icon_x;
     float icon_size_percent = single_icon_size_percent;
     float icon_y = single_icon_y;
@@ -486,7 +585,7 @@ void UIMgr::update_selection_panel() {
     icon_region.tex_h = (float)tex_h;
     panel.regions.push_back(icon_region);
 
-    // ---------- 属性列表（先排满第一列，再排第二列） ----------
+    // ---------- 属性列表 ----------
     std::vector<ui_attribute_row*> visible_attrs;
     for (auto& attr : attribute_rows)
         if (attr.visible(obj))
@@ -550,177 +649,213 @@ void UIMgr::update_selection_panel() {
         panel.regions.push_back(value_region);
     }
 
-    update_production_panel();
+    // 更新生产面板内容
+    update_production_panel_content();
     update_production_queue_display();
 }
 
-// ========== 生产面板构建 ==========
-void UIMgr::build_production_panel() {
+// ========== 生产 UI 框架（队列面板 + 按钮面板，始终显示） ==========
+void UIMgr::build_production_ui() {
+    // 队列面板（位于生产面板上方）
+    remove_panel("production_queue");
+    auto& queue_panel = add_panel("production_queue", PanelAnchor::BottomLeft,
+        0, 0, prod_panel_w_percent, prod_queue_panel_h_percent);
+    ui_region qbg;
+    qbg.x_percent = 0.0f; qbg.y_percent = 0.0f;
+    qbg.w_percent = 1.0f; qbg.h_percent = 1.0f;
+    qbg.bg_color = { 20, 20, 20, 220 };
+    queue_panel.regions.push_back(qbg);
+
+    // 生产按钮面板
     remove_panel("production");
-    auto& panel = add_panel("production", PanelAnchor::BottomLeft,
+    auto& prod_panel = add_panel("production", PanelAnchor::BottomLeft,
         0, 0, prod_panel_w_percent, prod_panel_h_percent);
-    // 具体位置由 update_production_panel 设置
+    ui_region pbg;
+    pbg.x_percent = 0.0f; pbg.y_percent = 0.0f;
+    pbg.w_percent = 1.0f; pbg.h_percent = 1.0f;
+    pbg.bg_color = { 20, 20, 20, 220 };
+    prod_panel.regions.push_back(pbg);
 }
-void UIMgr::update_production_panel() {
-    auto selected_ids = SelectionMgr::instance()->get_selected_object_id_set();
-    if (selected_ids.size() != 1) {
-        remove_panel("production");
-        current_production_list = nullptr;
-        return;
-    }
 
-    uint64_t id = *selected_ids.begin();
-    GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
-    if (!obj || !obj->check_valid()) {
-        remove_panel("production");
-        current_production_list = nullptr;
-        return;
-    }
-
-    auto* building_type = obj->get_component<BuildingType>();
-    if (!building_type) {
-        remove_panel("production");
-        current_production_list = nullptr;
-        return;
-    }
-
-    current_production_list = get_production_list(building_type->type);
-    if (!current_production_list) {
-        remove_panel("production");
-        return;
-    }
-    current_building_type = building_type->type;
+// ========== 生产按钮面板内容更新（固定格子数，空格子空显示） ==========
+void UIMgr::update_production_panel_content() {
+    auto* prod_panel = find_panel("production");
+    if (!prod_panel) return;
 
     // 位置紧贴信息面板右侧
     float info_x = panel_margin_x_percent + panel_w_percent + 0.005f;
     float info_w = info_single_panel_w_percent;
     float prod_x = info_x + info_w + 0.005f;
-    float prod_y = -(panel_h_percent + panel_margin_y_percent);
-    float prod_w = prod_panel_w_percent;
-    float prod_h = prod_panel_h_percent;
+    float base_y = -(panel_h_percent + panel_margin_y_percent);
 
-    remove_panel("production");
-    auto& panel = add_panel("production", PanelAnchor::BottomLeft,
-        prod_x, prod_y, prod_w, prod_h);
+    prod_panel->x_percent = prod_x;
+    prod_panel->y_percent = base_y;
+    prod_panel->w_percent = prod_panel_w_percent;
+    prod_panel->h_percent = prod_panel_h_percent;
 
-    // 背景
-    ui_region bg;
-    bg.x_percent = 0.0f; bg.y_percent = 0.0f;
-    bg.w_percent = 1.0f; bg.h_percent = 1.0f;
-    bg.bg_color = { 20, 20, 20, 220 };
-    panel.regions.push_back(bg);
-
-    // ---------- 生产队列横条 ----------
-    ui_region queue_bg;
-    queue_bg.x_percent = 0.02f; queue_bg.y_percent = 0.02f;
-    queue_bg.w_percent = 0.96f; queue_bg.h_percent = prod_queue_bar_height - 0.04f;
-    queue_bg.bg_color = { 30, 30, 30, 200 };
-    panel.regions.push_back(queue_bg);
-
-    // ---------- 生产按钮网格 ----------
-    float btn_area_y = prod_queue_bar_height + 0.02f;
-    float btn_size = prod_button_size_percent;
-    float gap = prod_button_gap;
-    float start_x = 0.02f;
-    int cols = prod_buttons_per_row;
-
-    const auto& list = *current_production_list;
-    SDL_Color text_color = to_sdl_color(Color::White);
-
-    for (size_t i = 0; i < list.size(); ++i) {
-        int col = i % cols;
-        int row = i / cols;
-        float x = start_x + col * (btn_size + gap);
-        float y = btn_area_y + row * (btn_size + gap);
-
-        // 按钮背景
-        ui_region btn_bg;
-        btn_bg.x_percent = x; btn_bg.y_percent = y;
-        btn_bg.w_percent = btn_size; btn_bg.h_percent = btn_size * (prod_w / prod_h);
-        btn_bg.bg_color = { 50, 50, 50, 255 };
-        panel.regions.push_back(btn_bg);
-
-        // 单位图标
-        ui_region icon;
-        icon.x_percent = x + 0.01f; icon.y_percent = y + 0.02f;
-        icon.w_percent = btn_size - 0.02f; icon.h_percent = btn_size * 0.7f;
-        icon.bg_color = { 0,0,0,0 };
-        Color player_color = ObjectFactory::get_player_color(
-            ResourcesMgr::instance()->get_local_player_id());
-        uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-            list[i].unit_type, to_sdl_color(player_color), 32, 32);
-        icon.texture_id = tex_id;
-        icon.tex_w = 32; icon.tex_h = 32;
-        panel.regions.push_back(icon);
-
-        // 点击回调
-        size_t idx = i;
-        btn_bg.on_click = [this, idx]() {
-            if (!current_production_list || idx >= current_production_list->size()) return;
-            const auto& item = (*current_production_list)[idx];
-            int player = ResourcesMgr::instance()->get_local_player_id();
-
-            bool can_afford = true;
-            for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
-                ResourceType res = static_cast<ResourceType>(r);
-                if (item.cost_amounts[r] > 0) {
-                    if (!ResourcesMgr::instance()->spend_resource(player, res, item.cost_amounts[r])) {
-                        can_afford = false;
-                        break;
-                    }
-                }
-            }
-            if (!can_afford) return;
-
-            auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
-            if (sel_ids.size() != 1) return;
-            uint64_t build_id = *sel_ids.begin();
-            GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
-            if (!building) return;
-            auto* queue = building->get_component<ProductionQueue>();
-            if (!queue) queue = building->add_component<ProductionQueue>();
-            queue->queue.push_back({ item.unit_type, 0.0f, item.produce_time });
-            };
-
-        // 按钮文字（取单位名前两字符）
-        ui_region label;
-        label.x_percent = x; label.y_percent = y + btn_size * 0.7f;
-        label.w_percent = btn_size; label.h_percent = btn_size * 0.25f;
-        label.bg_color = { 0,0,0,0 };
-
-        std::string full_name = TextureCache::instance()->get_unit_name(list[i].unit_type);
-        // 截取前两个 UTF-8 字符
-        std::string short_name;
-        int cnt = 0;
-        size_t pos = 0;
-        while (pos < full_name.size() && cnt < 2) {
-            unsigned char c = full_name[pos];
-            size_t len = 1;
-            if (c >= 0xE0 && c < 0xF0) len = 3;
-            else if (c >= 0xF0) len = 4;
-            else if (c >= 0xC0 && c < 0xE0) len = 2;
-            short_name += full_name.substr(pos, len);
-            pos += len;
-            ++cnt;
-        }
-
-        uint32_t label_id = TextureCache::instance()->get_text_texture(short_name, text_color, font_size);
-        if (label_id) {
-            label.texture_id = label_id;
-            float tw, th;
-            if (TextureCache::instance()->get_texture_size(label_id, tw, th)) {
-                label.tex_w = tw;
-                label.tex_h = th;
-            }
-        }
-        panel.regions.push_back(label);
+    auto* queue_panel = find_panel("production_queue");
+    if (queue_panel) {
+        queue_panel->x_percent = prod_x;
+        queue_panel->y_percent = base_y - prod_queue_panel_h_percent - 0.002f;
+        queue_panel->w_percent = prod_panel_w_percent;
+        queue_panel->h_percent = prod_queue_panel_h_percent;
     }
 
-    update_production_queue_display();
+    // 清除旧按钮（不释放纹理）
+    while (prod_panel->regions.size() > 1) {
+        prod_panel->regions.pop_back();
+    }
+
+    // 获取当前建筑的生产列表
+    const std::vector<ProductionItem>* list = nullptr;
+    auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+    if (sel_ids.size() == 1) {
+        uint64_t id = *sel_ids.begin();
+        GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+        if (obj && obj->check_valid()) {
+            auto* btype = obj->get_component<BuildingType>();
+            if (btype) list = get_production_list(btype->type);
+        }
+    }
+
+    const int total_buttons = prod_max_buttons;
+    const int cols = prod_grid_cols;
+    const float btn_w = prod_button_size_percent;
+    const float panel_w_pix = prod_panel->abs_rect.w;
+    const float panel_h_pix = prod_panel->abs_rect.h;
+    const float btn_w_pix = panel_w_pix * btn_w;
+    const float btn_h = btn_w_pix / panel_h_pix;   // 保证正方形
+    const float gap_x = prod_button_gap_x;
+    const float gap_y = prod_button_gap_y;
+    const float start_x = prod_grid_start_x;
+    const float start_y = prod_grid_start_y;
+
+    SDL_Color text_color = to_sdl_color(Color::White);
+
+    for (int i = 0; i < total_buttons; ++i) {
+        int col = i % cols;
+        int row = i / cols;
+        float x = start_x + col * (btn_w + gap_x);
+        float y = start_y + row * (btn_h + gap_y);
+
+        // 按钮背景（始终显示，但空格子无回调）
+        ui_region btn_bg;
+        btn_bg.x_percent = x;
+        btn_bg.y_percent = y;
+        btn_bg.w_percent = btn_w;
+        btn_bg.h_percent = btn_h;
+        btn_bg.bg_color = { 50, 50, 50, 255 };
+
+        bool has_item = (list != nullptr && i < (int)list->size());
+        if (has_item) {
+            const auto& item = (*list)[i];
+
+            // ★ 关键：先设置回调，再 push_back
+            size_t idx = i;
+            btn_bg.on_click = [this, idx, list]() {
+                if (!list || idx >= list->size()) return;
+                const auto& item = (*list)[idx];
+                int player = ResourcesMgr::instance()->get_local_player_id();
+
+                bool can_afford = true;
+                for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                    ResourceType res = static_cast<ResourceType>(r);
+                    if (item.cost_amounts[r] > 0) {
+                        if (!ResourcesMgr::instance()->spend_resource(player, res, item.cost_amounts[r])) {
+                            can_afford = false;
+                            break;
+                        }
+                    }
+                }
+                if (!can_afford) return;
+
+                auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+                if (sel_ids.size() != 1) return;
+                uint64_t build_id = *sel_ids.begin();
+                GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
+                if (!building) return;
+                auto* queue = building->get_component<ProductionQueue>();
+                if (!queue) queue = building->add_component<ProductionQueue>();
+                queue->queue.push_back({ item.unit_type, 0.0f, item.produce_time });
+                };
+        }
+        // 先推入按钮背景（含回调）
+        prod_panel->regions.push_back(btn_bg);
+
+        if (has_item) {
+            const auto& item = (*list)[i];
+
+            // 单位图标
+            ui_region icon;
+            icon.x_percent = x + 0.005f;
+            icon.y_percent = y + 0.005f;
+            icon.w_percent = btn_w - 0.01f;
+            icon.h_percent = btn_h * 0.7f;
+            icon.bg_color = { 0,0,0,0 };
+
+            Color player_color = ObjectFactory::get_player_color(
+                ResourcesMgr::instance()->get_local_player_id());
+            uint32_t tex_id = TextureCache::instance()->get_unit_texture(
+                item.unit_type, to_sdl_color(player_color), 32, 32);
+            if (tex_id) {
+                icon.texture_id = tex_id;
+                float tw, th;
+                if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
+                    icon.tex_w = tw;
+                    icon.tex_h = th;
+                }
+                else {
+                    icon.tex_w = 32; icon.tex_h = 32;
+                }
+            }
+            prod_panel->regions.push_back(icon);
+
+            // 文字标签
+            ui_region label;
+            label.x_percent = x;
+            label.y_percent = y + btn_h * 0.72f;
+            label.w_percent = btn_w;
+            label.h_percent = btn_h * 0.25f;
+            label.bg_color = { 0,0,0,0 };
+
+            std::string full_name = TextureCache::instance()->get_unit_name(item.unit_type);
+            std::string short_name;
+            int cnt = 0;
+            size_t pos = 0;
+            while (pos < full_name.size() && cnt < 2) {
+                unsigned char c = full_name[pos];
+                size_t len = 1;
+                if (c >= 0xE0 && c < 0xF0) len = 3;
+                else if (c >= 0xF0) len = 4;
+                else if (c >= 0xC0 && c < 0xE0) len = 2;
+                short_name += full_name.substr(pos, len);
+                pos += len;
+                ++cnt;
+            }
+
+            uint32_t label_id = TextureCache::instance()->get_text_texture(short_name, text_color, font_size);
+            if (label_id) {
+                label.texture_id = label_id;
+                float tw, th;
+                if (TextureCache::instance()->get_texture_size(label_id, tw, th)) {
+                    label.tex_w = tw;
+                    label.tex_h = th;
+                }
+            }
+            prod_panel->regions.push_back(label);
+        }
+    }
 }
+
+// ========== 生产队列面板更新 ==========
 void UIMgr::update_production_queue_display() {
-    auto* panel = find_panel("production");
+    auto* panel = find_panel("production_queue");
     if (!panel) return;
+
+    // 清除队列旧内容（不释放纹理）
+    while (panel->regions.size() > 1) {
+        panel->regions.pop_back();
+    }
 
     // 获取选中建筑的生产队列
     auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
@@ -729,57 +864,43 @@ void UIMgr::update_production_queue_display() {
     GameObject* building = WorldEntityMgr::instance()->get_object_by_id(id);
     if (!building) return;
     auto* queue = building->get_component<ProductionQueue>();
-    if (!queue) return;
+    if (!queue || queue->queue.empty()) return;
 
-    // 清除队列区域的旧纹理（region索引1及之后的队列图标，先移除再重建）
-    // 简单做法：保留背景，移除原有队列图标再重新添加
-    // 这里为了方便，我们只保留第0个背景和第1个队列背景，后面的全部移除
-    while (panel->regions.size() > 2) {
-        // 释放纹理
-        if (panel->regions.back().texture_id)
-            TextureCache::instance()->release_texture(panel->regions.back().texture_id);
-        panel->regions.pop_back();
-    }
-
-    // 重新添加队列中的单位图标（小图标 + 进度条）
-    float queue_start_x = 0.05f;
-    float queue_y = 0.04f;
-    float icon_size = 0.12f;
-    float gap = 0.02f;
+    float start_x = 0.02f, y = 0.05f;
+    float icon_size = 0.12f, gap = 0.02f;
     SDL_Color text_color = to_sdl_color(Color::White);
 
     for (size_t i = 0; i < queue->queue.size(); ++i) {
         const auto& entry = queue->queue[i];
-        float x = queue_start_x + i * (icon_size + gap);
+        float x = start_x + i * (icon_size + gap);
 
         // 图标
-        ui_region q_icon;
-        q_icon.x_percent = x; q_icon.y_percent = queue_y;
-        q_icon.w_percent = icon_size; q_icon.h_percent = icon_size * (prod_panel_w_percent / prod_panel_h_percent);
-        q_icon.bg_color = { 0,0,0,0 };
+        ui_region icon;
+        icon.x_percent = x; icon.y_percent = y;
+        icon.w_percent = icon_size;
+        icon.h_percent = icon_size * (prod_panel_w_percent / prod_queue_panel_h_percent);
+        icon.bg_color = { 0,0,0,0 };
         Color player_color = ObjectFactory::get_player_color(
             ResourcesMgr::instance()->get_local_player_id());
         uint32_t tex_id = TextureCache::instance()->get_unit_texture(
             entry.unit_type, to_sdl_color(player_color), 24, 24);
-        q_icon.texture_id = tex_id;
-        q_icon.tex_w = 24; q_icon.tex_h = 24;
-        panel->regions.push_back(q_icon);
+        icon.texture_id = tex_id;
+        icon.tex_w = 24; icon.tex_h = 24;
+        panel->regions.push_back(icon);
 
-        // 进度条（简单用色块表示）
-        float bar_h = 0.04f;
-        float bar_y = queue_y + icon_size * (prod_panel_w_percent / prod_panel_h_percent) + 0.01f;
-        // 背景
+        // 进度条背景
         ui_region bar_bg;
-        bar_bg.x_percent = x; bar_bg.y_percent = bar_y;
-        bar_bg.w_percent = icon_size; bar_bg.h_percent = bar_h;
-        bar_bg.bg_color = { 60, 60, 60, 255 };
+        bar_bg.x_percent = x; bar_bg.y_percent = y + icon_size * (prod_panel_w_percent / prod_queue_panel_h_percent) + 0.005f;
+        bar_bg.w_percent = icon_size; bar_bg.h_percent = 0.02f;
+        bar_bg.bg_color = { 60,60,60,255 };
         panel->regions.push_back(bar_bg);
-        // 前景（进度）
+
+        // 进度条前景
         float progress = (entry.total_time > 0) ? (entry.elapsed / entry.total_time) : 0.0f;
         ui_region bar_fg;
-        bar_fg.x_percent = x; bar_fg.y_percent = bar_y;
-        bar_fg.w_percent = icon_size * progress; bar_fg.h_percent = bar_h;
-        bar_fg.bg_color = { 0, 200, 0, 255 };
+        bar_fg.x_percent = x; bar_fg.y_percent = bar_bg.y_percent;
+        bar_fg.w_percent = icon_size * progress; bar_fg.h_percent = 0.02f;
+        bar_fg.bg_color = { 0,200,0,255 };
         panel->regions.push_back(bar_fg);
     }
 }

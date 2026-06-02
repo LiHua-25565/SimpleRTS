@@ -79,7 +79,7 @@ void GameScene::on_enter()
     attack_system.set_factory(&factory);
     production_system.set_factory(&factory);
 
-    // ★ 获取窗口并初始化输入系统
+    // 获取窗口并初始化输入系统
     SDL_Window* win = SDL_GetRenderWindow(renderer);  // SDL3 通过渲染器获取窗口
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system,
         local_player_id, win);           // 传入窗口
