@@ -21,10 +21,10 @@ void ResourcesMgr::init(int player_count)
 		set_player_resource_types(i, default_types);
 		// 初始资源数值
 		auto& bag = player_resources[i];
-		bag[ResourceType::Wood] = 200;
-		bag[ResourceType::Food] = 200;
-		bag[ResourceType::Gold] = 100;
-		bag[ResourceType::Stone] = 100;
+		bag[ResourceType::Wood] = 2000;
+		bag[ResourceType::Food] = 2000;
+		bag[ResourceType::Gold] = 1000;
+		bag[ResourceType::Stone] = 1000;
 	}
 }
 

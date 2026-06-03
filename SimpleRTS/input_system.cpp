@@ -237,17 +237,11 @@ void InputSystem::handle_event(const SDL_Event& event)
 
                             if (attack->is_ranged)
                             {
-                                float dist_to_target = (target_center - unit_center).length();
+                                float dist_to_target = rect_closest_distance(unit_center, obj->get_collision_box());
                                 if (dist_to_target > attack->range)
                                 {
                                     movable->target = compute_ranged_outer_target(
-                                        unit_center,
-                                        target_center,
-                                        unit->get_collision_box(),
-                                        obj->get_collision_box(),
-                                        attack->range,
-                                        5.0f
-                                    );
+                                        unit_center, target_center, unit->get_collision_box(), obj->get_collision_box(), attack->range, 5.0f);
                                     movable->flow_target = movable->target;
                                     feedback_system->add_line_for_unit(unit, movable->target, 0.5f);
                                 }

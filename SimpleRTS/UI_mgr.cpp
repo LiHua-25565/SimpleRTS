@@ -278,12 +278,6 @@ void UIMgr::update_content() {
         if (!panel || i * 3 + 2 >= panel->regions.size()) continue;
         auto& value_region = panel->regions[i * 3 + 2];
 
-        // 释放旧纹理
-        if (value_region.texture_id) {
-            TextureCache::instance()->release_texture(value_region.texture_id);
-            value_region.texture_id = 0;
-        }
-
         SDL_Color yellow = to_sdl_color(Color::Gold);
         std::string text = std::to_string(val);
         uint32_t tex_id = TextureCache::instance()->get_text_texture(text, yellow, font_size);
@@ -297,7 +291,6 @@ void UIMgr::update_content() {
         }
     }
 }
-
 // ========== 属性行初始化 ==========
 void UIMgr::init_attribute_rows() {
     attribute_rows.clear();
@@ -706,15 +699,18 @@ void UIMgr::update_production_panel_content() {
         prod_panel->regions.pop_back();
     }
 
-    // 获取当前建筑的生产列表
+    // 获取当前建筑的生产列表（仅己方建筑）
     const std::vector<ProductionItem>* list = nullptr;
     auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
     if (sel_ids.size() == 1) {
         uint64_t id = *sel_ids.begin();
         GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
         if (obj && obj->check_valid()) {
-            auto* btype = obj->get_component<BuildingType>();
-            if (btype) list = get_production_list(btype->type);
+            auto* ownership = obj->get_component<Ownership>();
+            if (ownership && ownership->player_id == ResourcesMgr::instance()->get_local_player_id()) {
+                auto* btype = obj->get_component<BuildingType>();
+                if (btype) list = get_production_list(btype->type);
+            }
         }
     }
 
@@ -750,7 +746,7 @@ void UIMgr::update_production_panel_content() {
         if (has_item) {
             const auto& item = (*list)[i];
 
-            // ★ 关键：先设置回调，再 push_back
+            // 关键：先设置回调，再 push_back
             size_t idx = i;
             btn_bg.on_click = [this, idx, list]() {
                 if (!list || idx >= list->size()) return;
@@ -776,6 +772,11 @@ void UIMgr::update_production_panel_content() {
                 if (!building) return;
                 auto* queue = building->get_component<ProductionQueue>();
                 if (!queue) queue = building->add_component<ProductionQueue>();
+
+                // 检查队列是否已满
+                if (queue->queue.size() >= max_production_queue_size)
+                    return;   // 已满，不加入
+
                 queue->queue.push_back({ item.unit_type, 0.0f, item.produce_time });
                 };
         }

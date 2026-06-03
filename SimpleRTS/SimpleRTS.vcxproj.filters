@@ -260,9 +260,6 @@
     <ClInclude Include="armor_type.h">
       <Filter>头文件\Content\Objects</Filter>
     </ClInclude>
-    <ClInclude Include="production_data.h">
-      <Filter>头文件\Content\Objects</Filter>
-    </ClInclude>
     <ClInclude Include="attack_system.h">
       <Filter>头文件\Content\Systems\attack_system</Filter>
     </ClInclude>
@@ -288,6 +285,9 @@
       <Filter>头文件\Content\Systems\resource_submit_system</Filter>
     </ClInclude>
     <ClInclude Include="production_system.h">
+      <Filter>头文件\Content\Systems\production_system</Filter>
+    </ClInclude>
+    <ClInclude Include="production_data.h">
       <Filter>头文件\Content\Systems\production_system</Filter>
     </ClInclude>
   </ItemGroup>

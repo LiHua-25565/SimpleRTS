@@ -16,7 +16,7 @@ struct ProductionItem {
 // ---------- 各建筑的生产列表 ----------
 inline const std::vector<ProductionItem>& get_town_center_production() {
     static const std::vector<ProductionItem> list = {
-        { UnitEntityType::Villager, 5.0f, {0, 0, 10, 0, 0} },   // 农民：5秒，消耗10食物
+        { UnitEntityType::Villager, 5.0f, {10, 10, 10, 10, 0} },   // 农民：5秒，消耗10食物
         { UnitEntityType::Archer,   8.0f, {0, 0, 0, 15, 0} },   // 弓兵：8秒，消耗15黄金
     };
     return list;
