@@ -21,6 +21,7 @@ public:
     GameObject* create_archer(const CollisionBox& box, bool allow_overlap = false);      
 
     GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
+    GameObject* create_archery_range(int grid_x, int grid_y, bool allow_overlap = false);   // °Ð³¡
 
     uint64_t create_projectile_by_type(ProjectileType type, const Vector2& start, const Vector2& target, int damage, uint64_t target_id);
     uint64_t create_arrow(const Vector2& start, const Vector2& target, int damage, uint64_t target_id);

@@ -432,20 +432,33 @@ std::string TextureCache::get_building_name(BuildingEntityType type) const
 {
     switch (type) {
     case BuildingEntityType::TownCenter: return u8"城镇大厅";
+    case BuildingEntityType::ArcheryRange: return u8"靶场";
     default: return "?";
     }
 }
 
 // ---- 文字纹理 ----
-uint32_t TextureCache::get_text_texture(const std::string& text, SDL_Color color, int font_size)
-{
-    TextKey key{ text, color, font_size };
+uint32_t TextureCache::get_text_texture(const std::string& text, SDL_Color color, int font_size, int width, int height) {
+    TextKey key{ text, color, font_size, width, height };
     auto it = text_cache.find(key);
     if (it != text_cache.end()) {
         if (get_texture_by_id(it->second)) return it->second;
         text_cache.erase(it);
     }
-    SDL_Texture* tex = create_text_texture(text, color, font_size);
+
+    SDL_Texture* tex = nullptr;
+    if (width > 0 && height > 0) {
+        // 多行纹理
+        SDL_Surface* surf = render_text_multiline(text, color, width, height);
+        if (!surf) return 0;
+        tex = SDL_CreateTextureFromSurface(renderer, surf);
+        SDL_DestroySurface(surf);
+    }
+    else {
+        tex = create_text_texture(text, color, font_size);
+    }
+    if (!tex) return 0;
+
     uint32_t id = register_texture(tex);
     if (id) text_cache[key] = id;
     return id;
@@ -479,4 +492,11 @@ SDL_Color TextureCache::get_player_color(int playerId) const
     case 2:  return to_sdl_color(Color::DarkRed);
     default: return to_sdl_color(Color::LightGray);
     }
+}
+
+// 科技纹理
+uint32_t TextureCache::get_research_texture(const std::string& name, int width, int height) {
+    // 为简单，直接返回一个固定ID（如用文字纹理“研”）
+    SDL_Color white = { 255,255,255,255 };
+    return get_text_texture(u8"研", white, 18);  // 临时
 }

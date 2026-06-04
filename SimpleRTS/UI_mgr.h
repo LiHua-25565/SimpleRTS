@@ -135,7 +135,7 @@ private:
     float prod_grid_start_x = 0.05f;   // 网格起点 X（面板内百分比）
     float prod_grid_start_y = 0.15f;   // 网格起点 Y（面板内百分比）
     int   prod_max_buttons = 8;       // 最大槽位数（应与 prod_grid_cols * prod_grid_rows 一致）
-    int   max_production_queue_size = 7;       // 生产队列最大长度（同时生产上限）
+    int   max_production_queue_size = 6;       // 生产队列最大长度（同时生产上限）
 
     // 生产 UI 框架与内容更新
     void build_production_ui();

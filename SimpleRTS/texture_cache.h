@@ -23,9 +23,10 @@ public:
     uint32_t get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height);
     uint32_t get_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type);
     uint32_t get_building_texture(BuildingEntityType type, SDL_Color color, int width, int height);
+    uint32_t get_research_texture(const std::string& name, int width, int height);
 
     // ---- 文字纹理（返回纹理 ID） ----
-    uint32_t get_text_texture(const std::string& text, SDL_Color color, int font_size);
+    uint32_t get_text_texture(const std::string& text, SDL_Color color, int font_size, int width = 0, int height = 0);
     bool get_texture_size(uint32_t id, float& w, float& h) const;
 
     // ---- 纹理 ID 操作 ----
@@ -151,9 +152,12 @@ private:
         std::string text;
         SDL_Color color;
         int font_size;
+        int width = 0;   // 0 表示单行（自动忽略）
+        int height = 0;
         bool operator==(const TextKey& o) const {
             return text == o.text && color.r == o.color.r && color.g == o.color.g &&
-                color.b == o.color.b && color.a == o.color.a && font_size == o.font_size;
+                color.b == o.color.b && color.a == o.color.a &&
+                font_size == o.font_size && width == o.width && height == o.height;
         }
     };
     struct TextKeyHash {
@@ -163,6 +167,8 @@ private:
             for (char c : k.text) combine((size_t)c);
             combine(k.color.r); combine(k.color.g); combine(k.color.b); combine(k.color.a);
             combine(k.font_size);
+            combine(k.width);
+            combine(k.height);
             return seed;
         }
     };

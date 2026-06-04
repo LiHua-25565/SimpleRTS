@@ -159,6 +159,9 @@
     <ClCompile Include="production_system.cpp">
       <Filter>头文件\Content\Systems\production_system</Filter>
     </ClCompile>
+    <ClCompile Include="production_data.cpp">
+      <Filter>头文件\Content\Systems\production_system</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="timer.h">

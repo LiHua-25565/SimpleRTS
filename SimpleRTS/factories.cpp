@@ -259,6 +259,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     dropoff->accept_mask = ALL_MASK;
 
     obj->add_component<Selectable>();
+    obj->add_component<ProductionQueue>();
 
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
@@ -267,6 +268,60 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     auto* health = obj->add_component<Health>();
     health->max_health = 1000;
     health->current_health = 1000;
+
+    WorldEntityMgr::instance()->insert_object(obj);
+    map->add_object_to_dynamic_obstacle_field(obj);
+    return obj;
+}
+
+GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool allow_overlap) {
+    if (!map) return nullptr;
+
+    const int size_cells = 20;
+    int cell_size = map->get_cell_size();
+    float w = (float)(size_cells * cell_size);
+    float h = (float)(size_cells * cell_size);
+    float x = (float)(grid_x * cell_size);
+    float y = (float)(grid_y * cell_size);
+    CollisionBox box{ {x, y}, w, h };
+
+    for (int row = 0; row < size_cells; ++row)
+        for (int col = 0; col < size_cells; ++col)
+            if (!map->is_cell_passable(grid_x + col, grid_y + row))
+                return nullptr;
+
+    if (!allow_overlap && check_overlap(box)) return nullptr;
+
+    auto* obj = new GameObject(box);
+
+    auto* render = obj->add_component<Renderable>();
+    Color tc_color = get_player_color(current_player_id);
+    render->color = tc_color;
+
+    SDL_Color sdl_color = to_sdl_color(tc_color);
+    uint32_t tex_id = TextureCache::instance()->get_building_texture(
+        BuildingEntityType::ArcheryRange, sdl_color, (int)w, (int)h);
+    if (tex_id) {
+        render->texture_id = tex_id;
+    }
+
+    obj->add_component<Structure>();
+    obj->add_component<FlashComponent>();
+    obj->add_component<BuildingType>()->type = BuildingEntityType::ArcheryRange;
+
+    auto* dropoff = obj->add_component<ResourceDropoff>();
+    dropoff->accept_mask = ALL_MASK;
+
+    obj->add_component<Selectable>();
+    obj->add_component<ProductionQueue>();
+
+    auto* ownership = obj->add_component<Ownership>();
+    ownership->player_id = current_player_id;
+    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
+
+    auto* health = obj->add_component<Health>();
+    health->max_health = 1200;
+    health->current_health = 1200;
 
     WorldEntityMgr::instance()->insert_object(obj);
     map->add_object_to_dynamic_obstacle_field(obj);

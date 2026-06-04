@@ -144,6 +144,7 @@
     <ClCompile Include="factories.cpp" />
     <ClCompile Include="move_feedback_system.cpp" />
     <ClCompile Include="move_system.cpp" />
+    <ClCompile Include="production_data.cpp" />
     <ClCompile Include="production_system.cpp" />
     <ClCompile Include="quad_tree.cpp" />
     <ClCompile Include="render_mgr.cpp" />

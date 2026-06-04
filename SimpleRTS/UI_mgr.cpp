@@ -701,6 +701,7 @@ void UIMgr::update_production_panel_content() {
 
     // 获取当前建筑的生产列表（仅己方建筑）
     const std::vector<ProductionItem>* list = nullptr;
+    GameObject* current_building = nullptr;   // 保存当前建筑指针
     auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
     if (sel_ids.size() == 1) {
         uint64_t id = *sel_ids.begin();
@@ -709,7 +710,10 @@ void UIMgr::update_production_panel_content() {
             auto* ownership = obj->get_component<Ownership>();
             if (ownership && ownership->player_id == ResourcesMgr::instance()->get_local_player_id()) {
                 auto* btype = obj->get_component<BuildingType>();
-                if (btype) list = get_production_list(btype->type);
+                if (btype) {
+                    list = get_production_list(btype->type);
+                    current_building = obj;
+                }
             }
         }
     }
@@ -726,7 +730,10 @@ void UIMgr::update_production_panel_content() {
     const float start_x = prod_grid_start_x;
     const float start_y = prod_grid_start_y;
 
-    SDL_Color text_color = to_sdl_color(Color::White);
+    // 阵营颜色
+    Color player_color = ObjectFactory::get_player_color(
+        ResourcesMgr::instance()->get_local_player_id());
+    SDL_Color sdl_player_color = to_sdl_color(player_color);
 
     for (int i = 0; i < total_buttons; ++i) {
         int col = i % cols;
@@ -734,116 +741,169 @@ void UIMgr::update_production_panel_content() {
         float x = start_x + col * (btn_w + gap_x);
         float y = start_y + row * (btn_h + gap_y);
 
-        // 按钮背景（始终显示，但空格子无回调）
+        // 按钮背景
         ui_region btn_bg;
         btn_bg.x_percent = x;
         btn_bg.y_percent = y;
         btn_bg.w_percent = btn_w;
         btn_bg.h_percent = btn_h;
-        btn_bg.bg_color = { 50, 50, 50, 255 };
+        btn_bg.bg_color = { 50, 50, 50, 255 }; // 默认
 
         bool has_item = (list != nullptr && i < (int)list->size());
+        bool is_completed = false;
+        bool is_in_queue = false;
+
         if (has_item) {
             const auto& item = (*list)[i];
-
-            // 关键：先设置回调，再 push_back
-            size_t idx = i;
-            btn_bg.on_click = [this, idx, list]() {
-                if (!list || idx >= list->size()) return;
-                const auto& item = (*list)[idx];
-                int player = ResourcesMgr::instance()->get_local_player_id();
-
-                bool can_afford = true;
-                for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
-                    ResourceType res = static_cast<ResourceType>(r);
-                    if (item.cost_amounts[r] > 0) {
-                        if (!ResourcesMgr::instance()->spend_resource(player, res, item.cost_amounts[r])) {
-                            can_afford = false;
-                            break;
+            if (item.type == ProductionType::Research && item.research && current_building) {
+                auto* q = current_building->get_component<ProductionQueue>();
+                if (q) {
+                    is_completed = q->completed_research.count(item.research->name) > 0;
+                    if (!is_completed) {
+                        for (const auto& e : q->queue) {
+                            if (e.type == ProductionType::Research && e.tech_name == item.research->name) {
+                                is_in_queue = true;
+                                break;
+                            }
                         }
                     }
                 }
-                if (!can_afford) return;
+            }
 
-                auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
-                if (sel_ids.size() != 1) return;
-                uint64_t build_id = *sel_ids.begin();
-                GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
-                if (!building) return;
-                auto* queue = building->get_component<ProductionQueue>();
-                if (!queue) queue = building->add_component<ProductionQueue>();
+            btn_bg.bg_color = (is_completed || is_in_queue) ? SDL_Color{ 30, 30, 30, 255 } : SDL_Color{ 50, 50, 50, 255 };
 
-                // 检查队列是否已满
-                if (queue->queue.size() >= max_production_queue_size)
-                    return;   // 已满，不加入
+            // 设置回调（仅当可用时）
+            if (!is_completed && !is_in_queue) {
+                size_t idx = i;
+                btn_bg.on_click = [this, idx, list, current_building]() {
+                    if (!list || idx >= list->size()) return;
+                    const auto& item = (*list)[idx];
+                    int player = ResourcesMgr::instance()->get_local_player_id();
 
-                queue->queue.push_back({ item.unit_type, 0.0f, item.produce_time });
-                };
-        }
-        // 先推入按钮背景（含回调）
-        prod_panel->regions.push_back(btn_bg);
+                    bool can_afford = true;
+                    for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                        ResourceType res = static_cast<ResourceType>(r);
+                        if (item.cost_amounts[r] > 0) {
+                            if (!ResourcesMgr::instance()->spend_resource(player, res, item.cost_amounts[r])) {
+                                can_afford = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!can_afford) return;
 
-        if (has_item) {
-            const auto& item = (*list)[i];
+                    auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+                    if (sel_ids.size() != 1) return;
+                    uint64_t build_id = *sel_ids.begin();
+                    GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
+                    if (!building) return;
+                    auto* queue = building->get_component<ProductionQueue>();
+                    if (!queue) queue = building->add_component<ProductionQueue>();
+                    if (queue->queue.size() >= max_production_queue_size) return;
 
-            // 单位图标
-            ui_region icon;
-            icon.x_percent = x + 0.005f;
-            icon.y_percent = y + 0.005f;
-            icon.w_percent = btn_w - 0.01f;
-            icon.h_percent = btn_h * 0.7f;
-            icon.bg_color = { 0,0,0,0 };
+                    // 科技唯一性二次检查
+                    if (item.type == ProductionType::Research && item.research) {
+                        if (queue->completed_research.count(item.research->name) > 0) return;
+                        for (const auto& e : queue->queue) {
+                            if (e.type == ProductionType::Research && e.tech_name == item.research->name)
+                                return;
+                        }
+                    }
 
-            Color player_color = ObjectFactory::get_player_color(
-                ResourcesMgr::instance()->get_local_player_id());
-            uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-                item.unit_type, to_sdl_color(player_color), 32, 32);
+                    ProductionQueue::QueueEntry entry;
+                    entry.type = item.type;
+                    entry.total_time = item.produce_time;
+                    for (int r = 0; r < static_cast<int>(ResourceType::Count); ++r)
+                        entry.cost_amounts[r] = item.cost_amounts[r];
+
+                    if (item.type == ProductionType::Unit) {
+                        entry.unit_type = item.unit_type;
+                    }
+                    else if (item.type == ProductionType::Research && item.research) {
+                        entry.research_callback = item.research->apply_effect;
+                        entry.tech_name = item.research->name;
+                    }
+                    queue->queue.push_back(entry);
+                    };
+            }
+
+            // 推入按钮背景
+            prod_panel->regions.push_back(btn_bg);
+
+            // ---- 构建按钮文字 ----
+            std::string label_text;
+            if (item.type == ProductionType::Unit) {
+                label_text = TextureCache::instance()->get_unit_name(item.unit_type);
+                std::string first_char;
+                if (!label_text.empty()) {
+                    unsigned char c = label_text[0];
+                    size_t len = 1;
+                    if (c >= 0xE0 && c < 0xF0) len = 3;
+                    else if (c >= 0xF0) len = 4;
+                    else if (c >= 0xC0 && c < 0xE0) len = 2;
+                    first_char = label_text.substr(0, len);
+                }
+                label_text = first_char.empty() ? u8"?" : first_char;
+            }
+            else if (item.type == ProductionType::Research && item.research) {
+                label_text = item.research->name;
+            }
+            else {
+                label_text = u8"?";
+            }
+
+            int char_count = 0;
+            size_t pos = 0;
+            while (pos < label_text.size()) {
+                unsigned char c = label_text[pos];
+                if (c < 0x80) pos += 1;
+                else if (c < 0xE0) pos += 2;
+                else if (c < 0xF0) pos += 3;
+                else pos += 4;
+                ++char_count;
+            }
+
+            uint32_t tex_id = 0;
+            if (char_count > 3) {
+                int tex_w = (int)(btn_w_pix * 0.9f);
+                int tex_h = (int)(btn_h * panel_h_pix * 0.9f);
+                tex_id = TextureCache::instance()->get_text_texture(
+                    label_text, sdl_player_color, font_size, tex_w, tex_h);
+            }
+            else {
+                tex_id = TextureCache::instance()->get_text_texture(
+                    label_text, sdl_player_color, font_size);
+            }
+
             if (tex_id) {
-                icon.texture_id = tex_id;
+                ui_region text_region;
+                text_region.texture_id = tex_id;
+                text_region.bg_color = { 0, 0, 0, 0 };
+
                 float tw, th;
                 if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
-                    icon.tex_w = tw;
-                    icon.tex_h = th;
+                    text_region.tex_w = tw;
+                    text_region.tex_h = th;
                 }
                 else {
-                    icon.tex_w = 32; icon.tex_h = 32;
+                    text_region.tex_w = 20;
+                    text_region.tex_h = 20;
                 }
-            }
-            prod_panel->regions.push_back(icon);
 
-            // 文字标签
-            ui_region label;
-            label.x_percent = x;
-            label.y_percent = y + btn_h * 0.72f;
-            label.w_percent = btn_w;
-            label.h_percent = btn_h * 0.25f;
-            label.bg_color = { 0,0,0,0 };
+                float tex_w_pct = text_region.tex_w / panel_w_pix;
+                float tex_h_pct = text_region.tex_h / panel_h_pix;
 
-            std::string full_name = TextureCache::instance()->get_unit_name(item.unit_type);
-            std::string short_name;
-            int cnt = 0;
-            size_t pos = 0;
-            while (pos < full_name.size() && cnt < 2) {
-                unsigned char c = full_name[pos];
-                size_t len = 1;
-                if (c >= 0xE0 && c < 0xF0) len = 3;
-                else if (c >= 0xF0) len = 4;
-                else if (c >= 0xC0 && c < 0xE0) len = 2;
-                short_name += full_name.substr(pos, len);
-                pos += len;
-                ++cnt;
-            }
+                text_region.w_percent = tex_w_pct;
+                text_region.h_percent = tex_h_pct;
 
-            uint32_t label_id = TextureCache::instance()->get_text_texture(short_name, text_color, font_size);
-            if (label_id) {
-                label.texture_id = label_id;
-                float tw, th;
-                if (TextureCache::instance()->get_texture_size(label_id, tw, th)) {
-                    label.tex_w = tw;
-                    label.tex_h = th;
-                }
+                text_region.x_percent = x + (btn_w - tex_w_pct) * 0.5f;
+                text_region.y_percent = y + (btn_h - tex_h_pct) * 0.5f;
+
+                prod_panel->regions.push_back(text_region);
             }
-            prod_panel->regions.push_back(label);
+        }
+        else {
+            prod_panel->regions.push_back(btn_bg);
         }
     }
 }
@@ -851,57 +911,162 @@ void UIMgr::update_production_panel_content() {
 // ========== 生产队列面板更新 ==========
 void UIMgr::update_production_queue_display() {
     auto* panel = find_panel("production_queue");
-    if (!panel) return;
 
-    // 清除队列旧内容（不释放纹理）
+    // 检查是否有选中建筑并拥有生产队列组件（仅己方）
+    auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
+    bool has_queue_component = false;
+    if (sel_ids.size() == 1) {
+        uint64_t id = *sel_ids.begin();
+        GameObject* building = WorldEntityMgr::instance()->get_object_by_id(id);
+        if (building && building->check_valid()) {
+            auto* ownership = building->get_component<Ownership>();
+            if (ownership && ownership->player_id == ResourcesMgr::instance()->get_local_player_id()) {
+                if (building->get_component<ProductionQueue>()) {
+                    has_queue_component = true;
+                }
+            }
+        }
+    }
+
+    // 没有生产队列组件 → 移除面板（隐藏）
+    if (!has_queue_component) {
+        remove_panel("production_queue");
+        return;
+    }
+
+    // 有生产队列组件 → 确保面板存在
+    if (!panel) {
+        auto& new_panel = add_panel("production_queue", PanelAnchor::BottomLeft,
+            0, 0, prod_panel_w_percent, prod_queue_panel_h_percent);
+        ui_region qbg;
+        qbg.x_percent = 0.0f; qbg.y_percent = 0.0f;
+        qbg.w_percent = 1.0f; qbg.h_percent = 1.0f;
+        qbg.bg_color = { 20, 20, 20, 220 };
+        new_panel.regions.push_back(qbg);
+        panel = &new_panel;
+    }
+
+    // 清除旧内容（不释放纹理）
     while (panel->regions.size() > 1) {
         panel->regions.pop_back();
     }
 
-    // 获取选中建筑的生产队列
-    auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
-    if (sel_ids.size() != 1) return;
+    // 重新获取建筑和队列
     uint64_t id = *sel_ids.begin();
     GameObject* building = WorldEntityMgr::instance()->get_object_by_id(id);
     if (!building) return;
     auto* queue = building->get_component<ProductionQueue>();
-    if (!queue || queue->queue.empty()) return;
+    // 不再因为 queue->queue.empty() 而提前返回
+    if (!queue) return;
 
-    float start_x = 0.02f, y = 0.05f;
-    float icon_size = 0.12f, gap = 0.02f;
-    SDL_Color text_color = to_sdl_color(Color::White);
+    const int slot_count = max_production_queue_size;
+    const float panel_w = panel->abs_rect.w;
+    const float panel_h = panel->abs_rect.h;
+    const float margin_px = 6.0f;
+    const float gap_px = 8.0f;
+    const float usable_w = panel_w - 2 * margin_px;
+    const float slot_w = (usable_w - gap_px * (slot_count - 1)) / slot_count;
+    const float slot_h = panel_h * 0.75f;
+    const float slot_y = (panel_h - slot_h) * 0.5f;
 
-    for (size_t i = 0; i < queue->queue.size(); ++i) {
-        const auto& entry = queue->queue[i];
-        float x = start_x + i * (icon_size + gap);
+    Color player_color = ObjectFactory::get_player_color(
+        ResourcesMgr::instance()->get_local_player_id());
+    SDL_Color sdl_color = to_sdl_color(player_color);
 
-        // 图标
-        ui_region icon;
-        icon.x_percent = x; icon.y_percent = y;
-        icon.w_percent = icon_size;
-        icon.h_percent = icon_size * (prod_panel_w_percent / prod_queue_panel_h_percent);
-        icon.bg_color = { 0,0,0,0 };
-        Color player_color = ObjectFactory::get_player_color(
-            ResourcesMgr::instance()->get_local_player_id());
-        uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-            entry.unit_type, to_sdl_color(player_color), 24, 24);
-        icon.texture_id = tex_id;
-        icon.tex_w = 24; icon.tex_h = 24;
-        panel->regions.push_back(icon);
+    const int active_slots = std::min((int)queue->queue.size(), slot_count);
 
-        // 进度条背景
-        ui_region bar_bg;
-        bar_bg.x_percent = x; bar_bg.y_percent = y + icon_size * (prod_panel_w_percent / prod_queue_panel_h_percent) + 0.005f;
-        bar_bg.w_percent = icon_size; bar_bg.h_percent = 0.02f;
-        bar_bg.bg_color = { 60,60,60,255 };
-        panel->regions.push_back(bar_bg);
+    for (int i = 0; i < slot_count; ++i) {
+        float slot_x = margin_px + i * (slot_w + gap_px);
 
-        // 进度条前景
-        float progress = (entry.total_time > 0) ? (entry.elapsed / entry.total_time) : 0.0f;
-        ui_region bar_fg;
-        bar_fg.x_percent = x; bar_fg.y_percent = bar_bg.y_percent;
-        bar_fg.w_percent = icon_size * progress; bar_fg.h_percent = 0.02f;
-        bar_fg.bg_color = { 0,200,0,255 };
-        panel->regions.push_back(bar_fg);
+        // 槽位背景（始终绘制，即使队列为空）
+        ui_region slot_bg;
+        slot_bg.x_percent = slot_x / panel_w;
+        slot_bg.y_percent = slot_y / panel_h;
+        slot_bg.w_percent = slot_w / panel_w;
+        slot_bg.h_percent = slot_h / panel_h;
+        slot_bg.bg_color = { 40, 40, 40, 200 };
+        panel->regions.push_back(slot_bg);
+
+        if (i < active_slots) {
+            const auto& entry = queue->queue[i];
+
+            // 图标纹理
+            uint32_t tex_id = 0;
+            if (entry.type == ProductionType::Unit) {
+                tex_id = TextureCache::instance()->get_unit_texture(
+                    entry.unit_type, sdl_color, (int)slot_w, (int)slot_h);
+            }
+            else {
+                std::string tech_name = entry.tech_name;
+                std::string short_name;
+                int cnt = 0; size_t pos = 0;
+                while (pos < tech_name.size() && cnt < 2) {
+                    unsigned char c = tech_name[pos];
+                    size_t len = 1;
+                    if (c >= 0xE0 && c < 0xF0) len = 3;
+                    else if (c >= 0xF0) len = 4;
+                    else if (c >= 0xC0 && c < 0xE0) len = 2;
+                    short_name += tech_name.substr(pos, len);
+                    pos += len; ++cnt;
+                }
+                tex_id = TextureCache::instance()->get_text_texture(
+                    short_name, sdl_color, font_size, (int)slot_w, (int)slot_h);
+            }
+
+            if (tex_id) {
+                ui_region icon;
+                icon.texture_id = tex_id;
+                icon.bg_color = { 0,0,0,0 };
+                float tw, th;
+                if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
+                    icon.tex_w = tw; icon.tex_h = th;
+                }
+                else { icon.tex_w = slot_w; icon.tex_h = slot_h; }
+                icon.x_percent = (slot_x + (slot_w - icon.tex_w) * 0.5f) / panel_w;
+                icon.y_percent = (slot_y + (slot_h - icon.tex_h) * 0.5f) / panel_h;
+                icon.w_percent = icon.tex_w / panel_w;
+                icon.h_percent = icon.tex_h / panel_h;
+                panel->regions.push_back(icon);
+            }
+
+            // 进度条
+            float bar_h = 0.04f * panel_h;
+            float bar_y = slot_y + slot_h - bar_h - 4.0f;
+            float progress = (entry.total_time > 0) ? (entry.elapsed / entry.total_time) : 0.0f;
+
+            ui_region bar_bg;
+            bar_bg.x_percent = slot_x / panel_w;
+            bar_bg.y_percent = bar_y / panel_h;
+            bar_bg.w_percent = slot_w / panel_w;
+            bar_bg.h_percent = bar_h / panel_h;
+            bar_bg.bg_color = { 60,60,60,255 };
+            panel->regions.push_back(bar_bg);
+
+            ui_region bar_fg;
+            bar_fg.x_percent = slot_x / panel_w;
+            bar_fg.y_percent = bar_y / panel_h;
+            bar_fg.w_percent = (slot_w * progress) / panel_w;
+            bar_fg.h_percent = bar_h / panel_h;
+            bar_fg.bg_color = { 0,200,0,255 };
+            panel->regions.push_back(bar_fg);
+
+            // 取消回调
+            size_t slot_idx = i;
+            slot_bg.on_click = [this, building_id = building->get_id(), slot_idx]() {
+                auto* building = WorldEntityMgr::instance()->get_object_by_id(building_id);
+                if (!building) return;
+                auto* q = building->get_component<ProductionQueue>();
+                if (!q || slot_idx >= q->queue.size()) return;
+
+                const auto& entry = q->queue[slot_idx];
+                int player = ResourcesMgr::instance()->get_local_player_id();
+                for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                    if (entry.cost_amounts[r] > 0) {
+                        ResourcesMgr::instance()->add_resource(player, static_cast<ResourceType>(r), entry.cost_amounts[r]);
+                    }
+                }
+                q->queue.erase(q->queue.begin() + slot_idx);
+                };
+        }
     }
 }

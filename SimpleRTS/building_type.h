@@ -5,6 +5,7 @@
 
 enum class BuildingEntityType : uint8_t {
     TownCenter,  // 城镇大厅
+    ArcheryRange,   // 靶场（新增）
     Count
 };
 

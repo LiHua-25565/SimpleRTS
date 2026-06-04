@@ -89,6 +89,7 @@ void GameScene::on_enter()
     factory.set_player_id(local_player_id);
 
     factory.create_town_center(60, 60);
+    factory.create_archery_range(100, 60);
     factory.create_resource_by_type(ResourceEntityType::SGold, 10, 10);
     factory.create_resource_by_type(ResourceEntityType::LGold, 30, 10);
     factory.create_resource_by_type(ResourceEntityType::Stone, 50, 10);

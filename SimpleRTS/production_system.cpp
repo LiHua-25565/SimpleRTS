@@ -2,6 +2,7 @@
 #include "world_entity_mgr.h"
 #include "game_map.h"
 #include "components.h"
+#include "production_data.h"
 #include <cmath>
 
 // ========== 建筑环绕槽位生成 ==========
@@ -103,25 +104,48 @@ void ProductionSystem::on_update(float delta) {
         auto& entry = queue->queue.front();
         entry.elapsed += delta;
 
-        // 之前被冻结，新帧重试
+        // 处理之前因空间不足被冻结的情况
         if (queue->frozen_flag) {
             queue->frozen_flag = false;
-            if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
+            if (entry.type == ProductionType::Unit) {
+                if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
+                    queue->queue.erase(queue->queue.begin());
+                }
+                else {
+                    queue->frozen_flag = true;
+                }
+            }
+            else if (entry.type == ProductionType::Research) {
+                // 研究完成
+                if (entry.research_callback) {
+                    auto* own = obj->get_component<Ownership>();
+                    if (own) entry.research_callback(own->player_id);
+                }
+                // 记录已完成科技
+                queue->completed_research.insert(entry.tech_name);
                 queue->queue.erase(queue->queue.begin());
             }
-            else {
-                queue->frozen_flag = true;
-            }
-            continue;
         }
 
+        // 正常完成生产/研究
         if (entry.elapsed >= entry.total_time) {
-            if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
-                queue->queue.erase(queue->queue.begin());
+            if (entry.type == ProductionType::Unit) {
+                if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
+                    queue->queue.erase(queue->queue.begin());
+                }
+                else {
+                    queue->frozen_flag = true;
+                    entry.elapsed = entry.total_time; // 保持完成状态，防止超时多次尝试
+                }
             }
-            else {
-                queue->frozen_flag = true;
-                entry.elapsed = entry.total_time;
+            else if (entry.type == ProductionType::Research) {
+                // 研究完成
+                if (entry.research_callback) {
+                    auto* own = obj->get_component<Ownership>();
+                    if (own) entry.research_callback(own->player_id);
+                }
+                queue->completed_research.insert(entry.tech_name);
+                queue->queue.erase(queue->queue.begin());
             }
         }
     }

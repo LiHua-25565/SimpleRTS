@@ -10,6 +10,9 @@
 #include "armor_type.h"
 #include "building_type.h"
 #include "projectile_type.h"
+#include "production_data.h"
+
+#include <unordered_set>
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -162,12 +165,17 @@ struct Structure : public Component {
 // ---------- 生产队列组件（挂载在建筑上） ----------
 struct ProductionQueue : public Component {
     struct QueueEntry {
-        UnitEntityType unit_type;
-        float elapsed = 0.0f;       // 已生产时间
-        float total_time = 0.0f;    // 总生产时间
+        ProductionType type = ProductionType::Unit;
+        UnitEntityType unit_type = UnitEntityType::Villager;
+        std::function<void(int)> research_callback;
+        std::string tech_name;
+        float elapsed = 0.0f;
+        float total_time = 0.0f;
+        int cost_amounts[static_cast<int>(ResourceType::Count)] = { 0 };   // 生产成本
     };
-    std::vector<QueueEntry> queue;  // 队列，最多可配置上限
-    bool frozen_flag = false;       // 当周围无空位时冻结，下一帧继续尝试
+    std::vector<QueueEntry> queue;
+    std::unordered_set<std::string> completed_research;
+    bool frozen_flag = false;
 };
 
 // 提交资源建筑组件
