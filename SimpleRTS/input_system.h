@@ -53,6 +53,13 @@ private:
     Vector2 camera_start_pos;
     Vector2 middle_drag_start;
 
+    bool handle_placement_event(const SDL_Event& event);  // 返回 true 表示事件已处理
+    void handle_mouse_button_down(const SDL_Event& event);
+    void handle_mouse_button_up(const SDL_Event& event);
+    void handle_mouse_motion(const SDL_Event& event);
+    void handle_key_down(const SDL_Event& event);
+    void handle_key_up(const SDL_Event& event);
+
     // 小地图辅助
     bool is_point_in_minimap(float x, float y) const;
     Vector2 minimap_to_world(float x, float y) const;

@@ -11,9 +11,6 @@ public:
 
 private:
     ObjectFactory* factory = nullptr;
-
-    // 在建筑周围寻找空位生成单位
-    bool try_spawn_unit(GameObject* building, UnitEntityType type);
 };
 
 #endif // _PRODUCTION_SYSTEM_H_

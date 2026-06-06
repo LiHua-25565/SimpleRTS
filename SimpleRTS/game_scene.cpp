@@ -78,6 +78,10 @@ void GameScene::on_enter()
     move_system.set_map(&game_map);
     attack_system.set_factory(&factory);
     production_system.set_factory(&factory);
+    UIMgr::instance()->on_placement_confirm = [this](BuildingEntityType type, int grid_x, int grid_y) {
+        factory.set_player_id(local_player_id);
+        factory.create_building_by_type(type, grid_x, grid_y, true);
+        };
 
     // 获取窗口并初始化输入系统
     SDL_Window* win = SDL_GetRenderWindow(renderer);  // SDL3 通过渲染器获取窗口

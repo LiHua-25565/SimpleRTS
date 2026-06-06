@@ -38,6 +38,8 @@ struct RenderCmd
 
     // 专门用于小地图层级的选中标记
     bool is_selected = false;
+    // 用于放置建筑的矩形预览
+    bool is_preview = false;   // 用于放置模式预览，可随时清除
 };
 
 #endif // !_RENDER_DEF_H_

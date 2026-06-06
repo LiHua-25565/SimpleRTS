@@ -11,6 +11,8 @@ public:
     static RenderMgr* instance();
 
     void set_camera(Camera* camera);
+    Camera* get_camera() const;
+
     void begin_frame();
     void push_cmd(const RenderCmd& cmd);
     void push_main_cmd(const RenderCmd& cmd);
@@ -32,6 +34,9 @@ public:
     void set_minimap_content_rect(const SDL_FRect& rect);
     const SDL_FRect& get_minimap_content_rect() const;
     void set_sell_size(int sell_size);
+
+    // 放置建筑预览相关
+    void clear_previews();
 
 private:
     RenderMgr() = default;

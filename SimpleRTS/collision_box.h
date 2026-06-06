@@ -49,6 +49,14 @@ public:
             position.y > other.position.y + other.height);
     }
 
+    // 严格相交（边缘接触不算重叠）
+    bool overlaps_strict(const CollisionBox& other) const {
+        return position.x < other.position.x + other.width &&
+            position.x + width > other.position.x &&
+            position.y < other.position.y + other.height &&
+            position.y + height > other.position.y;
+    }
+
 public:
     Vector2 position;
     float width = 0.0f;

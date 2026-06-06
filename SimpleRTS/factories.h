@@ -16,9 +16,12 @@ public:
 
     // 通用单位创建（根据类型分发）
     GameObject* create_unit_by_type(UnitEntityType type, const CollisionBox& box, bool allow_overlap = false);
+    // 建筑创建
+    GameObject* create_building_by_type(BuildingEntityType type, int grid_x, int grid_y, bool allow_overlap = false);
 
     GameObject* create_villager(const CollisionBox& box, bool allow_overlap = false);   // 快捷创建（农民）
     GameObject* create_archer(const CollisionBox& box, bool allow_overlap = false);      
+    GameObject* create_crossbowman(const CollisionBox& box, bool allow_overlap = false);    // 弩手
 
     GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
     GameObject* create_archery_range(int grid_x, int grid_y, bool allow_overlap = false);   // 靶场

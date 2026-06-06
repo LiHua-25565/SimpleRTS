@@ -23,7 +23,7 @@ static bool try_spawn_unit_circles(GameObject* building, UnitEntityType type, Ob
     const float step = UNIT_WIDTH + GAP;
     const int num_circles = 3;
     // 第一圈紧贴建筑边缘，外圈逐步增加一个单位宽度
-    const float base_offset = HALF_UNIT + 6.0f;   // 建筑边缘到槽位中心的距离
+    const float base_offset = HALF_UNIT + 5.0f;   // 建筑边缘到槽位中心的距离
 
     auto* map = WorldEntityMgr::instance()->get_map();
     if (!map) return false;

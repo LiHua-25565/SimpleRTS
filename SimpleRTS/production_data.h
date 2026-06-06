@@ -18,76 +18,37 @@ struct ResearchItem {
 };
 
 // 生产类型
-enum class ProductionType { Unit, Research };
+enum class ProductionType { Unit, Research, Building };
 
 struct ProductionItem {
     ProductionType type = ProductionType::Unit;
     UnitEntityType unit_type = UnitEntityType::Villager;
     ResearchItem* research = nullptr;
+    BuildingEntityType building_type = BuildingEntityType::TownCenter;
+    int size_cells = 0;
+
     float produce_time = 0.0f;
     int cost_amounts[static_cast<int>(ResourceType::Count)] = { 0 };
+    std::string unlock_techs;
 
     ProductionItem() = default;
-
-    ProductionItem(UnitEntityType unit, float time, std::initializer_list<int> costs)
-        : type(ProductionType::Unit), unit_type(unit), research(nullptr), produce_time(time) {
-        int idx = 0;
-        for (int c : costs) {
-            if (idx < static_cast<int>(ResourceType::Count))
-                cost_amounts[idx] = c;
-            ++idx;
-        }
-    }
-
-    ProductionItem(ResearchItem* res, float time, std::initializer_list<int> costs)
-        : type(ProductionType::Research), unit_type(UnitEntityType::Villager),
-        research(res), produce_time(time) {
-        int idx = 0;
-        for (int c : costs) {
-            if (idx < static_cast<int>(ResourceType::Count))
-                cost_amounts[idx] = c;
-            ++idx;
-        }
-    }
+    ProductionItem(UnitEntityType unit, float time, std::initializer_list<int> costs,
+        const std::string& techs = "");
+    ProductionItem(ResearchItem* res, float time, std::initializer_list<int> costs);
+    ProductionItem(BuildingEntityType building, int cells, float time,
+        std::initializer_list<int> costs);
 };
 
-// 城镇中心生产列表
-inline const std::vector<ProductionItem>& get_town_center_production() {
-    static const std::vector<ProductionItem> list = {
-        ProductionItem(UnitEntityType::Villager, 5.0f, {0, 0, 10, 0, 0}),
-        ProductionItem(UnitEntityType::Archer,   8.0f, {0, 0, 0, 15, 0}),
-    };
-    return list;
-}
-
-// 强弓科技效果：提升己方所有弓兵射程 +50（声明）
+// 强弓科技效果
 void research_strongbow_effect(int player_id);
 
-// 靶场生产列表
-inline const std::vector<ProductionItem>& get_archery_range_production() {
-    static ResearchItem strongbow{
-        u8"强弓",
-        15.0f,
-        {0, 0, 0, 50, 30},         // 50黄金, 30石头
-        research_strongbow_effect   // 函数指针
-    };
+// 生产列表查询
+const std::vector<ProductionItem>& get_town_center_production();
+const std::vector<ProductionItem>& get_archery_range_production();
+const std::vector<ProductionItem>* get_production_list(BuildingEntityType type);
 
-    static const std::vector<ProductionItem> list = {
-        ProductionItem(UnitEntityType::Archer, 8.0f, {0, 0, 0, 15, 0}),
-        ProductionItem(&strongbow, strongbow.research_time,
-                       {0, 0, 0, strongbow.cost_amounts[static_cast<int>(ResourceType::Gold)],
-                        strongbow.cost_amounts[static_cast<int>(ResourceType::Stone)]}),
-    };
-    return list;
-}
-
-// 根据建筑类型获取生产列表
-inline const std::vector<ProductionItem>* get_production_list(BuildingEntityType type) {
-    switch (type) {
-    case BuildingEntityType::TownCenter:   return &get_town_center_production();
-    case BuildingEntityType::ArcheryRange: return &get_archery_range_production();
-    default: return nullptr;
-    }
-}
+// 全局建筑列表（空闲生产面板）
+const std::vector<ProductionItem>& get_global_build_list();
+const ProductionItem* get_build_item(BuildingEntityType type);
 
 #endif // _PRODUCTION_DATA_H_

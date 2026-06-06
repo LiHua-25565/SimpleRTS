@@ -73,6 +73,13 @@ struct ImpactAnimation : public Component {
     Vector2 direction = { 1.0f, 0.0f }; // 冲击方向（单位向量），默认向右
 };
 
+// 建筑建造进度组件（放置动画）
+struct BuildProgressComponent : public Component {
+    float total_time = 5.0f;    // 建造总时间（秒）
+    float elapsed = 0.0f;       // 已经过时间
+    bool active = true;         // 是否正在建造
+};
+
 // 闪烁组件
 struct FlashComponent : public Component {
     float flash_timer = 0.0f;       // 当前闪烁计时（倒计时）

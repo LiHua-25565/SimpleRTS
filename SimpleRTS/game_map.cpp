@@ -5,7 +5,7 @@
 
 bool GameMap::is_cell_passable(int x, int y) const {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    return static_obstacle_field[y][x] >= 0.0f || dynamic_obstacle_field[y][x] >= 0.0f;
+    return static_obstacle_field[y][x] >= 0.0f && dynamic_obstacle_field[y][x] >= 0.0f;
 }
 
 std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& world_goal, float radius) const
@@ -357,38 +357,55 @@ Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const
     return world_goal; // 全图无路，保持原值
 }
 
-void GameMap::generate_static_obstacle_field()
-{   
+void GameMap::generate_static_obstacle_field() {
     static_obstacle_field.resize(height, std::vector<float>(width, 0.0f));
-    for (int x = 0; x < width;x++)
-        for (int y = 0;y < height;y++)
-            static_obstacle_field[y][x] = -1.0f;
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            if (grid[y][x] == TerrainType::Water)
+                static_obstacle_field[y][x] = -1.0f;
 }
 
-void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object)
-{
+void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object) {
     if (!object || !object->check_valid()) return;
     const CollisionBox& box = object->get_collision_box();
 
-    int minx = std::max(0, (int)(box.position.x / cell_size));
-    int miny = std::max(0, (int)(box.position.y / cell_size));
-    int maxx = std::min(width - 1, (int)((box.position.x + box.width) / cell_size));
-    int maxy = std::min(height - 1, (int)((box.position.y + box.height) / cell_size));
+    int minx = (int)(box.position.x / cell_size);
+    int miny = (int)(box.position.y / cell_size);
+    int maxx = (int)((box.position.x + box.width) / cell_size);
+    int maxy = (int)((box.position.y + box.height) / cell_size);
+
+    // 如果右/下边界恰好落在格子边界上，不包含该格子
+    float eps = 0.0001f;
+    if ((box.position.x + box.width) - maxx * cell_size < eps) maxx--;
+    if ((box.position.y + box.height) - maxy * cell_size < eps) maxy--;
+
+    minx = std::max(0, minx);
+    miny = std::max(0, miny);
+    maxx = std::min(width - 1, maxx);
+    maxy = std::min(height - 1, maxy);
 
     for (int y = miny; y <= maxy; ++y)
         for (int x = minx; x <= maxx; ++x)
             dynamic_obstacle_field[y][x] = -1.0f;
 }
 
-void GameMap::remove_object_from_dynamic_obstacle_field(const GameObject* object)
-{
+void GameMap::remove_object_from_dynamic_obstacle_field(const GameObject* object) {
     if (!object) return;
     const CollisionBox& box = object->get_collision_box();
 
-    int minx = std::max(0, (int)(box.position.x / cell_size));
-    int miny = std::max(0, (int)(box.position.y / cell_size));
-    int maxx = std::min(width - 1, (int)((box.position.x + box.width) / cell_size));
-    int maxy = std::min(height - 1, (int)((box.position.y + box.height) / cell_size));
+    int minx = (int)(box.position.x / cell_size);
+    int miny = (int)(box.position.y / cell_size);
+    int maxx = (int)((box.position.x + box.width) / cell_size);
+    int maxy = (int)((box.position.y + box.height) / cell_size);
+
+    float eps = 0.0001f;
+    if ((box.position.x + box.width) - maxx * cell_size < eps) maxx--;
+    if ((box.position.y + box.height) - maxy * cell_size < eps) maxy--;
+
+    minx = std::max(0, minx);
+    miny = std::max(0, miny);
+    maxx = std::min(width - 1, maxx);
+    maxy = std::min(height - 1, maxy);
 
     for (int y = miny; y <= maxy; ++y)
         for (int x = minx; x <= maxx; ++x)

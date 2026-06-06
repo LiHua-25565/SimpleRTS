@@ -6,16 +6,13 @@ void ObjectFactory::init(GameMap* map) {
     this->map = map;
 }
 
-GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const
-{
+GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const {
     std::vector<GameObject*> candidates;
     WorldEntityMgr::instance()->query_area(box, candidates);
-
     for (auto* obj : candidates) {
         if (!obj->check_valid()) continue;
         if (obj->get_component<Projectile>()) continue;
-
-        if (obj->get_collision_box().intersects(box)) {
+        if (obj->get_collision_box().overlaps_strict(box)) {  // 改为严格相交
             return obj;
         }
     }
@@ -92,6 +89,19 @@ GameObject* ObjectFactory::create_unit_by_type(UnitEntityType type, const Collis
         return create_villager(box, allow_overlap);
     case UnitEntityType::Archer:
         return create_archer(box, allow_overlap);
+    case UnitEntityType::Crossbowman:
+        return create_crossbowman(box, allow_overlap);
+    default:
+        return nullptr;
+    }
+}
+
+GameObject* ObjectFactory::create_building_by_type(BuildingEntityType type, int grid_x, int grid_y, bool allow_overlap) {
+    switch (type) {
+    case BuildingEntityType::TownCenter:
+        return create_town_center(grid_x, grid_y, allow_overlap);
+    case BuildingEntityType::ArcheryRange:
+        return create_archery_range(grid_x, grid_y, allow_overlap);
     default:
         return nullptr;
     }
@@ -219,6 +229,61 @@ GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_ove
     return obj;
 }
 
+GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allow_overlap) {
+    if (!map) return nullptr;
+    if (!allow_overlap && check_overlap(box)) return nullptr;
+
+    int cx = (int)(box.position.x / map->get_cell_size());
+    int cy = (int)(box.position.y / map->get_cell_size());
+    if (!map->is_cell_passable(cx, cy)) return nullptr;
+
+    auto* obj = new GameObject(box);
+
+    auto* render = obj->add_component<Renderable>();
+    Color unit_color = get_player_color(current_player_id);
+    render->color = unit_color;
+
+    SDL_Color sdl_color = to_sdl_color(unit_color);
+    uint32_t tex_id = TextureCache::instance()->get_unit_texture(
+        UnitEntityType::Crossbowman, sdl_color, (int)box.width, (int)box.height);
+    if (tex_id) render->texture_id = tex_id;
+
+    obj->add_component<Selectable>();
+    obj->add_component<ImpactAnimation>();
+    obj->add_component<FlashComponent>();
+
+    auto* movable = obj->add_component<Movable>();
+    movable->speed = 60.0f;
+
+    auto* unitType = obj->add_component<UnitType>();
+    unitType->type = UnitEntityType::Crossbowman;
+
+    auto* attack = obj->add_component<Attack>();
+    attack->damage = 12;
+    attack->attack_interval = 1.8f;
+    attack->range = 250.0f;
+    attack->is_ranged = true;
+    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 3;
+    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 4;
+    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 2;
+    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 1;
+
+    auto* armor = obj->add_component<Armor>();
+    armor->type = ArmorType::Light;
+    armor->armor_value = 2;
+
+    auto* health = obj->add_component<Health>();
+    health->max_health = 45;
+    health->current_health = 45;
+
+    auto* ownership = obj->add_component<Ownership>();
+    ownership->player_id = current_player_id;
+    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
+
+    WorldEntityMgr::instance()->insert_object(obj);
+    return obj;
+}
+
 GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow_overlap)
 {
     if (!map) return nullptr;
@@ -231,12 +296,13 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     float y = (float)(grid_y * cell_size);
     CollisionBox box{ {x, y}, w, h };
 
-    for (int row = 0; row < size_cells; ++row)
-        for (int col = 0; col < size_cells; ++col)
-            if (!map->is_cell_passable(grid_x + col, grid_y + row))
-                return nullptr;
-
-    if (!allow_overlap && check_overlap(box)) return nullptr;
+    if (!allow_overlap) {
+        for (int row = 0; row < size_cells; ++row)
+            for (int col = 0; col < size_cells; ++col)
+                if (!map->is_cell_passable(grid_x + col, grid_y + row))
+                    return nullptr;
+        if (check_overlap(box)) return nullptr;
+    }
 
     auto* obj = new GameObject(box);
 
@@ -260,6 +326,11 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
 
     obj->add_component<Selectable>();
     obj->add_component<ProductionQueue>();
+
+    // 建造进度组件（5秒建造时间）
+    auto* build_prog = obj->add_component<BuildProgressComponent>();
+    build_prog->total_time = 5.0f;
+    build_prog->active = true;
 
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
@@ -285,12 +356,13 @@ GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool all
     float y = (float)(grid_y * cell_size);
     CollisionBox box{ {x, y}, w, h };
 
-    for (int row = 0; row < size_cells; ++row)
-        for (int col = 0; col < size_cells; ++col)
-            if (!map->is_cell_passable(grid_x + col, grid_y + row))
-                return nullptr;
-
-    if (!allow_overlap && check_overlap(box)) return nullptr;
+    if (!allow_overlap) {
+        for (int row = 0; row < size_cells; ++row)
+            for (int col = 0; col < size_cells; ++col)
+                if (!map->is_cell_passable(grid_x + col, grid_y + row))
+                    return nullptr;
+        if (check_overlap(box)) return nullptr;
+    }
 
     auto* obj = new GameObject(box);
 
@@ -314,6 +386,11 @@ GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool all
 
     obj->add_component<Selectable>();
     obj->add_component<ProductionQueue>();
+
+    // 建造进度组件
+    auto* build_prog = obj->add_component<BuildProgressComponent>();
+    build_prog->total_time = 5.0f;
+    build_prog->active = true;
 
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;

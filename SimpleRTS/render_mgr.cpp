@@ -87,6 +87,13 @@ void RenderMgr::render_main(SDL_Renderer* renderer)
         // 无纹理 → 渲染纯色矩形
         else if (cmd.color.a != 0)
         {
+            // 如果透明度不是完全不透明（或为预览矩形），启用混合
+            if (cmd.color.a < 255 || cmd.is_preview) {
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            }
+            else {
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            }
             SDL_SetRenderDrawColor(renderer, cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a);
             SDL_RenderFillRect(renderer, &dst_rect);
         }
@@ -163,6 +170,13 @@ void RenderMgr::render_minimap(SDL_Renderer* renderer)
         SDL_SetRenderDrawColor(renderer, cam.r, cam.g, cam.b, cam.a);
         SDL_RenderRect(renderer, &cam_rect);
     }
+}
+
+void RenderMgr::clear_previews() {
+    main_cmd_list.erase(
+        std::remove_if(main_cmd_list.begin(), main_cmd_list.end(),
+            [](const RenderCmd& cmd) { return cmd.is_preview; }),
+        main_cmd_list.end());
 }
 
 void RenderMgr::update_minimap_content_rect()
@@ -266,6 +280,11 @@ float RenderMgr::get_world_height() const
 void RenderMgr::set_camera(Camera* camera)
 {
     this->camera = camera;
+}
+
+Camera* RenderMgr::get_camera() const 
+{ 
+    return camera; 
 }
 
 void RenderMgr::set_sell_size(int cell_size)

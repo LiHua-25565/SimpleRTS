@@ -17,6 +17,9 @@ struct ui_region {
 
     SDL_Color bg_color{ 0, 0, 0, 0 };
     uint32_t texture_id = 0;
+    SDL_Color border_color{ 0, 0, 0, 0 };
+    int       border_width = 0;
+
     float tex_w = 0.0f;
     float tex_h = 0.0f;
 
@@ -78,6 +81,27 @@ public:
     ui_panel* find_panel(const std::string& name);
     void remove_panel(const std::string& name);
 
+public:
+    // 建筑放置模式相关
+    bool is_placement_mode() const { return placement_active; }
+    void enter_placement(BuildingEntityType type);
+    void cancel_placement();
+    void confirm_placement(int grid_x, int grid_y);
+    void update_placement_preview(int grid_x, int grid_y, bool blocked);
+    void clear_placement_preview();
+    std::function<void(BuildingEntityType, int, int)> on_placement_confirm;
+    // 获取当前放置的建筑类型（供其他模块查询）
+    BuildingEntityType get_placement_building() const { return placement_building; }
+
+private:
+    bool placement_active = false;          // 是否处于放置状态
+    BuildingEntityType placement_building;  // 仅保存建筑类型
+    // 预览矩形状态
+    bool  preview_active = false;
+    int   preview_grid_x = 0;
+    int   preview_grid_y = 0;
+    bool  preview_blocked = false;
+
 private:
     UIMgr() = default;
     ~UIMgr() { shutdown(); }
@@ -86,7 +110,7 @@ private:
     void update_selection_panel();
     void init_attribute_rows();
 
-    int font_size = 18;                             // 当前字号
+    int font_size = 18;
 
     std::vector<ui_panel> panels;
 
@@ -99,8 +123,9 @@ private:
         "", u8"木", u8"肉", u8"金", u8"石"
     };
 
-    ui_region* pressed_region = nullptr;
-    ui_panel* pressed_panel = nullptr;
+    // 按下状态记录（面板名+索引，避免指针悬空）
+    std::string pressed_panel_name;
+    int         pressed_region_index = -1;
 
     // ========== 布局参数 ==========
     float panel_w_percent = 0.12f;
@@ -109,11 +134,10 @@ private:
     float panel_margin_y_percent = 0.01f;
     float font_size_percent = 0.025f;
 
-    // ========== 信息面板布局参数（可调试） ==========
-    float info_single_panel_w_percent = 0.30f;       // 单选信息面板宽度
-    float info_multi_panel_w_percent = 0.28f;       // 多选信息面板宽度
+    // ========== 信息面板布局参数 ==========
+    float info_single_panel_w_percent = 0.30f;
+    float info_multi_panel_w_percent = 0.28f;
 
-    // 单选属性布局
     float single_icon_x = 0.01f;
     float single_icon_y = 0.17f;
     float single_icon_size_percent = 0.15f;
@@ -123,28 +147,34 @@ private:
     int   single_max_rows_per_col = 3;
     float single_attr_row_height = 0.25f;
 
-    // ========== 生产面板参数（可调试） ==========
-    float prod_panel_w_percent = 0.18f;   // 生产按钮面板宽度
-    float prod_panel_h_percent = 0.16f;   // 生产按钮面板高度（与资源面板等高）
-    float prod_queue_panel_h_percent = 0.06f;   // 队列面板高度（位于生产面板上方）
-    int   prod_grid_cols = 4;       // 按钮列数
-    int   prod_grid_rows = 2;       // 按钮行数
-    float prod_button_size_percent = 0.16f;   // 按钮宽度百分比（高度自动适配为正方形）
-    float prod_button_gap_x = 0.08f;   // 按钮水平间距
-    float prod_button_gap_y = 0.1f;   // 按钮垂直间距
-    float prod_grid_start_x = 0.05f;   // 网格起点 X（面板内百分比）
-    float prod_grid_start_y = 0.15f;   // 网格起点 Y（面板内百分比）
-    int   prod_max_buttons = 8;       // 最大槽位数（应与 prod_grid_cols * prod_grid_rows 一致）
-    int   max_production_queue_size = 6;       // 生产队列最大长度（同时生产上限）
+    // ========== 生产面板参数 ==========
+    float prod_panel_w_percent = 0.18f;
+    float prod_panel_h_percent = 0.16f;
+    float prod_queue_panel_h_percent = 0.06f;
+    int   prod_grid_cols = 4;
+    int   prod_grid_rows = 2;
+    float prod_button_size_percent = 0.16f;
+    float prod_button_gap_x = 0.08f;
+    float prod_button_gap_y = 0.1f;
+    float prod_grid_start_x = 0.05f;
+    float prod_grid_start_y = 0.15f;
+    int   prod_max_buttons = 8;
+    int   max_production_queue_size = 6;
 
-    // 生产 UI 框架与内容更新
+    // ========== 可调颜色 ==========
+    SDL_Color panel_bg_color = { 20, 20, 20, 255 };  // 所有面板统一背景色
+    SDL_Color slot_bg_color = { 60, 60, 60, 255 };  // 有效槽位背景色
+    SDL_Color empty_slot_bg_color = { 35, 35, 35, 255 };  // 空槽位背景色（稍暗）
+    SDL_Color button_bg_color = { 60, 60, 60, 255 };  // 可用生产按钮背景色
+    SDL_Color disabled_button_bg_color = { 30, 30, 30, 255 };  // 不可用按钮背景色（科技完成/排队）
+    SDL_Color empty_button_bg_color = { 35, 35, 35, 255 };  // 空按钮背景色（与空槽位一致）
+
     void build_production_ui();
     void update_production_panel_content();
     void update_production_queue_display();
 
-    // 缓存当前生产列表
     const std::vector<ProductionItem>* current_production_list = nullptr;
     BuildingEntityType current_building_type = BuildingEntityType::TownCenter;
 };
 
-#endif // !_UI_MGR_H_
+#endif // _UI_MGR_H_

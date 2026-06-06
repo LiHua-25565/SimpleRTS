@@ -27,6 +27,18 @@ void RenderSystem::on_update(float delta)
             }
         }
 
+        // 更新建造进度
+        auto* build_prog = obj->get_component<BuildProgressComponent>();
+        if (build_prog && build_prog->active) {
+            build_prog->elapsed += delta;
+            if (build_prog->elapsed >= build_prog->total_time) {
+                build_prog->active = false;          // 标记完成
+                // 完成后移除组件，释放内存（可选）
+                obj->remove_component<BuildProgressComponent>();
+            }
+        }
+
+        // 更新单位动画
         auto* renderable = obj->get_component<Renderable>();
         auto* anim = obj->get_component<ImpactAnimation>();
         if (!renderable || !anim) continue;
@@ -88,7 +100,6 @@ void RenderSystem::on_render()
         auto* gatherer = obj->get_component<Gatherer>();
         auto* unit_type = obj->get_component<UnitType>();
         if (gatherer && unit_type) {
-            // 携带资源的采集单位纹理
             ResourceType carried = gatherer->carried_type;
             SDL_Color color = to_sdl_color(renderable->color);
             tex_id = TextureCache::instance()->get_carrying_unit_texture(
@@ -106,6 +117,40 @@ void RenderSystem::on_render()
         else
             cmd.layer = RenderLayer::Unit;
         cmd.color = to_sdl_color(renderable->color);
+
+        // 建造动画：透明度渐变 + 头顶进度条
+        auto* build_prog = obj->get_component<BuildProgressComponent>();
+        if (build_prog && build_prog->active) {
+            float progress = build_prog->elapsed / build_prog->total_time;
+            if (progress > 1.0f) progress = 1.0f;
+            // 透明度从 100 到 255
+            cmd.color.a = static_cast<Uint8>(100 + 155 * progress);
+
+            // 进度条
+            const auto& collider = obj->get_collision_box();
+            float bar_w = collider.width * 0.8f;
+            float bar_h = 6.0f;
+            Vector2 bar_pos = {
+                collider.position.x + (collider.width - bar_w) * 0.5f,
+                collider.position.y - bar_h - 2.0f
+            };
+
+            RenderCmd bar_bg;
+            bar_bg.layer = RenderLayer::Animation;
+            bar_bg.position = bar_pos;
+            bar_bg.w = bar_w;
+            bar_bg.h = bar_h;
+            bar_bg.color = { 60, 60, 60, 200 };
+            RenderMgr::instance()->push_cmd(bar_bg);
+
+            RenderCmd bar_fg;
+            bar_fg.layer = RenderLayer::Animation;
+            bar_fg.position = bar_pos;
+            bar_fg.w = bar_w * progress;
+            bar_fg.h = bar_h;
+            bar_fg.color = { 0, 200, 0, 200 };
+            RenderMgr::instance()->push_cmd(bar_fg);
+        }
 
         bool is_selected = selected_ids.count(id) > 0;
         auto* ownership = obj->get_component<Ownership>();
