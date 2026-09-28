@@ -76,6 +76,42 @@ static inline float dot(const Vector2& a, const Vector2& b) {
     return a.x * b.x + a.y * b.y;
 }
 
+// 从 center 沿 dir 走，最多走 max_dist，返回真正"走得通"的距离。
+// 沿路径多点采样（只检查终点会漏掉中途擦到的障碍格）。
+// 这是切向逃逸的"传感器"：告诉转向逻辑前方还有多少余量
+static float clearance(const GameMap* map, const Vector2& center, const Vector2& dir, float max_dist)
+{
+    const float step = (float)map->get_cell_size() * 0.5f;
+    for (float t = step; t <= max_dist; t += step)
+        if (!center_passable(center + dir * t, map))
+            return t - step;          // 该点之前都是通的
+    return max_dist;                  // 全程通畅
+}
+
+// 沿障碍物边缘的切向逃逸方向（所有偏转候选都被堵死时的兜底）。
+// 用周围一圈的不可通行方向之和估计障碍法线 n，再取 n 的垂线作为切线，
+// 并选与原前进方向同侧的那一头，保证"绕着走"而不是"往回走"
+static Vector2 wall_tangent(const GameMap* map, const Vector2& center, const Vector2& desired_dir)
+{
+    const float r = (float)map->get_cell_size() * 2.0f;
+    Vector2 n(0.0f, 0.0f);
+    for (int k = 0; k < 8; ++k) {
+        float a = k * 0.7853982f;                 // 45° 一档
+        Vector2 d(std::cos(a), std::sin(a));
+        if (!center_passable(center + d * r, map)) n = n + d;
+    }
+    Vector2 t;
+    if (n.length() > 0.01f) {
+        Vector2 nn = n.normalize();
+        t = Vector2(-nn.y, nn.x);                 // 法线的垂线 = 障碍边缘方向
+    }
+    else {
+        t = Vector2(-desired_dir.y, desired_dir.x);
+    }
+    if (dot(t, desired_dir) < 0.0f) t = Vector2(-t.x, -t.y);
+    return t.length() > 0.01f ? t.normalize() : desired_dir;
+}
+
 static int calc_max_cols(int N) {
     return std::max(4, (int)std::ceil(std::sqrt(N) * 1.2f));
 }
@@ -273,6 +309,33 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
 
 // ======================= MoveSystem 成员函数 =======================
 
+void MoveSystem::reset_caches() {
+    goal_flow_cache.clear();
+    local_flow_cache.clear();
+    m_avoid_side.clear();
+    m_line_ok.clear();
+    m_frame = 0;
+    m_rvo_accumulator = 0.0f;
+}
+
+// 带 TTL 的视线查询。
+// is_line_passable 沿直线按 5px 采样，长距离下每单位每帧要查上百个格子，
+// 60 个单位就是上万次 —— 实测占了移动系统约 1.5ms/帧。
+// 而视线结果在 8 帧（≈55ms，单位只移动 3px）内几乎不会变化，
+// 因此缓存它，让"流场准入判断"与"直线短路判断"共用同一次结果
+bool MoveSystem::line_of_sight(uint64_t id, const Vector2& from, const Vector2& to)
+{
+    static constexpr uint32_t TTL = 8;
+    auto it = m_line_ok.find(id);
+    if (it != m_line_ok.end() && m_frame - it->second.first < TTL)
+        return it->second.second;
+
+    bool ok = is_line_passable(from, to);
+    if (m_line_ok.size() > 512) m_line_ok.clear();   // 防止已销毁实体的条目堆积
+    m_line_ok[id] = { m_frame, ok };
+    return ok;
+}
+
 void MoveSystem::correct_unwalkable_targets() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
     const int cell_size = map->get_cell_size();
@@ -337,8 +400,9 @@ void MoveSystem::update_local_flow_cache() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
     const int cell_size = map->get_cell_size();
 
-    // key -> 该目标点最近单位的距离（用于按急迫程度排优先级）
-    std::unordered_map<uint64_t, float> active_local;
+    // key -> 该目标点最近单位的距离（用于按急迫程度排优先级）与最远距离（用于决定半径）
+    std::unordered_map<uint64_t, float> active_min;
+    std::unordered_map<uint64_t, float> active_max;
     std::unordered_map<uint64_t, Vector2> key_target;
     for (auto& [id, obj] : pool) {
         if (!obj->check_valid()) continue;
@@ -346,37 +410,51 @@ void MoveSystem::update_local_flow_cache() {
         if (!mv || !mv->is_moving()) continue;
         Vector2 center = obj->get_collision_box().get_center_position();
         float dist = (mv->target - center).length();
-        if (dist >= LOCAL_FLOW_RADIUS_CELLS * cell_size) continue;
+
+        // 准入条件：目标在局部半径内，
+        // **或者** 直线走不通（障碍横在中间）。
+        // 第二条是关键：单位/障碍/目标连成一线时，若因距离太远而不生成流场，
+        // get_flow_direction 就只能退化成"直冲障碍"，前面又只有 RVO 硬挡，
+        // 最终表现为顶在墙上不动 —— 这就是"一线停滞"的结构性成因
+        // 近距离单位本来就准入，不必再付一次射线检测的开销
+        bool need_local = (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size);
+        if (!need_local && !line_of_sight(id, center, mv->target))
+            need_local = true;
+        if (!need_local) continue;
 
         uint64_t key = pos_key(mv->target, cell_size);
-        auto it = active_local.find(key);
-        if (it == active_local.end() || dist < it->second) {
-            active_local[key] = dist;
-            key_target[key] = mv->target;
-        }
+        auto it = active_min.find(key);
+        if (it == active_min.end() || dist < it->second) active_min[key] = dist;
+        auto it2 = active_max.find(key);
+        if (it2 == active_max.end() || dist > it2->second) active_max[key] = dist;
+        key_target[key] = mv->target;
     }
 
     std::unordered_set<uint64_t> active_keys;
-    active_keys.reserve(active_local.size());
-    for (auto& [k, d] : active_local) active_keys.insert(k);
+    active_keys.reserve(active_min.size());
+    for (auto& [k, d] : active_min) active_keys.insert(k);
 
     evict_flow_cache(local_flow_cache, active_keys, m_frame, map->obstacle_version(), MAX_LOCAL_FLOW_CACHE);
 
     // 集中生成（原来是在 get_flow_direction 里惰性生成，单帧可能同时生成多个造成卡顿尖峰）
     // 按距离由近到远优先，受每帧预算限制；未就绪的单位本帧回退到全局流场/直线
     std::vector<std::pair<float, uint64_t>> pending;
-    pending.reserve(active_local.size());
-    for (auto& [k, d] : active_local)
+    pending.reserve(active_min.size());
+    for (auto& [k, d] : active_min)
         if (!local_flow_cache.count(k)) pending.push_back({ d, k });
     std::sort(pending.begin(), pending.end());
 
     int budget = MAX_LOCAL_FLOW_PER_FRAME;
     for (auto& [d, k] : pending) {
         if (budget <= 0) break;
+        // 半径自适应：必须覆盖到最远那个单位，否则它采样到的是全零场。
+        // 上限 MAX_LOCAL_FLOW_RADIUS_CELLS 防止个别超远距离把 Dijkstra 撑爆
+        float radius_cells = std::clamp(active_max[k] / (float)cell_size + 6.0f,
+            LOCAL_FLOW_RADIUS_CELLS + 2.0f, MAX_LOCAL_FLOW_RADIUS_CELLS);
         FlowEntry entry;
         entry.version = map->obstacle_version();
         entry.last_used_frame = m_frame;
-        entry.field = map->generate_local_flow_field(key_target[k], (float)(LOCAL_FLOW_RADIUS_CELLS + 2));
+        entry.field = map->generate_local_flow_field(key_target[k], radius_cells);
         local_flow_cache[k] = std::move(entry);
         --budget;
     }
@@ -389,7 +467,7 @@ Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& ta
     const int cell_size = map->get_cell_size();
 
     // 直线可达就直接朝目标走：省掉绝大部分流场需求，也避免 8 邻域网格带来的锯齿
-    if (is_line_passable(center, target))
+    if (line_of_sight(unit->get_id(), center, target))
         return (target - center).normalize();
 
     if (dist_to_target < LOCAL_FLOW_RADIUS_CELLS * cell_size) {
@@ -491,6 +569,80 @@ void MoveSystem::arrange_units(float delta) {
     }
 }
 
+// ========== 局部避障：切向逃逸 ==========
+//
+// 存在的问题（改进前）：
+//   首选速度直接指向障碍时，RVO/ORCA 的可行速度空间会把"朝向障碍的分量"整块剪掉，
+//   剩下的只有切向分量，其长度 = |pref|·cos(偏角)。正对障碍时 cos≈0，输出速度趋近 0。
+//   而 RVO 只做"一步避让"，不会主动绕行，于是单位停在障碍前 —— 经典局部极小值。
+//
+// 做法：在把方向交给 RVO **之前**先做转向。发现前方受阻时，把前进方向偏转到一个
+//   "既走得通、又尽量贴近原方向"的角度上，且**保持单位长度**（只改方向不降速）。
+//   这样 RVO 拿到的是一个本来就安全的 pref，不需要再靠削减速度来避让。
+Vector2 MoveSystem::steer_around_obstacles(uint64_t id, const Vector2& center,
+    const Vector2& desired_dir, float probe_dist)
+{
+    if (desired_dir.length() < 0.01f) return desired_dir;
+
+    // 快路径：前方通畅就原样返回。绝大多数帧走这里，开销只有一次 clearance
+    if (clearance(map, center, desired_dir, probe_dist) >= probe_dist) {
+        m_avoid_side.erase(id);
+        return desired_dir;
+    }
+
+    // ---- 受阻：在 ±90° 范围内采样偏转方向 ----
+    // CANDIDATES = 每侧候选数，MAX_DEFLECT = 最大偏转角。
+    // 偏转角上限 90° 意味着宁可"横着贴墙走"也不后退，避免原地打转
+    static constexpr int   CANDIDATES  = 4;
+    static constexpr float MAX_DEFLECT = 1.5707963f;              // 90°
+    const float step_angle = MAX_DEFLECT / (float)CANDIDATES;      // 22.5°
+
+    const AvoidState* prev = nullptr;
+    auto it = m_avoid_side.find(id);
+    if (it != m_avoid_side.end() && it->second.until_frame > m_frame) prev = &it->second;
+    const int locked_side = prev ? prev->side : 0;
+
+    const float base_ang = std::atan2(desired_dir.y, desired_dir.x);
+    float best_score = -1e9f, best_ang = base_ang;
+    int   best_side = 0;
+
+    for (int i = -CANDIDATES; i <= CANDIDATES; ++i) {
+        if (i == 0) continue;
+        const float ang = base_ang + i * step_angle;
+        const Vector2 d(std::cos(ang), std::sin(ang));
+
+        // 一出去就撞墙的方向直接弃用（至少要走完 2 格）
+        const float clr = clearance(map, center, d, probe_dist);
+        if (clr < (float)map->get_cell_size() * 2.0f) continue;
+
+        const int side = (i > 0) ? 1 : -1;
+        // 评分三项：
+        //   clr/probe_dist          走得越远越好（优先选真正绕得出去的方向）
+        //   cos(偏角)*0.35          越贴近原方向越好（避免绕远路）
+        //   SIDE_BONUS              与上次绕行侧一致则加分，防止左右摇摆抖动
+        float score = clr / probe_dist
+            + std::cos(i * step_angle) * 0.35f
+            + (locked_side != 0 && side == locked_side ? 0.30f : 0.0f);
+
+        if (score > best_score) { best_score = score; best_ang = ang; best_side = side; }
+    }
+
+    Vector2 out;
+    if (best_score < -1e8f) {
+        // 全部候选都堵死（贴着墙的凹角、夹缝）：沿障碍边缘滑行
+        out = wall_tangent(map, center, desired_dir);
+        best_side = 0;
+    }
+    else {
+        out = Vector2(std::cos(best_ang), std::sin(best_ang));
+    }
+
+    // 记忆绕行侧约 0.35 秒（144Hz ≈ 50 帧）。这是"迟滞"：一旦决定往左绕，
+    // 短期内继续往左，直到前方重新通畅（快路径会清掉记忆），否则会左右抽搐
+    m_avoid_side[id] = AvoidState{ best_side, m_frame + 50 };
+    return out;
+}
+
 // ========== 核心移动逻辑 ==========
 
 void MoveSystem::update_projectiles(float delta)
@@ -534,31 +686,56 @@ void MoveSystem::compute_pref_velocities()
         if (!mv) continue;
 
         const CollisionBox& cb = obj->get_collision_box();
-        Vector2 center = cb.get_center_position();
-        Vector2 target = mv->target;
-        float dist = (target - center).length();
+        const Vector2 center = cb.get_center_position();
 
-        if (!mv->is_moving() || dist < ARRIVE_EPS)
+        if (!mv->is_moving())
         {
             rvo->set_pref_velocity(id, { 0.0f, 0.0f });
             mv->velocity = { 0.0f, 0.0f };
-            if (mv->is_moving()) mv->stop();
+            m_avoid_side.erase(id);
             continue;
         }
 
-        Vector2 pref_vel;
+        // 到达：只有不在列阵状态时才判定结束（列阵有独立的目标点）
+        if (!mv->is_arranging && (mv->target - center).length() < ARRIVE_EPS)
+        {
+            rvo->set_pref_velocity(id, { 0.0f, 0.0f });
+            mv->velocity = { 0.0f, 0.0f };
+            mv->stop();
+            m_avoid_side.erase(id);
+            continue;
+        }
+
+        Vector2 desired_dir;        // 期望前进方向（单位向量）
+        float   dist_to_goal = 0.0f; // 到真正要去的点的距离（用于到达减速）
+
         if (mv->is_arranging && mv->formation_slot >= 0 &&
             mv->formation_slot < (int)m_formation_slots.size())
         {
-            Vector2 slot = m_formation_slots[mv->formation_slot];
-            Vector2 to_slot = slot - center;
-            pref_vel = to_slot.length() < ARRIVE_EPS ? Vector2(0.0f, 0.0f) : to_slot.normalize() * mv->speed;
+            Vector2 to_slot = m_formation_slots[mv->formation_slot] - center;
+            dist_to_goal = to_slot.length();
+            desired_dir = dist_to_goal > 0.01f ? to_slot.normalize() : Vector2(0.0f, 0.0f);
         }
         else
         {
-            Vector2 flow_dir = get_flow_direction(obj, target, mv->flow_target, dist);
-            pref_vel = flow_dir * mv->speed;
+            float dist = (mv->target - center).length();
+            dist_to_goal = dist;
+            desired_dir = get_flow_direction(obj, mv->target, mv->flow_target, dist);
         }
+
+        // ---- 切向逃逸：把撞墙的方向偏转到可通行的切向 ----
+        // 只改方向、不降速。RVO 拿到的因此是本来就安全的首选速度，
+        // 不需要靠削减速度大小来避让 —— 这是"靠近障碍就变慢"的治本手段
+        float diagonal = std::sqrt(cb.width * cb.width + cb.height * cb.height);
+        float probe_dist = std::max(diagonal, mv->speed * PROBE_TIME);
+        desired_dir = steer_around_obstacles(id, center, desired_dir, probe_dist);
+
+        // ---- 到达减速带 ----
+        float slow_radius = mv->speed * ARRIVE_SLOW_TIME;
+        float scale = (dist_to_goal < slow_radius)
+            ? std::max(MIN_ARRIVE_SCALE, dist_to_goal / slow_radius) : 1.0f;
+
+        Vector2 pref_vel = desired_dir * (mv->speed * scale);
         rvo->set_pref_velocity(id, pref_vel);
         // FlowOnly 直接采用首选速度；FlowRVO 会在 integrate 前用 RVO 结果覆盖
         mv->velocity = pref_vel;
@@ -585,8 +762,19 @@ void MoveSystem::integrate_positions(float delta)
 
         if (!mv->is_moving()) continue;
 
+        // ---- 速度限幅：每帧最多改变 max_dv，消除急停/急起与转向抖动 ----
+        // RVO 每 0.05s 才刷新一次速度，定步切换的瞬间会有一个台阶；
+        // 转向时方向突变也会产生抽搐。限幅后速度连续，观感平滑。
+        // 注意只限制"变化量"，不降低目标速度，因此不影响通过能力
+        {
+            Vector2 dv = mv->velocity - mv->smooth_velocity;
+            float max_dv = (std::max(mv->speed, 1.0f) / ACCEL_TIME) * delta;
+            if (dv.length() > max_dv) dv = dv.length() > 0.01f ? dv.normalize() * max_dv : Vector2(0.0f, 0.0f);
+            mv->smooth_velocity = mv->smooth_velocity + dv;
+        }
+
         CollisionBox cb = obj->get_collision_box();
-        Vector2 new_pos = cb.position + mv->velocity * delta;
+        Vector2 new_pos = cb.position + mv->smooth_velocity * delta;
         new_pos.x = std::max(0.0f, std::min(new_pos.x, map_w - cb.width));
         new_pos.y = std::max(0.0f, std::min(new_pos.y, map_h - cb.height));
 

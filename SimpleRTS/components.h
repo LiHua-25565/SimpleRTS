@@ -96,6 +96,9 @@ struct Movable : public Component {
     Vector2 target = { -1.0f, -1.0f };   // 个人精确停止点
     Vector2 flow_target = { -1.0f, -1.0f };   // 流场导航目标（命令中心）
     Vector2 velocity = { 0.0f, 0.0f };
+    // 平滑后的实际速度：每帧向 velocity 逼近但限制变化量，用于消除急停/抖动。
+    // 位置积分用的是它，而不是上一行
+    Vector2 smooth_velocity = { 0.0f, 0.0f };
     MoveMode move_mode = MoveMode::Land;
 
     // 排列状态（到达目标附近后使用）
@@ -107,6 +110,7 @@ struct Movable : public Component {
         target = { -1.0f, -1.0f };
         flow_target = { -1.0f, -1.0f };
         velocity = { 0.0f,0.0f };
+        smooth_velocity = { 0.0f,0.0f };
         is_arranging = false;
     }
 };

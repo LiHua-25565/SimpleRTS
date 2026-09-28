@@ -85,6 +85,21 @@ RVOAdapter* RVOAdapter::instance() {
     return &adapter;
 }
 
+// RVO 邻居与时间窗参数。
+//
+// 关键配平关系：timeHorizon * maxSpeed 必须与 neighborDist 同量级。
+// timeHorizon 是“向前看多久内可能相撞”，它决定 VO（速度障碍）锥的大小：
+//   timeHorizon 越大 → VO 锥越大 → 可行速度空间被切得越多 → 单位越早、越狠地减速。
+// 原先的 5.0s / 3.0s 对 speed≈60px/s、neighborDist=80px 完全失配
+// （5s 可走 300px，远大于 80px 的感知半径），于是只要 80px 内出现任何
+// 邻居或障碍，可行速度几乎被切光，输出速度趋近于 0 —— 这就是
+// “靠近障碍物速度骤降、整体运动迟缓”的直接来源。
+static constexpr float  RVO_NEIGHBOR_DIST     = 70.0f;  // 邻居查询半径（像素）
+static constexpr size_t RVO_MAX_NEIGHBORS     = 10;     // 单个 agent 最多考虑的邻居数
+static constexpr float  RVO_TIME_HORIZON      = 1.5f;   // 与其它单位：向前看 1.5s（≈90px 行程）
+static constexpr float  RVO_TIME_HORIZON_OBST = 1.2f;   // 与静态障碍：略短，避免贴墙时过度减速
+static constexpr float  RVO_RADIUS_SCALE      = 0.75f;  // agent 半径 = 外接圆半径 × 该系数
+
 void RVOAdapter::init(GameMap* map) {
     shutdown();
     map_ = map;
@@ -146,14 +161,16 @@ void RVOAdapter::rebuild_simulation() {
         const CollisionBox& cb = obj->get_collision_box();
         Vector2 center = cb.get_center_position();
 
-        // 修正半径：外接圆半径的 80%
+        // 修正半径：外接圆半径的 70%。
+        // 系数越大，agent 越“胖”，通道越窄、约束越强、减速越明显；
+        // 太小则会在建筑拐角处轻微擦模。0.7 是贴墙与通行效率的折中
         float diagonal = std::sqrt(cb.width * cb.width + cb.height * cb.height);
-        float radius = diagonal * 0.5f * 0.8f;
+        float radius = diagonal * 0.5f * RVO_RADIUS_SCALE;
 
         size_t idx = sim_->addAgent(
             RVO::Vector2(center.x, center.y),
-            80.0f, 10,
-            5.0f, 3.0f,
+            RVO_NEIGHBOR_DIST, RVO_MAX_NEIGHBORS,
+            RVO_TIME_HORIZON, RVO_TIME_HORIZON_OBST,
             radius,
             movable->speed,
             RVO::Vector2(movable->velocity.x, movable->velocity.y)

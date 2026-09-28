@@ -87,6 +87,7 @@ void ResourceSubmitSystem::on_update(float delta)
                 movable->target = { -1.0f, -1.0f };
                 movable->flow_target = { -1.0f, -1.0f };
                 movable->velocity = { 0.0f, 0.0f };
+                movable->smooth_velocity = { 0.0f, 0.0f };
             }
         }
         else
@@ -95,6 +96,7 @@ void ResourceSubmitSystem::on_update(float delta)
             movable->target = { -1.0f, -1.0f };
             movable->flow_target = { -1.0f, -1.0f };
             movable->velocity = { 0.0f, 0.0f };
+            movable->smooth_velocity = { 0.0f, 0.0f };
         }
     }
 }
