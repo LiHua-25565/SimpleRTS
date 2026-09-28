@@ -57,9 +57,8 @@ private:
     MoveModeKind mode_ = MoveModeKind::Legacy;
     float m_rvo_accumulator = 0.0f;
 
-    // 帧计数（流场缓存 LRU 用）与本帧剩余生成预算
+    // 帧计数（流场缓存 LRU 用）
     uint32_t m_frame = 0;
-    int m_flow_gen_budget = 0;
 
     // 排列相关
     std::vector<Vector2> m_formation_slots;

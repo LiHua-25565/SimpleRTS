@@ -109,6 +109,48 @@ static Vector2 make_target_reachable(const Vector2& ideal, const GameMap* map) {
     return ideal;
 }
 
+// 以 center 为中心生成 cols × rows 的矩形阵列槽位
+static std::vector<Vector2> make_grid_slots(const Vector2& center, const Vector2& fwd,
+    const Vector2& right, int cols, int rows, float spacing)
+{
+    std::vector<Vector2> slots;
+    slots.reserve((size_t)cols * (size_t)rows);
+    float half_width = (cols - 1) * spacing * 0.5f;
+    float half_depth = (rows - 1) * spacing * 0.5f;
+    for (int r = 0; r < rows; ++r)
+        for (int c = 0; c < cols; ++c)
+            slots.push_back(center + right * (c * spacing - half_width) + fwd * (half_depth - r * spacing));
+    return slots;
+}
+
+// 该阵列是否放得下：槽位大多可通行，且不压在建筑/资源上。
+// obstacles 由调用方一次性查询后传入，避免每个候选方向都查一次四叉树
+static bool can_formation_fit(const std::vector<Vector2>& slots, const GameMap* map,
+    const std::vector<GameObject*>& obstacles, float margin)
+{
+    if (slots.empty()) return false;
+
+    int passable = 0;
+    for (const Vector2& s : slots) {
+        int gx = (int)(s.x / map->get_cell_size());
+        int gy = (int)(s.y / map->get_cell_size());
+        if (map->is_cell_passable(gx, gy)) ++passable;
+    }
+    if ((float)passable / (float)slots.size() < 0.8f) return false;
+
+    for (GameObject* o : obstacles) {
+        if (!o || !o->check_valid()) continue;   // 四叉树可能返回已销毁的实体
+        if (!o->get_component<Structure>() && !o->get_component<Harvestable>()) continue;
+        const CollisionBox& ob = o->get_collision_box();
+        float l = ob.position.x - margin, r = ob.position.x + ob.width + margin;
+        float t = ob.position.y - margin, b = ob.position.y + ob.height + margin;
+        for (const Vector2& s : slots) {
+            if (s.x >= l && s.x <= r && s.y >= t && s.y <= b) return false;
+        }
+    }
+    return true;
+}
+
 // ========== 编队目标点计算（输入系统使用） ==========
 std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     const std::vector<GameObject*>& selected_units,
@@ -162,6 +204,13 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
         float spacing = std::max(key.width, key.height) * 1.8f;
         int max_cols = calc_max_cols(N);
 
+        // 只查一次附近建筑/资源，供下面所有候选方向复用
+        float extent = max_cols * spacing;
+        CollisionBox search_area{ { command_center.x - extent, command_center.y - extent },
+                                  extent * 2.0f, extent * 2.0f };
+        std::vector<GameObject*> obstacles;
+        WorldEntityMgr::instance()->query_area(search_area, obstacles);
+
         int best_cols = 0, best_rows = 0;
         Vector2 best_forward, best_right;
         bool found = false;
@@ -169,9 +218,8 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
             for (int cols = max_cols; cols >= 1; --cols) {
                 int rows = (N + cols - 1) / cols;
                 Vector2 group_center = command_center + forward * row_offset_forward;
-                // can_formation_fit 复用 MoveSystem 中的逻辑（此处用简化版）
-                bool fit = true;
-                // 此处省略详细检测，保留你的 can_formation_fit 实现即可
+                bool fit = can_formation_fit(make_grid_slots(group_center, forward, right, cols, rows, spacing),
+                    map, obstacles, spacing * 0.5f);
                 if (fit) {
                     if (!found || cols > best_cols || (cols == best_cols && rows < best_rows)) {
                         best_cols = cols; best_rows = rows;
@@ -288,16 +336,50 @@ void MoveSystem::update_global_flow_cache() {
 void MoveSystem::update_local_flow_cache() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
     const int cell_size = map->get_cell_size();
-    std::unordered_set<uint64_t> active_local;
+
+    // key -> 该目标点最近单位的距离（用于按急迫程度排优先级）
+    std::unordered_map<uint64_t, float> active_local;
+    std::unordered_map<uint64_t, Vector2> key_target;
     for (auto& [id, obj] : pool) {
         if (!obj->check_valid()) continue;
         auto* mv = obj->get_component<Movable>();
         if (!mv || !mv->is_moving()) continue;
-        float dist = (mv->target - obj->get_collision_box().get_center_position()).length();
-        if (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size)
-            active_local.insert(pos_key(mv->target, cell_size));
+        Vector2 center = obj->get_collision_box().get_center_position();
+        float dist = (mv->target - center).length();
+        if (dist >= LOCAL_FLOW_RADIUS_CELLS * cell_size) continue;
+
+        uint64_t key = pos_key(mv->target, cell_size);
+        auto it = active_local.find(key);
+        if (it == active_local.end() || dist < it->second) {
+            active_local[key] = dist;
+            key_target[key] = mv->target;
+        }
     }
-    evict_flow_cache(local_flow_cache, active_local, m_frame, map->obstacle_version(), MAX_LOCAL_FLOW_CACHE);
+
+    std::unordered_set<uint64_t> active_keys;
+    active_keys.reserve(active_local.size());
+    for (auto& [k, d] : active_local) active_keys.insert(k);
+
+    evict_flow_cache(local_flow_cache, active_keys, m_frame, map->obstacle_version(), MAX_LOCAL_FLOW_CACHE);
+
+    // 集中生成（原来是在 get_flow_direction 里惰性生成，单帧可能同时生成多个造成卡顿尖峰）
+    // 按距离由近到远优先，受每帧预算限制；未就绪的单位本帧回退到全局流场/直线
+    std::vector<std::pair<float, uint64_t>> pending;
+    pending.reserve(active_local.size());
+    for (auto& [k, d] : active_local)
+        if (!local_flow_cache.count(k)) pending.push_back({ d, k });
+    std::sort(pending.begin(), pending.end());
+
+    int budget = MAX_LOCAL_FLOW_PER_FRAME;
+    for (auto& [d, k] : pending) {
+        if (budget <= 0) break;
+        FlowEntry entry;
+        entry.version = map->obstacle_version();
+        entry.last_used_frame = m_frame;
+        entry.field = map->generate_local_flow_field(key_target[k], (float)(LOCAL_FLOW_RADIUS_CELLS + 2));
+        local_flow_cache[k] = std::move(entry);
+        --budget;
+    }
 }
 
 Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& target,
@@ -313,16 +395,6 @@ Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& ta
     if (dist_to_target < LOCAL_FLOW_RADIUS_CELLS * cell_size) {
         uint64_t key = pos_key(target, cell_size);
         auto it = local_flow_cache.find(key);
-        if (it == local_flow_cache.end() && m_flow_gen_budget > 0) {
-            // 惰性生成，受每帧预算限制，避免单帧生成多张流场造成卡顿
-            FlowEntry entry;
-            entry.version = map->obstacle_version();
-            entry.last_used_frame = m_frame;
-            entry.field = map->generate_local_flow_field(target, (float)(LOCAL_FLOW_RADIUS_CELLS + 2));
-            local_flow_cache[key] = std::move(entry);
-            it = local_flow_cache.find(key);
-            --m_flow_gen_budget;
-        }
         if (it != local_flow_cache.end()) {
             it->second.last_used_frame = m_frame;
             Vector2 dir = map->sample_flow_from_box(it->second.field, cb);
@@ -371,11 +443,8 @@ void MoveSystem::build_formation_grid(Vector2 center, int total_units, float spa
     }
     m_formation_cols = best_cols; m_formation_rows = best_rows;
 
-    m_formation_slots.clear();
-    float half_width = (best_cols - 1) * spacing * 0.5f, half_depth = (best_rows - 1) * spacing * 0.5f;
-    for (int r = 0; r < best_rows; ++r)
-        for (int c = 0; c < best_cols; ++c)
-            m_formation_slots.push_back(center + m_formation_right * (c * spacing - half_width) + m_formation_forward * (half_depth - r * spacing));
+    m_formation_slots = make_grid_slots(center, m_formation_forward, m_formation_right,
+        best_cols, best_rows, spacing);
     m_slot_occupied.assign(m_formation_slots.size(), false);
 }
 
@@ -389,7 +458,14 @@ void MoveSystem::arrange_units(float delta) {
     if (arranging.empty()) return;
 
     Vector2 cmd_center = arranging[0]->get_component<Movable>()->target;
-    float avg_spacing = 40.0f;
+    // RVO 的 agent 半径约为外接圆半径的 0.8（32px 单位约 18px），
+    // 间距必须明显大于两个半径之和，否则列阵时会持续互相推挤
+    float avg_size = 0.0f;
+    for (GameObject* u : arranging)
+        avg_size += std::max(u->get_collision_box().width, u->get_collision_box().height);
+    avg_size /= (float)arranging.size();
+    float avg_spacing = avg_size * 1.8f;
+
     build_formation_grid(cmd_center, (int)arranging.size(), avg_spacing);
 
     std::sort(arranging.begin(), arranging.end(), [&](GameObject* a, GameObject* b) {
@@ -647,7 +723,6 @@ void MoveSystem::on_update(float delta)
 
     // ===== 流场寻路模式 =====
     ++m_frame;
-    m_flow_gen_budget = MAX_LOCAL_FLOW_PER_FRAME;
     m_arrange_radius = 5.0f * map->get_cell_size();   // 进入排列的半径
 
     update_projectiles(delta);
