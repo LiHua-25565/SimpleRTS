@@ -26,6 +26,12 @@ public:
     void do_step();
     Vector2 get_agent_velocity(uint64_t entity_id) const;
 
+    // 把 ECS 中的权威位置同步给 RVO（位置始终以 ECS 为准，RVO 只负责出速度）
+    void set_agent_position(uint64_t entity_id, const Vector2& pos);
+
+    bool has_agent(uint64_t entity_id) const;
+    size_t get_agent_count() const;
+
     // 当静态障碍物或 Agent 数量/碰撞属性变化时，外部调用此函数请求重建
     void request_rebuild();
 

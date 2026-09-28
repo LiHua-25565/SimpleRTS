@@ -1,5 +1,6 @@
 #include "world_entity_mgr.h"
 #include "rvo_adapter.h"
+#include "components.h"
 #include "Windows.h"
 
 WorldEntityMgr* WorldEntityMgr::instance()
@@ -50,6 +51,9 @@ void WorldEntityMgr::on_update()
         {
             quadtree->remove(object->get_id());
             it = object_pool.erase(it);
+            // 投射物不参与 RVO：否则每支箭命中都会触发一次全量重建
+            if (!object->get_component<Projectile>())
+                RVOAdapter::instance()->request_rebuild();
             delete object;
             continue;
         }
@@ -78,6 +82,10 @@ void WorldEntityMgr::insert_object(GameObject* obj)
     object_pool.insert_or_assign(obj->get_id(), obj);
     quadtree->insert(obj->get_id());
     obj->clear_dirty();
+
+    // 新实体需要加入 RVO 模拟（投射物除外，避免频繁重建）
+    if (!obj->get_component<Projectile>())
+        RVOAdapter::instance()->request_rebuild();
 }
 
 void WorldEntityMgr::destroy_object(GameObject* obj)
@@ -89,7 +97,9 @@ void WorldEntityMgr::destroy_object(GameObject* obj)
     if (quadtree)
         quadtree->remove(obj->get_id());
 
-    RVOAdapter::instance()->request_rebuild();
+    // 投射物不参与 RVO，避免每支箭命中都触发一次全量重建
+    if (!obj->get_component<Projectile>())
+        RVOAdapter::instance()->request_rebuild();
 }
 
 void WorldEntityMgr::query_area(const CollisionBox& area, std::vector<GameObject*>& out)

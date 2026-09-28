@@ -1,20 +1,23 @@
 #include "rvo_adapter.h"
 #include "world_entity_mgr.h"
+#include "components.h"
 #include <cmath>
 #include <queue>
 
-// ---------- 顶点顺序：逆时针 ----------
+// RVO2 要求障碍物顶点按逆时针给出（其内部用 leftOf 判定凸性，
+// 顺序反了会被当成非凸顶点，导致障碍约束不生成、单位直接穿墙）。
+// 屏幕坐标 y 轴向下，因此逆时针顺序为：左上 → 右上 → 右下 → 左下
 std::vector<RVO::Vector2> RVOAdapter::box_to_obstacle(const CollisionBox& box) {
     float left = box.position.x;
     float top = box.position.y;
     float right = left + box.width;
     float bottom = top + box.height;
-    // 逆时针：左下 → 右下 → 右上 → 左上
+    // 逆时针：左上 → 右上 → 右下 → 左下
     return {
-        RVO::Vector2(left,  bottom),
-        RVO::Vector2(right, bottom),
+        RVO::Vector2(left,  top),
         RVO::Vector2(right, top),
-        RVO::Vector2(left,  top)
+        RVO::Vector2(right, bottom),
+        RVO::Vector2(left,  bottom)
     };
 }
 
@@ -64,12 +67,12 @@ static std::vector<std::vector<RVO::Vector2>> extract_water_contours(const GameM
             float right = (max_x + 1) * cell_size;
             float bottom = (max_y + 1) * cell_size;
 
-            // 逆时针：左下 → 右下 → 右上 → 左上
+            // 逆时针：左上 → 右上 → 右下 → 左下
             std::vector<RVO::Vector2> vertices = {
-                RVO::Vector2(left,  bottom),
-                RVO::Vector2(right, bottom),
+                RVO::Vector2(left,  top),
                 RVO::Vector2(right, top),
-                RVO::Vector2(left,  top)
+                RVO::Vector2(right, bottom),
+                RVO::Vector2(left,  bottom)
             };
             obstacles.push_back(vertices);
         }
@@ -135,6 +138,8 @@ void RVOAdapter::rebuild_simulation() {
 
     for (auto& [id, obj] : pool) {
         if (!obj->check_valid()) continue;
+        // 投射物不作为 agent：它们靠自身速度飞行，不参与避让
+        if (obj->get_component<Projectile>()) continue;
         auto* movable = obj->get_component<Movable>();
         if (!movable) continue;
 
@@ -181,4 +186,19 @@ Vector2 RVOAdapter::get_agent_velocity(uint64_t entity_id) const {
         return Vector2(v.x(), v.y());
     }
     return { 0, 0 };
+}
+
+void RVOAdapter::set_agent_position(uint64_t entity_id, const Vector2& pos) {
+    if (!sim_) return;
+    auto it = entity_to_agent_.find(entity_id);
+    if (it != entity_to_agent_.end())
+        sim_->setAgentPosition(it->second, RVO::Vector2(pos.x, pos.y));
+}
+
+bool RVOAdapter::has_agent(uint64_t entity_id) const {
+    return entity_to_agent_.find(entity_id) != entity_to_agent_.end();
+}
+
+size_t RVOAdapter::get_agent_count() const {
+    return entity_to_agent_.size();
 }
