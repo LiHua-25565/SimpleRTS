@@ -42,6 +42,8 @@ private:
     void compute_pref_velocities();
     void integrate_positions(float delta);
     void move_units(float delta);
+    // RVO 的一次定步推进：同步位置 → 算首选速度 → doStep → 取回速度（不积分位置）
+    void rvo_step(float fixed_dt);
     Vector2 get_flow_direction(const GameObject* unit, const Vector2& target,
         const Vector2& flow_target, float dist_to_target);
 

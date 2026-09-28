@@ -531,11 +531,46 @@ void MoveSystem::integrate_positions(float delta)
     }
 }
 
+void MoveSystem::rvo_step(float fixed_dt)
+{
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    auto* rvo = RVOAdapter::instance();
+
+    // 1. 确保模拟器就绪（实体增删后会重建）
+    rvo->ensure_sim_ready();
+
+    // 2. 位置权威始终在 ECS：先把当前位置同步给 RVO，
+    //    否则 RVO 内部积分出来的位置会与实体位置漂移
+    for (auto& [id, obj] : pool)
+    {
+        if (!obj->check_valid()) continue;
+        if (obj->get_component<Projectile>()) continue;
+        if (!obj->get_component<Movable>()) continue;
+        rvo->set_agent_position(id, obj->get_collision_box().get_center_position());
+    }
+
+    // 3. 流场给出首选速度
+    compute_pref_velocities();
+
+    // 4. RVO 定步求解
+    rvo->do_step();
+
+    // 5. 只取回速度，位置不在这里积分（由 integrate_positions 用真实 delta 积分）
+    for (auto& [id, obj] : pool)
+    {
+        if (!obj->check_valid()) continue;
+        if (obj->get_component<Projectile>()) continue;
+        auto* mv = obj->get_component<Movable>();
+        if (!mv) continue;
+        mv->velocity = rvo->get_agent_velocity(id);
+    }
+}
+
 void MoveSystem::move_units(float delta)
 {
     compute_pref_velocities();
     // FlowOnly：直接用首选速度推进。
-    // FlowRVO 的定步推进见 rvo_step（Step 4），那里会先跑 RVO 再积分
+    // FlowRVO 的定步推进见 rvo_step，这里不再重复 RVO 流程
     integrate_positions(delta);
 }
 void MoveSystem::on_update(float delta)
@@ -619,6 +654,32 @@ void MoveSystem::on_update(float delta)
     correct_unwalkable_targets();
     update_global_flow_cache();
     update_local_flow_cache();
-    move_units(delta);
+    if (mode_ == MoveModeKind::FlowRVO)
+    {
+        // RVO 用固定步长做决策，位置仍按每帧真实 delta 积分：
+        // 144Hz 下单帧位移约 0.42px，天然平滑；若用 0.1s 定步积分会一次跳 6px
+        const float fixed_dt = RVOAdapter::instance()->get_fixed_timestep();
+        if (fixed_dt > 0.0f)
+        {
+            m_rvo_accumulator += delta;
+            int steps = 0;
+            while (m_rvo_accumulator >= fixed_dt && steps < 3)
+            {
+                rvo_step(fixed_dt);
+                m_rvo_accumulator -= fixed_dt;
+                ++steps;
+            }
+            if (steps == 3) m_rvo_accumulator = 0.0f;   // 防死亡螺旋
+            integrate_positions(delta);
+        }
+        else
+        {
+            move_units(delta);
+        }
+    }
+    else
+    {
+        move_units(delta);   // FlowOnly
+    }
     // arrange_units(delta);   // Step 7 启用（到达后自动列阵）
 }
