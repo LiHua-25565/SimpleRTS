@@ -7,9 +7,20 @@
 
 class GameObject;
 
+// 移动模式开关
+// 注意：components.h 中已有 MoveMode（陆地/水面），此处换名避免冲突
+enum class MoveModeKind
+{
+    Legacy,     // 直线移动：无寻路、无避让（切回完整移动前的基线）
+    FlowOnly,   // 流场寻路，不走 RVO
+    FlowRVO     // 流场寻路 + RVO 局部避让
+};
+
 class MoveSystem {
 public:
     void set_map(GameMap* map) { this->map = map; }
+    void set_move_mode(MoveModeKind mode) { mode_ = mode; }
+    MoveModeKind get_move_mode() const { return mode_; }
     void on_update(float delta);
 
 private:
@@ -28,6 +39,10 @@ private:
     void build_formation_grid(Vector2 center, int total_units, float spacing);
 
     GameMap* map = nullptr;
+
+    // 移动模式（A/B 开关）与 RVO 定步长累加器
+    MoveModeKind mode_ = MoveModeKind::Legacy;
+    float m_rvo_accumulator = 0.0f;
 
     // 排列相关
     std::vector<Vector2> m_formation_slots;

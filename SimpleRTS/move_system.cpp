@@ -425,63 +425,72 @@ void MoveSystem::move_units() {
 
 void MoveSystem::on_update(float delta)
 {
-    auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
-    float map_w = (float)map->get_width() * map->get_cell_size();
-    float map_h = (float)map->get_height() * map->get_cell_size();
+    if (!map) return;
 
-    for (auto& [id, obj] : obj_pool)
+    // ===== Legacy 模式：直线移动，保持切回完整移动前的基线行为 =====
+    if (mode_ == MoveModeKind::Legacy)
     {
-        if (!obj->check_valid()) continue;
+        auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
+        float map_w = (float)map->get_width() * map->get_cell_size();
+        float map_h = (float)map->get_height() * map->get_cell_size();
 
-        // ---- 投射物处理：仅负责移动与边界检查 ----
-        if (auto* proj = obj->get_component<Projectile>())
+        for (auto& [id, obj] : obj_pool)
         {
-            auto* movable = obj->get_component<Movable>();
-            if (movable)
+            if (!obj->check_valid()) continue;
+
+            // ---- 投射物处理：仅负责移动与边界检查 ----
+            if (auto* proj = obj->get_component<Projectile>())
             {
-                // 根据速度移动投射物
-                Vector2 new_pos = obj->get_collision_box().position + movable->velocity * delta;
-                obj->set_position(new_pos);
-
-                // 边界检查：超出地图则标记失效
-                const auto& box = obj->get_collision_box();
-                if (new_pos.x < -box.width - 100.0f || new_pos.y < -box.height - 100.0f ||
-                    new_pos.x > map_w + box.width + 100.0f || new_pos.y > map_h + box.height + 100.0f)
+                auto* movable = obj->get_component<Movable>();
+                if (movable)
                 {
-                    obj->set_valid(false);
-                    continue;
+                    // 根据速度移动投射物
+                    Vector2 new_pos = obj->get_collision_box().position + movable->velocity * delta;
+                    obj->set_position(new_pos);
+
+                    // 边界检查：超出地图则标记失效
+                    const auto& box = obj->get_collision_box();
+                    if (new_pos.x < -box.width - 100.0f || new_pos.y < -box.height - 100.0f ||
+                        new_pos.x > map_w + box.width + 100.0f || new_pos.y > map_h + box.height + 100.0f)
+                    {
+                        obj->set_valid(false);
+                        continue;
+                    }
                 }
+                // 投射物跳过普通单位的移动逻辑
+                continue;
             }
-            // 投射物跳过普通单位的移动逻辑
-            continue;
+
+            // ---- 普通单位移动 ----
+            auto* movable = obj->get_component<Movable>();
+            if (!movable || !movable->is_moving()) continue;
+
+            Vector2 center_pos = obj->get_collision_box().get_center_position();
+            Vector2 dir = movable->target - center_pos;
+            float dist = dir.length();
+            if (dist < 1.0f)
+            {
+                movable->stop();
+                continue;
+            }
+
+            float step = movable->speed * delta;
+            if (step > dist) step = dist;
+
+            Vector2 pos = obj->get_collision_box().position;
+            movable->velocity = dir.normalize() * step;
+            pos += movable->velocity;
+
+            // 边界钳位
+            if (pos.x < 0.0f) pos.x = 0.0f;
+            if (pos.y < 0.0f) pos.y = 0.0f;
+            if (pos.x > map_w - obj->get_collision_box().width)  pos.x = map_w - obj->get_collision_box().width;
+            if (pos.y > map_h - obj->get_collision_box().height) pos.y = map_h - obj->get_collision_box().height;
+
+            obj->set_position(pos);
         }
-
-        // ---- 普通单位移动 ----
-        auto* movable = obj->get_component<Movable>();
-        if (!movable || !movable->is_moving()) continue;
-
-        Vector2 center_pos = obj->get_collision_box().get_center_position();
-        Vector2 dir = movable->target - center_pos;
-        float dist = dir.length();
-        if (dist < 1.0f)
-        {
-            movable->stop();
-            continue;
-        }
-
-        float step = movable->speed * delta;
-        if (step > dist) step = dist;
-
-        Vector2 pos = obj->get_collision_box().position;
-        movable->velocity = dir.normalize() * step;
-        pos += movable->velocity;
-
-        // 边界钳位
-        if (pos.x < 0.0f) pos.x = 0.0f;
-        if (pos.y < 0.0f) pos.y = 0.0f;
-        if (pos.x > map_w - obj->get_collision_box().width)  pos.x = map_w - obj->get_collision_box().width;
-        if (pos.y > map_h - obj->get_collision_box().height) pos.y = map_h - obj->get_collision_box().height;
-
-        obj->set_position(pos);
+        return;
     }
+
+    // ===== 流场寻路模式（Step 2 起逐步接入）=====
 }
