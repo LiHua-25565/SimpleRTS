@@ -2,6 +2,7 @@
 #include "world_entity_mgr.h"
 #include <cmath>
 #include <queue>
+#include <algorithm>
 
 bool GameMap::is_cell_passable(int x, int y) const {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
@@ -283,6 +284,15 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
     return flow_field;
 }
 
+// 以中心点所在格判断可通行。
+// 不用整个碰撞盒：单位按格子流场行走时必然会与障碍格部分重叠（单位宽 20px > 格子 10px），
+// 用整个盒子判断会让贴着障碍走被误判为不可通行；真正的分离由 RVO 负责。
+static bool center_passable(const Vector2& center, const GameMap* map)
+{
+    int cs = map->get_cell_size();
+    return map->is_cell_passable((int)(center.x / cs), (int)(center.y / cs));
+}
+
 // 按照碰撞箱占格子面积加权
 Vector2 GameMap::sample_flow_from_box(const std::vector<std::vector<Vector2>>& flow, const CollisionBox& box) const {
     if (flow.empty() || flow[0].empty()) return { 0.0f, 0.0f };
@@ -296,6 +306,15 @@ Vector2 GameMap::sample_flow_from_box(const std::vector<std::vector<Vector2>>& f
     min_y = std::max(0, min_y);
     max_x = std::min(max_x, (int)flow[0].size() - 1);
     max_y = std::min(max_y, (int)flow.size() - 1);
+
+    // 以碰撞盒中心所在格的方向为基准。
+    // 若对所有覆盖格直接做面积加权，当盒子横跨“分水岭”（左右绕行代价相同，
+    // 两侧方向相反）时两个方向会相互抵消，单位会径直撞向障碍。
+    // 因此与基准方向相反的格子不参与加权。
+    int cx = std::clamp((int)((box.position.x + box.width * 0.5f) / cell_size), 0, width - 1);
+    int cy = std::clamp((int)((box.position.y + box.height * 0.5f) / cell_size), 0, height - 1);
+    Vector2 base = flow[cy][cx];
+    const bool has_base = base.length() > 0.01f;
 
     Vector2 total_dir{ 0.0f, 0.0f };
 
@@ -314,11 +333,53 @@ Vector2 GameMap::sample_flow_from_box(const std::vector<std::vector<Vector2>>& f
             if (overlap_left < overlap_right && overlap_top < overlap_bottom) {
                 float area = (overlap_right - overlap_left) * (overlap_bottom - overlap_top);
                 const Vector2& dir = flow[y][x];
+                if (dir.length() <= 0.01f) continue;                       // 障碍格/目标格
+                if (has_base && (dir.x * base.x + dir.y * base.y) <= 0.0f) continue;  // 与基准反向，丢弃
                 total_dir = total_dir + dir * area;
             }
         }
     }
-    return total_dir.normalize(); 
+    if (total_dir.length() > 0.01f) {
+        Vector2 dir = total_dir.normalize();
+        // 邻格的平滑分量可能把方向“切”进障碍（贴着障碍走时尤其明显）。
+        // 若沿该方向走一步就会进入不可通行格，依次退化为：
+        // 纯中心格方向 → 纯纵向 → 纯横向（分轴滑动）
+        const float probe = (float)cell_size * 1.5f;
+        Vector2 center = box.position + Vector2(box.width * 0.5f, box.height * 0.5f);
+
+        // 沿方向分多点采样：只检查终点会漏掉中途擦到的障碍格
+        auto path_ok = [&](const Vector2& d) {
+            for (float t = 2.0f; t <= probe; t += 2.0f)
+                if (!center_passable(center + d * t, this)) return false;
+            return true;
+        };
+
+        if (!path_ok(dir)) {
+            Vector2 candidates[3] = {
+                base.normalize(),
+                Vector2(0.0f, dir.y).normalize(),
+                Vector2(dir.x, 0.0f).normalize()
+            };
+            for (const Vector2& c : candidates) {
+                if (c.length() > 0.01f && path_ok(c)) return c;
+            }
+        }
+        return dir;
+    }
+
+    // 兜底：中心格无效（站在障碍上）时，螺旋向外找最近的有效方向
+    for (int r = 1; r <= 4; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                if (std::max(std::abs(dx), std::abs(dy)) != r) continue;
+                int nx = cx + dx, ny = cy + dy;
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                Vector2 dir = flow[ny][nx];
+                if (dir.length() > 0.01f) return dir.normalize();
+            }
+        }
+    }
+    return { 0.0f, 0.0f };
 }
 
 Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const

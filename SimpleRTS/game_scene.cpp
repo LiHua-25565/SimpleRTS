@@ -78,7 +78,7 @@ void GameScene::on_enter()
     move_system.set_map(&game_map);
     // 移动模式开关：Legacy=直线(基线) / FlowOnly=流场 / FlowRVO=流场+RVO
     // 出问题只需改这里一个枚举值即可降级回退
-    move_system.set_move_mode(MoveModeKind::Legacy);
+    move_system.set_move_mode(MoveModeKind::FlowOnly);
     attack_system.set_factory(&factory);
     production_system.set_factory(&factory);
     UIMgr::instance()->on_placement_confirm = [this](BuildingEntityType type, int grid_x, int grid_y) {

@@ -26,11 +26,22 @@ public:
 private:
     static constexpr float LOCAL_FLOW_RADIUS_CELLS = 20.0f;
 
+    // 到达判定阈值（像素）。比原来的 5.0 略宽松，用于抵消后续 RVO 的横向抖动
+    static constexpr float ARRIVE_EPS = 6.0f;
+    // 流场缓存上限与每帧生成预算（防止单帧生成多张全图流场造成卡顿）
+    static constexpr int MAX_GLOBAL_FLOW_CACHE = 8;
+    static constexpr int MAX_LOCAL_FLOW_CACHE = 6;
+    static constexpr int MAX_GLOBAL_FLOW_PER_FRAME = 1;
+    static constexpr int MAX_LOCAL_FLOW_PER_FRAME = 2;
+
     // 流场与导航
     void correct_unwalkable_targets();
     void update_global_flow_cache();
     void update_local_flow_cache();
-    void move_units();
+    void update_projectiles(float delta);
+    void compute_pref_velocities();
+    void integrate_positions(float delta);
+    void move_units(float delta);
     Vector2 get_flow_direction(const GameObject* unit, const Vector2& target,
         const Vector2& flow_target, float dist_to_target);
 
@@ -43,6 +54,10 @@ private:
     // 移动模式（A/B 开关）与 RVO 定步长累加器
     MoveModeKind mode_ = MoveModeKind::Legacy;
     float m_rvo_accumulator = 0.0f;
+
+    // 帧计数（流场缓存 LRU 用）与本帧剩余生成预算
+    uint32_t m_frame = 0;
+    int m_flow_gen_budget = 0;
 
     // 排列相关
     std::vector<Vector2> m_formation_slots;

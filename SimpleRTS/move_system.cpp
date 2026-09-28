@@ -2,21 +2,74 @@
 #include "selection_mgr.h"
 #include "world_entity_mgr.h"
 #include "rvo_adapter.h"
+#include "util.h"
 #include <map>
 #include <unordered_set>
 #include <algorithm>
 #include <cmath>
 #include <queue>
 
+// 流场缓存条目
+// version        : 障碍版本号，地图障碍变化后据此失效（Step 3 启用）
+// last_used_frame: 最近使用帧，用于超上限时按 LRU 淘汰
+struct FlowEntry {
+    uint32_t version = 0;
+    uint32_t last_used_frame = 0;
+    std::vector<std::vector<Vector2>> field;
+};
+
 // 全局流场缓存
-static std::unordered_map<uint64_t, std::vector<std::vector<Vector2>>> goal_flow_cache;
+static std::unordered_map<uint64_t, FlowEntry> goal_flow_cache;
 // 局部流场缓存
-static std::unordered_map<uint64_t, std::vector<std::vector<Vector2>>> local_flow_cache;
+static std::unordered_map<uint64_t, FlowEntry> local_flow_cache;
 
 // 工具函数
-static uint64_t vec_to_key(const Vector2& vec) {
-    return (static_cast<uint64_t>(static_cast<int>(vec.x * 100.f)) << 32
-        | static_cast<uint64_t>(static_cast<int>(vec.y * 100.f)));
+static uint64_t cell_key(int gx, int gy) {
+    return (static_cast<uint64_t>(static_cast<uint32_t>(gx)) << 32)
+        | static_cast<uint64_t>(static_cast<uint32_t>(gy));
+}
+
+// 位置 → 格子键。按格子量化，避免浮点抖动导致缓存永不命中
+static uint64_t pos_key(const Vector2& vec, int cell_size) {
+    return cell_key((int)(vec.x / cell_size), (int)(vec.y / cell_size));
+}
+
+// 格子键 → 该格中心的世界坐标
+static Vector2 key_to_world(uint64_t key, int cell_size) {
+    int gx = (int)(key >> 32);
+    int gy = (int)(key & 0xFFFFFFFFu);
+    return Vector2(gx * cell_size + cell_size * 0.5f, gy * cell_size + cell_size * 0.5f);
+}
+
+// 缓存淘汰：先移除本帧不再活跃的条目，再按 LRU 砍到上限
+static void evict_flow_cache(std::unordered_map<uint64_t, FlowEntry>& cache,
+    const std::unordered_set<uint64_t>& active, uint32_t cur_frame, int max_size)
+{
+    for (auto it = cache.begin(); it != cache.end(); ) {
+        if (!active.count(it->first)) it = cache.erase(it);
+        else ++it;
+    }
+    while ((int)cache.size() > max_size) {
+        auto victim = cache.end();
+        uint32_t oldest = 0xFFFFFFFFu;
+        for (auto it = cache.begin(); it != cache.end(); ++it) {
+            if (it->second.last_used_frame < oldest) {
+                oldest = it->second.last_used_frame;
+                victim = it;
+            }
+        }
+        if (victim == cache.end()) break;
+        cache.erase(victim);
+    }
+}
+
+// 单位中心所在格是否可通行。
+// 不用整个碰撞盒：单位（20~32px）比格子（10px）大，贴着障碍走时必然部分重叠，
+// 用整个盒子判断会把正常的贴边行走误判为不可通行；精细分离交给 RVO。
+static bool center_passable(const Vector2& center, const GameMap* map)
+{
+    int cs = map->get_cell_size();
+    return map->is_cell_passable((int)(center.x / cs), (int)(center.y / cs));
 }
 
 static inline float dot(const Vector2& a, const Vector2& b) {
@@ -27,28 +80,15 @@ static int calc_max_cols(int N) {
     return std::max(4, (int)std::ceil(std::sqrt(N) * 1.2f));
 }
 
-// 可达性修正（按需 BFS，避开水和动态实体）
-static bool is_cell_blocked_by_entity(int gx, int gy, const GameMap* map) {
-    float cell_size = (float)map->get_cell_size();
-    CollisionBox cell_box{ { gx * cell_size, gy * cell_size }, cell_size, cell_size };
-    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (const auto& [id, obj] : pool) {
-        if (!obj->check_valid()) continue;
-        if (!obj->get_component<Structure>() && !obj->get_component<Harvestable>())
-            continue;
-        if (obj->get_collision_box().intersects(cell_box))
-            return true;
-    }
-    return false;
-}
-
+// 可达性修正（按需 BFS）。建筑与资源已写入 dynamic_obstacle_field，
+// 因此直接用 is_cell_passable 即可，无需再遍历实体
 static Vector2 make_target_reachable(const Vector2& ideal, const GameMap* map) {
     int cell_size = map->get_cell_size();
     int w = map->get_width(), h = map->get_height();
     int gx = (int)(ideal.x / cell_size), gy = (int)(ideal.y / cell_size);
     gx = std::clamp(gx, 0, w - 1); gy = std::clamp(gy, 0, h - 1);
 
-    if (map->is_cell_passable(gx, gy) && !is_cell_blocked_by_entity(gx, gy, map))
+    if (map->is_cell_passable(gx, gy))
         return ideal;
 
     std::vector<std::vector<bool>> visited(h, std::vector<bool>(w, false));
@@ -57,7 +97,7 @@ static Vector2 make_target_reachable(const Vector2& ideal, const GameMap* map) {
     const int dirs[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
     while (!q.empty()) {
         auto [x, y] = q.front(); q.pop();
-        if (map->is_cell_passable(x, y) && !is_cell_blocked_by_entity(x, y, map)) {
+        if (map->is_cell_passable(x, y)) {
             return { x * cell_size + cell_size * 0.5f, y * cell_size + cell_size * 0.5f };
         }
         for (auto d : dirs) {
@@ -187,10 +227,14 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
 
 void MoveSystem::correct_unwalkable_targets() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    const int cell_size = map->get_cell_size();
     std::unordered_map<uint64_t, std::vector<GameObject*>> flow_units;
     for (auto& [id, obj] : pool) {
+        if (!obj->check_valid()) continue;
         auto* mv = obj->get_component<Movable>();
-        if (mv && mv->is_moving()) flow_units[vec_to_key(mv->flow_target)].push_back(obj);
+        if (!mv || !mv->is_moving()) continue;
+        if (mv->flow_target.x < 0.0f) continue;
+        flow_units[pos_key(mv->flow_target, cell_size)].push_back(obj);
     }
     for (auto& [key, units] : flow_units) {
         if (units.empty()) continue;
@@ -209,62 +253,96 @@ void MoveSystem::correct_unwalkable_targets() {
 
 void MoveSystem::update_global_flow_cache() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    const int cell_size = map->get_cell_size();
     std::unordered_set<uint64_t> active;
     for (auto& [id, obj] : pool) {
+        if (!obj->check_valid()) continue;
         auto* mv = obj->get_component<Movable>();
-        if (mv && mv->is_moving()) active.insert(vec_to_key(mv->flow_target));
+        if (!mv || !mv->is_moving()) continue;
+        // 只有编队命令（命令中心 != 个人目标点）才值得建全图流场。
+        // 攻击/采集/送货时两者相同，走直线或局部流场即可，避免每单位一张全图流场
+        if (mv->flow_target.x < 0.0f || mv->flow_target == mv->target) continue;
+        active.insert(pos_key(mv->flow_target, cell_size));
     }
-    for (auto it = goal_flow_cache.begin(); it != goal_flow_cache.end(); ) {
-        if (!active.count(it->first)) it = goal_flow_cache.erase(it);
-        else ++it;
-    }
+
+    evict_flow_cache(goal_flow_cache, active, m_frame, MAX_GLOBAL_FLOW_CACHE);
+
+    int budget = MAX_GLOBAL_FLOW_PER_FRAME;
     for (auto key : active) {
-        if (!goal_flow_cache.count(key)) {
-            float x = ((float)(int)(key >> 32)) / 100.0f;
-            float y = ((float)(int)(key & 0xFFFFFFFF)) / 100.0f;
-            goal_flow_cache[key] = map->generate_goal_flow_field({ x, y });
+        auto it = goal_flow_cache.find(key);
+        if (it != goal_flow_cache.end()) {
+            it->second.last_used_frame = m_frame;
+            continue;
         }
+        if (budget <= 0) continue;   // 本帧预算用尽，下一帧再生成
+
+        FlowEntry entry;
+        entry.version = 0;   // Step 3 起填入 map->obstacle_version()
+        entry.last_used_frame = m_frame;
+        entry.field = map->generate_goal_flow_field(key_to_world(key, cell_size));
+        goal_flow_cache[key] = std::move(entry);
+        --budget;
     }
 }
 
 void MoveSystem::update_local_flow_cache() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    const int cell_size = map->get_cell_size();
     std::unordered_set<uint64_t> active_local;
     for (auto& [id, obj] : pool) {
+        if (!obj->check_valid()) continue;
         auto* mv = obj->get_component<Movable>();
         if (!mv || !mv->is_moving()) continue;
         float dist = (mv->target - obj->get_collision_box().get_center_position()).length();
-        if (dist < LOCAL_FLOW_RADIUS_CELLS * map->get_cell_size())
-            active_local.insert(vec_to_key(mv->target));
+        if (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size)
+            active_local.insert(pos_key(mv->target, cell_size));
     }
-    for (auto it = local_flow_cache.begin(); it != local_flow_cache.end(); ) {
-        if (!active_local.count(it->first)) it = local_flow_cache.erase(it);
-        else ++it;
-    }
+    evict_flow_cache(local_flow_cache, active_local, m_frame, MAX_LOCAL_FLOW_CACHE);
 }
 
 Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& target,
     const Vector2& flow_target, float dist_to_target) {
     const CollisionBox& cb = unit->get_collision_box();
-    if (dist_to_target < LOCAL_FLOW_RADIUS_CELLS * map->get_cell_size()) {
-        uint64_t key = vec_to_key(target);
+    Vector2 center = cb.get_center_position();
+    const int cell_size = map->get_cell_size();
+
+    // 直线可达就直接朝目标走：省掉绝大部分流场需求，也避免 8 邻域网格带来的锯齿
+    if (is_line_passable(center, target))
+        return (target - center).normalize();
+
+    if (dist_to_target < LOCAL_FLOW_RADIUS_CELLS * cell_size) {
+        uint64_t key = pos_key(target, cell_size);
         auto it = local_flow_cache.find(key);
-        if (it == local_flow_cache.end()) {
-            int radius_cells = (int)(LOCAL_FLOW_RADIUS_CELLS + 2);
-            local_flow_cache[key] = map->generate_local_flow_field(target, (float)radius_cells);
+        if (it == local_flow_cache.end() && m_flow_gen_budget > 0) {
+            // 惰性生成，受每帧预算限制，避免单帧生成多张流场造成卡顿
+            FlowEntry entry;
+            entry.version = 0;
+            entry.last_used_frame = m_frame;
+            entry.field = map->generate_local_flow_field(target, (float)(LOCAL_FLOW_RADIUS_CELLS + 2));
+            local_flow_cache[key] = std::move(entry);
             it = local_flow_cache.find(key);
+            --m_flow_gen_budget;
         }
         if (it != local_flow_cache.end()) {
-            Vector2 dir = map->sample_flow_from_box(it->second, cb);
+            it->second.last_used_frame = m_frame;
+            Vector2 dir = map->sample_flow_from_box(it->second.field, cb);
             if (dir.length() > 0.01f) return dir;
         }
     }
-    auto it_global = goal_flow_cache.find(vec_to_key(flow_target));
-    if (it_global != goal_flow_cache.end()) {
-        Vector2 dir = map->sample_flow_from_box(it_global->second, cb);
-        if (dir.length() > 0.01f) return dir;
+
+    if (flow_target.x >= 0.0f) {
+        auto it_global = goal_flow_cache.find(pos_key(flow_target, cell_size));
+        if (it_global != goal_flow_cache.end()) {
+            it_global->second.last_used_frame = m_frame;
+            Vector2 dir = map->sample_flow_from_box(it_global->second.field, cb);
+            if (dir.length() > 0.01f) return dir;
+        }
     }
-    return { 0.0f, 0.0f };
+
+    // 兜底：流场不可用时仍朝目标方向走，碰撞交给 RVO 与分轴回退处理，
+    // 直接返回零向量会让单位永久冻结
+    Vector2 fallback = target - center;
+    return fallback.length() > 0.01f ? fallback.normalize() : Vector2(0.0f, 0.0f);
 }
 
 // 排列系统（与之前相同，直接复用）
@@ -337,17 +415,45 @@ void MoveSystem::arrange_units(float delta) {
     }
 }
 
-// ========== 核心移动逻辑（RVO 驱动） ==========
-void MoveSystem::move_units() {
+// ========== 核心移动逻辑 ==========
+
+void MoveSystem::update_projectiles(float delta)
+{
+    auto& obj_pool = WorldEntityMgr::instance()->get_object_pool();
+    float map_w = (float)map->get_width() * map->get_cell_size();
+    float map_h = (float)map->get_height() * map->get_cell_size();
+
+    for (auto& [id, obj] : obj_pool)
+    {
+        if (!obj->check_valid()) continue;
+        auto* proj = obj->get_component<Projectile>();
+        if (!proj) continue;
+        auto* movable = obj->get_component<Movable>();
+        if (!movable) continue;
+
+        Vector2 new_pos = obj->get_collision_box().position + movable->velocity * delta;
+        obj->set_position(new_pos);
+
+        // 边界检查：超出地图则标记失效
+        const auto& box = obj->get_collision_box();
+        if (new_pos.x < -box.width - 100.0f || new_pos.y < -box.height - 100.0f ||
+            new_pos.x > map_w + box.width + 100.0f || new_pos.y > map_h + box.height + 100.0f)
+        {
+            obj->set_valid(false);
+        }
+    }
+}
+
+void MoveSystem::compute_pref_velocities()
+{
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
     auto* rvo = RVOAdapter::instance();
-    const float fixed_dt = rvo->get_fixed_timestep();  // 获取固定步长
 
-    // 1. 确保模拟器就绪（必要时重建）
-    rvo->ensure_sim_ready();
-
-    // 2. 计算首选速度并设置
-    for (auto& [id, obj] : pool) {
+    for (auto& [id, obj] : pool)
+    {
+        if (!obj->check_valid()) continue;
+        // 投射物由 update_projectiles 负责，不参与寻路
+        if (obj->get_component<Projectile>()) continue;
         auto* mv = obj->get_component<Movable>();
         if (!mv) continue;
 
@@ -356,76 +462,88 @@ void MoveSystem::move_units() {
         Vector2 target = mv->target;
         float dist = (target - center).length();
 
-        if (!mv->is_moving() || dist < 5.0f) {
-            rvo->set_pref_velocity(id, { 0,0 });
-            if (dist < 5.0f) {
-                mv->stop();
-                mv->velocity = { 0,0 };
-            }
+        if (!mv->is_moving() || dist < ARRIVE_EPS)
+        {
+            rvo->set_pref_velocity(id, { 0.0f, 0.0f });
+            mv->velocity = { 0.0f, 0.0f };
+            if (mv->is_moving()) mv->stop();
             continue;
         }
 
         Vector2 pref_vel;
         if (mv->is_arranging && mv->formation_slot >= 0 &&
-            mv->formation_slot < (int)m_formation_slots.size()) {
+            mv->formation_slot < (int)m_formation_slots.size())
+        {
             Vector2 slot = m_formation_slots[mv->formation_slot];
             Vector2 to_slot = slot - center;
-            if (to_slot.length() < 5.0f)
-                pref_vel = { 0,0 };
-            else
-                pref_vel = to_slot.normalize() * mv->speed;
+            pref_vel = to_slot.length() < ARRIVE_EPS ? Vector2(0.0f, 0.0f) : to_slot.normalize() * mv->speed;
         }
-        else {
+        else
+        {
             Vector2 flow_dir = get_flow_direction(obj, target, mv->flow_target, dist);
-            if (flow_dir.length() < 0.01f) {
-                rvo->set_pref_velocity(id, { 0,0 });
-                mv->velocity = { 0,0 };
-                continue;
-            }
             pref_vel = flow_dir * mv->speed;
         }
         rvo->set_pref_velocity(id, pref_vel);
+        // FlowOnly 直接采用首选速度；FlowRVO 会在 integrate 前用 RVO 结果覆盖
+        mv->velocity = pref_vel;
     }
+}
 
-    // 3. 执行 RVO 步进
-    rvo->do_step();
-
-    // 4. 回写速度并用固定步长更新位置
+void MoveSystem::integrate_positions(float delta)
+{
+    auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    auto* rvo = RVOAdapter::instance();
     float map_w = (float)map->get_width() * map->get_cell_size();
     float map_h = (float)map->get_height() * map->get_cell_size();
 
-    for (auto& [id, obj] : pool) {
+    for (auto& [id, obj] : pool)
+    {
+        if (!obj->check_valid()) continue;
+        if (obj->get_component<Projectile>()) continue;
         auto* mv = obj->get_component<Movable>();
         if (!mv) continue;
 
-        Vector2 rvo_vel = rvo->get_agent_velocity(id);
-        mv->velocity = rvo_vel;
+        // RVO 只负责出速度，位置始终以 ECS 为准
+        if (mode_ == MoveModeKind::FlowRVO)
+            mv->velocity = rvo->get_agent_velocity(id);
 
         if (!mv->is_moving()) continue;
 
         CollisionBox cb = obj->get_collision_box();
-        Vector2 new_pos = cb.position + mv->velocity * fixed_dt;  // 固定步长
+        Vector2 new_pos = cb.position + mv->velocity * delta;
         new_pos.x = std::max(0.0f, std::min(new_pos.x, map_w - cb.width));
         new_pos.y = std::max(0.0f, std::min(new_pos.y, map_h - cb.height));
+
+        // 障碍回退：新位置的中心若进入不可通行格，先尝试单轴滑动，避免贴墙卡死。
+        // 若当前中心本就不可通行（例如正站在资源格上），则放行，否则会永久卡住
+        Vector2 half(cb.width * 0.5f, cb.height * 0.5f);
+        if (center_passable(cb.position + half, map) && !center_passable(new_pos + half, map))
+        {
+            Vector2 try_x(new_pos.x, cb.position.y);
+            Vector2 try_y(cb.position.x, new_pos.y);
+            if (center_passable(try_x + half, map))      new_pos = try_x;
+            else if (center_passable(try_y + half, map)) new_pos = try_y;
+            else                                         new_pos = cb.position;
+        }
+
         cb.position = new_pos;
         obj->set_collision_box(cb);
     }
 }
-// 主更新入口
-//void MoveSystem::on_update(float delta) {
-//    if (!map) return;
-//    m_arrange_radius = 5.0f * map->get_cell_size();  // 进入排列的半径
-//
-//    correct_unwalkable_targets();
-//    update_global_flow_cache();
-//    update_local_flow_cache();
-//    move_units();
-//    arrange_units(delta);   // 分配槽位，设置 is_arranging
-//}
 
+void MoveSystem::move_units(float delta)
+{
+    compute_pref_velocities();
+    // FlowOnly：直接用首选速度推进。
+    // FlowRVO 的定步推进见 rvo_step（Step 4），那里会先跑 RVO 再积分
+    integrate_positions(delta);
+}
 void MoveSystem::on_update(float delta)
 {
     if (!map) return;
+
+    // 防止切后台回来后单帧步长过大导致穿墙
+    if (delta > 0.1f) delta = 0.1f;
 
     // ===== Legacy 模式：直线移动，保持切回完整移动前的基线行为 =====
     if (mode_ == MoveModeKind::Legacy)
@@ -492,5 +610,15 @@ void MoveSystem::on_update(float delta)
         return;
     }
 
-    // ===== 流场寻路模式（Step 2 起逐步接入）=====
+    // ===== 流场寻路模式 =====
+    ++m_frame;
+    m_flow_gen_budget = MAX_LOCAL_FLOW_PER_FRAME;
+    m_arrange_radius = 5.0f * map->get_cell_size();   // 进入排列的半径
+
+    update_projectiles(delta);
+    correct_unwalkable_targets();
+    update_global_flow_cache();
+    update_local_flow_cache();
+    move_units(delta);
+    // arrange_units(delta);   // Step 7 启用（到达后自动列阵）
 }
