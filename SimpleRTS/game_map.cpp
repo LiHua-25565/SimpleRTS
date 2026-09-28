@@ -18,27 +18,12 @@ std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& w
     static const float cost[8] = { 1.0f,1.0f ,1.0f ,1.0f ,SQRT2 ,SQRT2 ,SQRT2 ,SQRT2 };
     std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));
 
-    // 标记动态障碍（建筑，资源）
-    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id, obj] : pool)
-    {
-        if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
-        {
-            CollisionBox collision_box = obj->get_collision_box();
-            int minx = std::max(int(collision_box.position.x / cell_size), 0);
-            int miny = std::max(int(collision_box.position.y / cell_size), 0);
-            int maxx = std::min(int((collision_box.position.x + collision_box.width) / cell_size), width - 1);
-            int maxy = std::min(int((collision_box.position.y + collision_box.height) / cell_size), height - 1);
-            for (int x = minx;x <= maxx;++x)
-                for (int y = miny;y <= maxy;++y)
-                    dist_field[y][x] = -1.0f;
-        }
-    }
-
-    // 标记静态障碍（水域）
-    for (int x = 0;x < width;++x)
-        for (int y = 0; y < height;++y)
-            if (grid[y][x] == TerrainType::Water) dist_field[y][x] = -1.0f;
+    // 统一用 is_cell_passable 标记障碍（同时覆盖水域与建筑/资源）。
+    // 这里原本自己重算建筑包围盒，少了边界 eps 修正，比动态障碍场多标记了一格，
+    // 会让落在建筑边缘的目标点被误判为不可通行、进而返回空流场
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            if (!is_cell_passable(x, y)) dist_field[y][x] = -1.0f;
 
     // 计算距离场（Dijkstra）
     int gx = int(world_goal.x / cell_size);
@@ -89,27 +74,12 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
 
     std::vector<std::vector<float>> dist_field(height, std::vector<float>(width, INF));
 
-    // 标记动态障碍（建筑，资源）
-    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id, obj] : pool)
-    {
-        if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
-        {
-            CollisionBox collision_box = obj->get_collision_box();
-            int minx = std::max(int(collision_box.position.x / cell_size), 0);
-            int miny = std::max(int(collision_box.position.y / cell_size), 0);
-            int maxx = std::min(int((collision_box.position.x + collision_box.width) / cell_size), width - 1);
-            int maxy = std::min(int((collision_box.position.y + collision_box.height) / cell_size), height - 1);
-            for (int x = minx;x <= maxx;++x)
-                for (int y = miny;y <= maxy;++y)
-                    dist_field[y][x] = -1.0f;
-        }
-    }
-
-    // 标记静态障碍（水域）
-    for (int x = 0;x < width;++x)
-        for (int y = 0; y < height;++y)
-            if (grid[y][x] == TerrainType::Water) dist_field[y][x] = -1.0f;
+    // 统一用 is_cell_passable 标记障碍（同时覆盖水域与建筑/资源）。
+    // 这里原本自己重算建筑包围盒，少了边界 eps 修正，比动态障碍场多标记了一格，
+    // 会让落在建筑边缘的目标点被误判为不可通行、进而返回空流场
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            if (!is_cell_passable(x, y)) dist_field[y][x] = -1.0f;
 
     // 计算距离场（Dijkstra）
     int gx = int(world_goal.x / cell_size);
@@ -163,8 +133,10 @@ std::vector<std::vector<Vector2>> GameMap::generate_goal_flow_field(const Vector
             {
                 int nx = x + dx[i], ny = y + dy[i];
                 if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                // d >= 0：允许取到目标格（d==0）。原来用 d > 0 会排除目标格，
+                // 导致目标点周围一圈格子拿不到指向目标的方向（零向量死环）
                 float d = dist_field[ny][nx];
-                if (d > 0 && d < best_dist)
+                if (d >= 0.0f && d < best_dist)
                 {
                     best_dist = d;
                     best_idx = i;
@@ -186,26 +158,10 @@ std::vector<std::vector<Vector2>> GameMap::generate_local_flow_field(
     static const float INF = 1e20f;
     std::vector<std::vector<float>> dist(height, std::vector<float>(width, INF));
 
-    // 标记动态障碍（建筑、资源）
-    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id, obj] : pool) {
-        if (obj->get_component<Structure>() || obj->get_component<Harvestable>()) {
-            CollisionBox box = obj->get_collision_box();
-            int minx = std::max((int)(box.position.x / cell_size), 0);
-            int miny = std::max((int)(box.position.y / cell_size), 0);
-            int maxx = std::min((int)((box.position.x + box.width) / cell_size), width - 1);
-            int maxy = std::min((int)((box.position.y + box.height) / cell_size), height - 1);
-            for (int y = miny; y <= maxy; ++y)
-                for (int x = minx; x <= maxx; ++x)
-                    dist[y][x] = -1.0f;
-        }
-    }
-
-    // 标记静态障碍 Water
+    // 同 generate_goal_flow_field：统一用 is_cell_passable，避免多标记一格
     for (int y = 0; y < height; ++y)
         for (int x = 0; x < width; ++x)
-            if (grid[y][x] == TerrainType::Water)
-                dist[y][x] = -1.0f;
+            if (!is_cell_passable(x, y)) dist[y][x] = -1.0f;
 
     int gx = (int)(world_goal.x / cell_size);
     int gy = (int)(world_goal.y / cell_size);
@@ -389,7 +345,9 @@ Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const
     gx = std::max(0, std::min(gx, width - 1));
     gy = std::max(0, std::min(gy, height - 1));
 
-    if (grid[gy][gx] != TerrainType::Water)
+    // 同时考虑水（静态）与建筑/资源（动态），
+    // 否则命令点落在建筑上时全局流场会返回全零，单位永久冻结
+    if (is_cell_passable(gx, gy))
         return world_goal; // 本来就可通行
 
     // BFS 查找最近可通行格子
@@ -402,7 +360,7 @@ Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const
     while (!q.empty())
     {
         auto [x, y] = q.front(); q.pop();
-        if (grid[y][x] != TerrainType::Water) {
+        if (is_cell_passable(x, y)) {
             return { x * cell_size + cell_size * 0.5f,
                      y * cell_size + cell_size * 0.5f };
         }
@@ -426,10 +384,8 @@ void GameMap::generate_static_obstacle_field() {
                 static_obstacle_field[y][x] = -1.0f;
 }
 
-void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object) {
-    if (!object || !object->check_valid()) return;
-    const CollisionBox& box = object->get_collision_box();
-
+void GameMap::fill_dynamic_box(const CollisionBox& box)
+{
     int minx = (int)(box.position.x / cell_size);
     int miny = (int)(box.position.y / cell_size);
     int maxx = (int)((box.position.x + box.width) / cell_size);
@@ -448,6 +404,28 @@ void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object) {
     for (int y = miny; y <= maxy; ++y)
         for (int x = minx; x <= maxx; ++x)
             dynamic_obstacle_field[y][x] = -1.0f;
+}
+
+void GameMap::add_object_to_dynamic_obstacle_field(const GameObject* object) {
+    if (!object || !object->check_valid()) return;
+    fill_dynamic_box(object->get_collision_box());
+    ++obstacle_version_;
+}
+
+void GameMap::rebuild_dynamic_obstacle_field()
+{
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            dynamic_obstacle_field[y][x] = 0.0f;
+
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool)
+    {
+        if (!obj || !obj->check_valid()) continue;
+        if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
+            fill_dynamic_box(obj->get_collision_box());
+    }
+    ++obstacle_version_;
 }
 
 void GameMap::remove_object_from_dynamic_obstacle_field(const GameObject* object) {

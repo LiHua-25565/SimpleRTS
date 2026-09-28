@@ -95,10 +95,23 @@ public:
 
     void remove_object_from_dynamic_obstacle_field(const GameObject* object);
 
+    // 障碍版本号：建筑/资源增删后自增，流场缓存据此失效
+    uint32_t obstacle_version() const { return obstacle_version_; }
+
+    // 全量重建动态障碍场（清空后按当前存活实体重新填充）
+    // 不用 remove_object_from_dynamic_obstacle_field：它会把格子盲清为 0，
+    // 重叠的建筑会互相擦掉对方的格子
+    void rebuild_dynamic_obstacle_field();
+
 private:
     int cell_size = 10;       // 格子边长
     int width = 0;        // 地图宽度（格子数）
     int height = 0;        // 地图高度（格子数）
+
+    uint32_t obstacle_version_ = 0;
+
+    // 把一个碰撞盒覆盖的格子写入动态障碍场
+    void fill_dynamic_box(const CollisionBox& box);
 
     std::vector<std::vector<float>> static_obstacle_field;  // 静态障碍场（水）
     std::vector<std::vector<float>> dynamic_obstacle_field; // 动态障碍场（建筑,资源）（后续加入实体部队）

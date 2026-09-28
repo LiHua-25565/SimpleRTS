@@ -37,6 +37,8 @@ void WorldEntityMgr::on_update()
         return;
     }
 
+    bool obstacle_dirty = false;
+
     for (auto it = object_pool.begin(); it != object_pool.end(); )
     {
         GameObject* object = it->second;
@@ -53,7 +55,10 @@ void WorldEntityMgr::on_update()
             it = object_pool.erase(it);
             // 投射物不参与 RVO：否则每支箭命中都会触发一次全量重建
             if (!object->get_component<Projectile>())
+            {
                 RVOAdapter::instance()->request_rebuild();
+                obstacle_dirty = true;   // 可能是建筑/资源被摧毁
+            }
             delete object;
             continue;
         }
@@ -66,6 +71,10 @@ void WorldEntityMgr::on_update()
         }
         ++it;
     }
+
+    // 有实体被移除后重建动态障碍场，否则被摧毁的建筑/枯竭的资源会留下永久不可通行的格子
+    if (obstacle_dirty && map)
+        map->rebuild_dynamic_obstacle_field();
 }
 
 void WorldEntityMgr::insert_object(GameObject* obj)

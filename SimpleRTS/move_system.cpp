@@ -41,12 +41,12 @@ static Vector2 key_to_world(uint64_t key, int cell_size) {
     return Vector2(gx * cell_size + cell_size * 0.5f, gy * cell_size + cell_size * 0.5f);
 }
 
-// 缓存淘汰：先移除本帧不再活跃的条目，再按 LRU 砍到上限
+// 缓存淘汰：先移除本帧不再活跃或已过期（障碍版本变化）的条目，再按 LRU 砍到上限
 static void evict_flow_cache(std::unordered_map<uint64_t, FlowEntry>& cache,
-    const std::unordered_set<uint64_t>& active, uint32_t cur_frame, int max_size)
+    const std::unordered_set<uint64_t>& active, uint32_t cur_frame, uint32_t cur_version, int max_size)
 {
     for (auto it = cache.begin(); it != cache.end(); ) {
-        if (!active.count(it->first)) it = cache.erase(it);
+        if (!active.count(it->first) || it->second.version != cur_version) it = cache.erase(it);
         else ++it;
     }
     while ((int)cache.size() > max_size) {
@@ -265,7 +265,7 @@ void MoveSystem::update_global_flow_cache() {
         active.insert(pos_key(mv->flow_target, cell_size));
     }
 
-    evict_flow_cache(goal_flow_cache, active, m_frame, MAX_GLOBAL_FLOW_CACHE);
+    evict_flow_cache(goal_flow_cache, active, m_frame, map->obstacle_version(), MAX_GLOBAL_FLOW_CACHE);
 
     int budget = MAX_GLOBAL_FLOW_PER_FRAME;
     for (auto key : active) {
@@ -277,7 +277,7 @@ void MoveSystem::update_global_flow_cache() {
         if (budget <= 0) continue;   // 本帧预算用尽，下一帧再生成
 
         FlowEntry entry;
-        entry.version = 0;   // Step 3 起填入 map->obstacle_version()
+        entry.version = map->obstacle_version();
         entry.last_used_frame = m_frame;
         entry.field = map->generate_goal_flow_field(key_to_world(key, cell_size));
         goal_flow_cache[key] = std::move(entry);
@@ -297,7 +297,7 @@ void MoveSystem::update_local_flow_cache() {
         if (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size)
             active_local.insert(pos_key(mv->target, cell_size));
     }
-    evict_flow_cache(local_flow_cache, active_local, m_frame, MAX_LOCAL_FLOW_CACHE);
+    evict_flow_cache(local_flow_cache, active_local, m_frame, map->obstacle_version(), MAX_LOCAL_FLOW_CACHE);
 }
 
 Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& target,
@@ -316,7 +316,7 @@ Vector2 MoveSystem::get_flow_direction(const GameObject* unit, const Vector2& ta
         if (it == local_flow_cache.end() && m_flow_gen_budget > 0) {
             // 惰性生成，受每帧预算限制，避免单帧生成多张流场造成卡顿
             FlowEntry entry;
-            entry.version = 0;
+            entry.version = map->obstacle_version();
             entry.last_used_frame = m_frame;
             entry.field = map->generate_local_flow_field(target, (float)(LOCAL_FLOW_RADIUS_CELLS + 2));
             local_flow_cache[key] = std::move(entry);
