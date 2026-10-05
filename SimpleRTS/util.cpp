@@ -373,5 +373,156 @@ Vector2 compute_ranged_outer_target(const Vector2& unit_center,
     return closest_point + dir * (range - extra_margin);
 }
 
+// ========== 周界站位点分配（多单位作业分散） ==========
+//
+// 背景：多个农民采集/提交时，原来每个人都用 compute_outer_target ——
+// 各自取“离自己最近的边点”，结果一群农民全挤在资源/建筑的同一侧同一点，
+// RVO 让先到的人占住位置，后来者在十几像素外被挡到速度归零，
+// 又永远进不了采集判定距离，于是停工（经典拥堵）。
+//
+// 做法：把目标盒四周的周界（膨胀 half_unit + margin，约贴盒站立）均匀
+// 采样成一圈站位点，给每个单位分配一个互不重复的点；单个单位换位时选
+// “附近其它单位最少”的点。这样 n 个农民会自动围着资源/建筑散开。
+
+// 生成周界站位点：沿膨胀矩形四边采样，间距 spacing；
+// 每边两端各留 spacing*0.5，避开“站在角上”时斜向接近采集判定距离不够的边缘情形
+static std::vector<Vector2> make_perimeter_slots(const CollisionBox& target_box,
+    float expand, float spacing, const GameMap* map)
+{
+    std::vector<Vector2> slots;
+    const float l = target_box.position.x - expand;
+    const float r = target_box.position.x + target_box.width + expand;
+    const float t = target_box.position.y - expand;
+    const float b = target_box.position.y + target_box.height + expand;
+
+    auto push = [&](float x, float y) {
+        if (!map || map->is_cell_passable((int)(x / map->get_cell_size()),
+                                          (int)(y / map->get_cell_size())))
+            slots.push_back({ x, y });
+    };
+
+    for (float x = l + spacing * 0.5f; x <= r - spacing * 0.5f + 0.01f; x += spacing) push(x, t);
+    for (float x = l + spacing * 0.5f; x <= r - spacing * 0.5f + 0.01f; x += spacing) push(x, b);
+    for (float y = t + spacing * 0.5f; y <= b - spacing * 0.5f + 0.01f; y += spacing) push(r, y);
+    for (float y = t + spacing * 0.5f; y <= b - spacing * 0.5f + 0.01f; y += spacing) push(l, y);
+
+    if (slots.empty() && map) {
+        // 全图都被障碍包围的退化情形：退回最近可通行点
+        Vector2 c = target_box.get_center_position();
+        slots.push_back(map->find_nearest_passable(c));
+    }
+    return slots;
+}
+
+std::unordered_map<GameObject*, Vector2> compute_perimeter_targets(
+    const std::vector<GameObject*>& units,
+    const CollisionBox& target_box,
+    float extra_margin)
+{
+    std::unordered_map<GameObject*, Vector2> targets;
+    if (units.empty()) return targets;
+
+    // 站位间距必须大于软推挤半径之和（32px 单位 ≈ 41px），
+    // 否则相邻站位者会整局互相推搡
+    float unit_size = 0.0f;
+    for (GameObject* u : units)
+        unit_size = std::max(unit_size, std::max(u->get_collision_box().width,
+                                                 u->get_collision_box().height));
+    const float expand = unit_size * 0.5f + extra_margin;
+    const float spacing = unit_size * 1.35f;
+
+    std::vector<Vector2> slots = make_perimeter_slots(target_box, expand, spacing,
+        WorldEntityMgr::instance()->get_map());
+
+    std::vector<bool> taken(slots.size(), false);
+
+    // 先给离目标最近的单位分配（就近原则），每个槽位只给一个人；
+    // 人数多于槽位时允许复用最近槽位，由拥堵自愈逻辑继续分散
+    std::vector<GameObject*> order = units;
+    std::sort(order.begin(), order.end(), [&](GameObject* a, GameObject* b) {
+        float da = (target_box.get_center_position() - a->get_collision_box().get_center_position()).length();
+        float db = (target_box.get_center_position() - b->get_collision_box().get_center_position()).length();
+        return da < db;
+        });
+
+    for (GameObject* u : order) {
+        const Vector2 uc = u->get_collision_box().get_center_position();
+        int best = -1; float best_d = 1e9f;
+        // 第一轮找未占用的最近槽位
+        for (int i = 0; i < (int)slots.size(); ++i) {
+            if (taken[i]) continue;
+            float d = (slots[i] - uc).length();
+            if (d < best_d) { best_d = d; best = i; }
+        }
+        if (best < 0) {
+            // 槽位全被占用：就近复用
+            for (int i = 0; i < (int)slots.size(); ++i) {
+                float d = (slots[i] - uc).length();
+                if (d < best_d) { best_d = d; best = i; }
+            }
+        }
+        if (best >= 0) {
+            taken[best] = true;
+            targets[u] = slots[best];
+        }
+    }
+    return targets;
+}
+
+Vector2 compute_perimeter_target(uint64_t requester_id,
+    const Vector2& unit_center,
+    const CollisionBox& unit_box,
+    const CollisionBox& target_box,
+    float extra_margin,
+    const Vector2& current_target)
+{
+    const float unit_size = std::max(unit_box.width, unit_box.height);
+    const float expand = unit_size * 0.5f + extra_margin;
+    const float spacing = unit_size * 1.35f;
+
+    std::vector<Vector2> slots = make_perimeter_slots(target_box, expand, spacing,
+        WorldEntityMgr::instance()->get_map());
+    if (slots.empty()) return compute_outer_target(unit_center,
+        target_box.get_center_position(), unit_box, target_box, extra_margin);
+
+    // 评分用“最大最小距离”：每个槽位测量它到最近其它单位的距离，
+    // 选该距离最大的槽位 —— 最宽敞、最可能真正走得到的点。
+    // 单纯的“附近单位计数”分辨不出“槽位被占死”和“旁边路过”的区别，
+    // 会反复把单位分到被占的槽位上造成兜圈子。
+    // 另外把“别的行进单位正在赶往的槽位”视为已被预订，避免两个
+    // 农民同时选中同一个空位、到了以后互相堵（双订）
+    std::vector<float> clearance(slots.size(), spacing * 1.5f);
+    std::vector<bool> claimed(slots.size(), false);
+    for (int i = 0; i < (int)slots.size(); ++i) {
+        CollisionBox area{
+            { slots[i].x - spacing * 1.5f, slots[i].y - spacing * 1.5f },
+            spacing * 3.0f, spacing * 3.0f };
+        std::vector<GameObject*> nearby;
+        WorldEntityMgr::instance()->query_area(area, nearby);
+        for (GameObject* o : nearby) {
+            if (!o || !o->check_valid() || o->get_id() == requester_id) continue;
+            if (o->get_component<Projectile>()) continue;
+            auto* omv = o->get_component<Movable>();
+            if (!omv) continue;
+            float d = (slots[i] - o->get_collision_box().get_center_position()).length();
+            if (d < clearance[i]) clearance[i] = d;
+            if (omv->is_moving() && (omv->target - slots[i]).length() < 6.0f)
+                claimed[i] = true;
+        }
+    }
+
+    int best = -1;
+    float best_score = -1e9f;
+    for (int i = 0; i < (int)slots.size(); ++i) {
+        float score = clearance[i] - (slots[i] - unit_center).length() * 0.1f;
+        // 已被别人预订的槽位重罚，自己正堵的点也要降权（避免原地重复选中）
+        if (claimed[i]) score -= 2000.0f;
+        if (current_target.x >= 0.0f && (slots[i] - current_target).length() < 6.0f)
+            score -= 1000.0f;
+        if (score > best_score) { best_score = score; best = i; }
+    }
+    return slots[best];
+}
+
 
 

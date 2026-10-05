@@ -19,6 +19,7 @@ void GameScene::on_update(float delta)
     auto t0 = std::chrono::high_resolution_clock::now();
     input_system.on_update(delta);
     move_system.on_update(delta);
+    ai_system.on_update(delta);          // AI 决策（下发移动/采集/生产/攻击命令）
     harvest_system.on_update(delta);
     attack_system.on_update(delta);
     production_system.on_update(delta);
@@ -67,11 +68,14 @@ void GameScene::on_enter()
     bake_terrain();
     RenderMgr::instance()->set_minimap_terrain(map_bake_tex.get_texture_id()); // 纹理 ID
 
-    ResourcesMgr::instance()->init(3);
+    ResourcesMgr::instance()->init(5);
     ResourcesMgr::instance()->set_local_player_id(local_player_id);
+    // 2v2 对局：玩家1（人类）+ 玩家2（AI 盟友） vs 玩家3/4（AI 对手）
     ResourcesMgr::instance()->set_player_team(0, 0);
-    ResourcesMgr::instance()->set_player_team(1, 1);
-    ResourcesMgr::instance()->set_player_team(2, 2);
+    ResourcesMgr::instance()->set_player_team(1, 0);
+    ResourcesMgr::instance()->set_player_team(2, 0);
+    ResourcesMgr::instance()->set_player_team(3, 1);
+    ResourcesMgr::instance()->set_player_team(4, 1);
 
     SelectionMgr::instance()->set_local_player_id(local_player_id);
     TextureCache::instance()->init(renderer, font);
@@ -82,6 +86,7 @@ void GameScene::on_enter()
     move_system.set_move_mode(MoveModeKind::FlowRVO);
     attack_system.set_factory(&factory);
     production_system.set_factory(&factory);
+    ai_system.set_factory(&factory);
     UIMgr::instance()->on_placement_confirm = [this](BuildingEntityType type, int grid_x, int grid_y) {
         factory.set_player_id(local_player_id);
         factory.create_building_by_type(type, grid_x, grid_y, true);
@@ -94,8 +99,16 @@ void GameScene::on_enter()
 
     update_ui_layout();
 
-    factory.set_player_id(local_player_id);
+    // ===== 2v2 对局布场 =====
+    // 地图 300x200 格，中央是水域（约 x138..160, y88..110），四个基地放四角方向
+    auto give = [](int player, int wood, int food) {
+        ResourcesMgr::instance()->set_resource(player, ResourceType::Wood, wood);
+        ResourcesMgr::instance()->set_resource(player, ResourceType::Food, food);
+        };
 
+    // ---- 人类（玩家1）：左上 ----
+    factory.set_player_id(1);
+    give(1, 150, 100);
     factory.create_town_center(60, 60);
     factory.create_archery_range(100, 60);
     factory.create_resource_by_type(ResourceEntityType::SGold, 10, 10);
@@ -104,24 +117,55 @@ void GameScene::on_enter()
     factory.create_resource_by_type(ResourceEntityType::Wood, 70, 10);
     factory.create_resource_by_type(ResourceEntityType::Wood, 90, 10);
     factory.create_resource_by_type(ResourceEntityType::Berries, 120, 10);
+    for (int i = 0; i < 3; ++i)
+        factory.create_unit_by_type(UnitEntityType::Villager,
+            { {250.0f + i * 60.0f, 400.0f}, 32.0f, 32.0f });
+    for (int i = 0; i < 2; ++i)
+        factory.create_archer({ {450.0f + i * 60.0f, 520.0f}, 32.0f, 32.0f });
 
-    for (int i = 0; i < 1; i++) {
-        float x = 250 + i / 10 * 50;
-        float y = 100 + (i % 10) * 50;
-        float w = 32, h = 32;
-        CollisionBox collision_box{ {x, y}, w, h };
-        factory.create_unit_by_type(UnitEntityType::Villager, collision_box);
-    }
+    // ---- AI 盟友（玩家2）：左下 ----
+    factory.set_player_id(2);
+    give(2, 150, 100);
+    factory.create_town_center(60, 120);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 10, 140);
+    factory.create_resource_by_type(ResourceEntityType::SGold, 30, 140);
+    factory.create_resource_by_type(ResourceEntityType::Berries, 50, 140);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 70, 140);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 90, 140);
+    for (int i = 0; i < 3; ++i)
+        factory.create_unit_by_type(UnitEntityType::Villager,
+            { {250.0f + i * 60.0f, 850.0f}, 32.0f, 32.0f });
 
-    for (int i = 0; i < 3; ++i) {
-        CollisionBox box{ {500.0f, 400.0f + i * 50.0f}, 32, 32 };
-        factory.create_archer(box);
-    }
+    // ---- AI 对手（玩家3）：右上 ----
+    factory.set_player_id(3);
+    give(3, 150, 100);
+    factory.create_town_center(220, 60);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 200, 10);
+    factory.create_resource_by_type(ResourceEntityType::SGold, 220, 10);
+    factory.create_resource_by_type(ResourceEntityType::Berries, 240, 10);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 200, 30);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 220, 30);
+    for (int i = 0; i < 3; ++i)
+        factory.create_unit_by_type(UnitEntityType::Villager,
+            { {1950.0f + i * 60.0f, 400.0f}, 32.0f, 32.0f });
 
-    factory.set_player_id(0);
-    factory.create_unit_by_type(UnitEntityType::Villager, { {300.0f, 300.0f}, 32.0f, 32.0f });
-    factory.create_unit_by_type(UnitEntityType::Villager, { {350.0f, 350.0f}, 32.0f, 32.0f });
-    factory.create_town_center(60, 30);
+    // ---- AI 对手（玩家4）：右下 ----
+    factory.set_player_id(4);
+    give(4, 150, 100);
+    factory.create_town_center(220, 120);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 200, 140);
+    factory.create_resource_by_type(ResourceEntityType::LGold, 220, 140);
+    factory.create_resource_by_type(ResourceEntityType::Berries, 240, 140);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 200, 160);
+    factory.create_resource_by_type(ResourceEntityType::Wood, 220, 160);
+    for (int i = 0; i < 3; ++i)
+        factory.create_unit_by_type(UnitEntityType::Villager,
+            { {1950.0f + i * 60.0f, 850.0f}, 32.0f, 32.0f });
+
+    // ---- AI 玩家注册（集结/基地点用世界坐标） ----
+    ai_system.add_ai_player(2, { 600.0f, 1200.0f });
+    ai_system.add_ai_player(3, { 2200.0f, 600.0f });
+    ai_system.add_ai_player(4, { 2200.0f, 1200.0f });
 }
 
 void GameScene::on_exit()

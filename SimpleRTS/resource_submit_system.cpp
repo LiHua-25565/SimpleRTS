@@ -71,13 +71,12 @@ void ResourceSubmitSystem::on_update(float delta)
             auto* target_resource = WorldEntityMgr::instance()->get_object_by_id(gatherer->target_resource_id);
             if (target_resource && target_resource->check_valid())
             {
-                movable->target = compute_outer_target(
-                    unit_center,
-                    target_resource->get_collision_box().get_center_position(),
-                    unit_box,
-                    target_resource->get_collision_box(),
-                    10.0f
-                );
+                // 返程站位：选资源周界上"附近单位最少"的点，
+                // 避免所有农民从提交点原路返回后再次挤在同一侧
+                gatherer->stand_target = compute_perimeter_target(
+                    obj->get_id(), unit_center, unit_box,
+                    target_resource->get_collision_box(), 2.0f, movable->target);
+                movable->target = gatherer->stand_target;
                 movable->flow_target = movable->target;
             }
             else

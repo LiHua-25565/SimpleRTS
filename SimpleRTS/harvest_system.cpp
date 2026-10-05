@@ -45,8 +45,106 @@ void HarvestSystem::on_update(float delta)
         CollisionBox advanced_box = unit_box;
         advanced_box.position.x += dir.x * advance;
         advanced_box.position.y += dir.y * advance;
+        const bool adjacent = advanced_box.intersects(res_box);
 
-        if (!advanced_box.intersects(res_box)) continue;
+        // ===== 拥堵自愈（采集侧） =====
+        // 情形 1：被同伴挤离站位点后原地停着（is_moving == false，被推出去后
+        //   RVO 早就判定到达了）——立即走回自己的站位点（stand_target），
+        //   而不是换新点：换新点会把本来稳定的队伍搅成抢座位的循环。
+        // 情形 2：目标被占/被 RVO 顶住，长时间（2s 窗口）向目标的推进不足
+        //   5px——换一个"最宽敞"的站位点，围着资源散开。
+        // 用"推进量"而不是瞬时速度判断：被顶住时单位会来回推挤，速度并不低
+        if (!adjacent && gatherer->carried_amount < gatherer->carry_capacity)
+        {
+            bool need_new_target = !movable->is_moving();
+            if (movable->is_moving())
+            {
+                if (gatherer->blocked_time <= 0.0f)
+                    gatherer->last_target_dist = (movable->target - unit_center).length();
+                gatherer->blocked_time += delta;
+                if (gatherer->blocked_time >= 2.0f)
+                {
+                    const float d = (movable->target - unit_center).length();
+                    const float progress = gatherer->last_target_dist - d;
+                    if (progress < 5.0f)
+                    {
+                        need_new_target = true;
+                        gatherer->blocked_time = 0.0f;
+                    }
+                    else
+                    {
+                        // 推进正常：刷新快照，进入下一个 2s 窗口
+                        gatherer->last_target_dist = d;
+                        gatherer->blocked_time = 0.0f;
+                    }
+                }
+            }
+
+            if (need_new_target)
+            {
+                Vector2 nt;
+                // 被挤离的闲置单位：走回自己的站位点（大概率就在几像素外）。
+                // 行进中被堵的单位：当前目标就是自己的站位点，走回去等于
+                // 原地踏步，必须重新挑一个“最宽敞”的槽位
+                if (!movable->is_moving() && gatherer->stand_target.x >= 0.0f &&
+                    (gatherer->stand_target - unit_center).length() < 40.0f)
+                {
+                    nt = gatherer->stand_target;
+                }
+                else
+                {
+                    nt = compute_perimeter_target(
+                        obj->get_id(), unit_center, unit_box, res_box, 2.0f, movable->target);
+                    gatherer->stand_target = nt;
+                }
+                movable->target = nt;
+                movable->flow_target = nt;
+                gatherer->blocked_time = 0.0f;
+            }
+            continue;
+        }
+
+        // ===== 拥堵自愈（送货侧） =====
+        // 满载走向提交建筑时被堵：同样的推进量检测，换一个提交站位点
+        if (gatherer->dropoff_target_id != 0 && movable->is_moving())
+        {
+            GameObject* dropoff = WorldEntityMgr::instance()->get_object_by_id(gatherer->dropoff_target_id);
+            if (dropoff && dropoff->check_valid())
+            {
+                const auto& build_box = dropoff->get_collision_box();
+                Vector2 to_build = build_box.get_center_position() - unit_center;
+                Vector2 build_dir = to_build.normalize();
+                CollisionBox adv_build = unit_box;
+                adv_build.position.x += build_dir.x * advance;
+                adv_build.position.y += build_dir.y * advance;
+                if (!adv_build.intersects(build_box))
+                {
+                    if (gatherer->blocked_time <= 0.0f)
+                        gatherer->last_target_dist = (movable->target - unit_center).length();
+                    gatherer->blocked_time += delta;
+                    if (gatherer->blocked_time >= 2.0f)
+                    {
+                        const float d = (movable->target - unit_center).length();
+                        const float progress = gatherer->last_target_dist - d;
+                        if (progress < 5.0f)
+                        {
+                            gatherer->stand_target = compute_perimeter_target(
+                                obj->get_id(), unit_center, unit_box, build_box, 2.0f, movable->target);
+                            movable->target = gatherer->stand_target;
+                            movable->flow_target = movable->target;
+                        }
+                        else
+                        {
+                            gatherer->last_target_dist = d;
+                        }
+                        gatherer->blocked_time = 0.0f;
+                    }
+                }
+            }
+        }
+
+        if (!adjacent) continue;
+        gatherer->blocked_time = 0.0f;
 
         // 采集冷却
         gatherer->gather_pass_time += delta;
@@ -93,13 +191,10 @@ void HarvestSystem::on_update(float delta)
             if (new_target)
             {
                 gatherer->target_resource_id = new_target->get_id();
-                movable->target = compute_outer_target(
-                    unit_center,
-                    new_target->get_collision_box().get_center_position(),
-                    unit_box,
-                    new_target->get_collision_box(),
-                    10.0f
-                );
+                gatherer->stand_target = compute_perimeter_target(
+                    obj->get_id(), unit_center, unit_box,
+                    new_target->get_collision_box(), 2.0f);
+                movable->target = gatherer->stand_target;
                 movable->flow_target = movable->target;
             }
             else
@@ -134,8 +229,11 @@ void HarvestSystem::on_update(float delta)
 
             if (dropoff)
             {
-                Vector2 build_center = dropoff->get_collision_box().get_center_position();
-                movable->target = compute_outer_target(unit_center, build_center, unit_box, dropoff->get_collision_box(), 10.0f);
+                // 提交站位同样分散到建筑周界，避免满载农民全挤在建筑同一侧
+                gatherer->stand_target = compute_perimeter_target(
+                    obj->get_id(), unit_center, unit_box,
+                    dropoff->get_collision_box(), 2.0f, movable->target);
+                movable->target = gatherer->stand_target;
                 movable->flow_target = movable->target;
             }
         }

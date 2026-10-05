@@ -54,6 +54,9 @@ private:
     Vector2 middle_drag_start;
 
     bool handle_placement_event(const SDL_Event& event);  // 返回 true 表示事件已处理
+    // 放置预览辅助：锚点 = 指针所在格 - 半个建筑宽，使指针落在建筑矩形中心
+    bool is_placement_blocked(int grid_x, int grid_y, int size_cells) const;
+    void sync_placement_preview(float screen_x, float screen_y);
     void handle_mouse_button_down(const SDL_Event& event);
     void handle_mouse_button_up(const SDL_Event& event);
     void handle_mouse_motion(const SDL_Event& event);

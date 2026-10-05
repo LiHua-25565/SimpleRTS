@@ -25,6 +25,26 @@ Vector2 compute_outer_target(const Vector2& unit_center,
     const CollisionBox& target_box,
     float extra_margin = 5.0f);
 
+// ===== 周界站位点分配（多单位作业分散，解决采集/提交拥堵） =====
+// 在 target_box 周围（膨胀 half_unit + extra_margin）的周界上按单位尺寸
+// 采样站位点（避开四角），并为 **一组单位** 各分配一个互不重复的点
+// （就近原则）。站位点数不足时允许复用。用于多个农民同时右键采集/提交，
+// 避免所有人挤在目标盒的同一侧同一点上互相堵死
+std::unordered_map<GameObject*, Vector2> compute_perimeter_targets(
+    const std::vector<GameObject*>& units,
+    const CollisionBox& target_box,
+    float extra_margin = 2.0f);
+
+// 为 **单个单位** 选择周界站位点：在所有候选点中挑"附近其它单位最少"
+// （最不拥挤）的一个；current_target 附近的点会被降权，避免堵在原地时
+// 反复选中同一个点。用于农民被挤离/堵住后的换位，以及送货、返程分配
+Vector2 compute_perimeter_target(uint64_t requester_id,
+    const Vector2& unit_center,
+    const CollisionBox& unit_box,
+    const CollisionBox& target_box,
+    float extra_margin = 2.0f,
+    const Vector2& current_target = { -1.0f, -1.0f });
+
 // 计算远程单位应停在射程边缘的位置（基于目标矩形最近点）
 Vector2 compute_ranged_outer_target(const Vector2& unit_center,
     const Vector2& target_center,

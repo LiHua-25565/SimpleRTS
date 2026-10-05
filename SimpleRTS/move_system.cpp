@@ -237,7 +237,10 @@ std::unordered_map<GameObject*, Vector2> compute_formation_targets(
     float row_offset_forward = 0.0f;
     for (auto& [key, units] : groups) {
         int N = (int)units.size();
-        float spacing = std::max(key.width, key.height) * 1.8f;
+        // 编队间距：SC2 的集团移动是紧密队形（单位几乎挨着），
+        // 1.6 倍边长对 32px 单位 ≈ 51px 间距，仍大于推挤半径之和（≈41px），
+        // 列阵不会互相推搡，但观感明显比 1.8 倍更紧凑
+        float spacing = std::max(key.width, key.height) * 1.6f;
         int max_cols = calc_max_cols(N);
 
         // 只查一次附近建筑/资源，供下面所有候选方向复用
@@ -314,6 +317,7 @@ void MoveSystem::reset_caches() {
     local_flow_cache.clear();
     m_avoid_side.clear();
     m_line_ok.clear();
+    m_stuck.clear();
     m_frame = 0;
     m_rvo_accumulator = 0.0f;
 }
@@ -365,27 +369,62 @@ void MoveSystem::correct_unwalkable_targets() {
 void MoveSystem::update_global_flow_cache() {
     auto& pool = WorldEntityMgr::instance()->get_object_pool();
     const int cell_size = map->get_cell_size();
-    std::unordered_set<uint64_t> active;
+
+    // 准入 + 需求统计（key -> 需求单位数 / 最近单位距离）
+    std::unordered_map<uint64_t, int> demand;
+    std::unordered_map<uint64_t, float> min_dist;
     for (auto& [id, obj] : pool) {
         if (!obj->check_valid()) continue;
         auto* mv = obj->get_component<Movable>();
         if (!mv || !mv->is_moving()) continue;
-        // 只有编队命令（命令中心 != 个人目标点）才值得建全图流场。
-        // 攻击/采集/送货时两者相同，走直线或局部流场即可，避免每单位一张全图流场
-        if (mv->flow_target.x < 0.0f || mv->flow_target == mv->target) continue;
-        active.insert(pos_key(mv->flow_target, cell_size));
+        if (mv->flow_target.x < 0.0f) continue;
+
+        Vector2 center = obj->get_collision_box().get_center_position();
+        float dist = (mv->target - center).length();
+        // 编队命令（命令中心 != 个人目标点）本来就要建全图流场。
+        // 攻击/采集/送货时两者相同：直线可通则走直线，省掉全图流场；
+        // 视线被挡、且超出局部流场覆盖半径（20 格）时才需要全图流场 ——
+        // 否则远距离目标只能直冲障碍靠切向逃逸贴墙走
+        if (mv->flow_target == mv->target) {
+            if (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size) continue;   // 局部流场管得着
+            if (line_of_sight(id, center, mv->target)) continue;        // 直线可通
+        }
+
+        uint64_t key = pos_key(mv->flow_target, cell_size);
+        ++demand[key];
+        auto it = min_dist.find(key);
+        if (it == min_dist.end() || dist < it->second) min_dist[key] = dist;
     }
+
+    std::unordered_set<uint64_t> active;
+    active.reserve(demand.size());
+    for (auto& [k, n] : demand) active.insert(k);
 
     evict_flow_cache(goal_flow_cache, active, m_frame, map->obstacle_version(), MAX_GLOBAL_FLOW_CACHE);
 
-    int budget = MAX_GLOBAL_FLOW_PER_FRAME;
+    // 按需求排序：编队（多单位共享目标）优先，其次最近的目标先建。
+    // 与 unordered_set 的任意顺序相比，这个顺序是确定的，且把有限的
+    // 缓存槽位留给收益最大的目标
+    std::vector<std::pair<uint64_t, float>> pending;
     for (auto key : active) {
-        auto it = goal_flow_cache.find(key);
-        if (it != goal_flow_cache.end()) {
-            it->second.last_used_frame = m_frame;
+        if (goal_flow_cache.count(key)) {
+            goal_flow_cache[key].last_used_frame = m_frame;
             continue;
         }
-        if (budget <= 0) continue;   // 本帧预算用尽，下一帧再生成
+        pending.push_back({ key, min_dist[key] });
+    }
+    std::sort(pending.begin(), pending.end(), [&](const auto& a, const auto& b) {
+        if (demand[a.first] != demand[b.first]) return demand[a.first] > demand[b.first];
+        if (a.second != b.second) return a.second < b.second;
+        return a.first < b.first;
+        });
+
+    // 缓存已满就不再建新场：60 个互不相同的远目标同时请求时，
+    // 无脑“每帧淘汰再重建”会让每帧白算一张全图 Dijkstra（抖动），
+    // 而收益只有 MAX_GLOBAL_FLOW_CACHE 个目标。装不下的目标回退到切向逃逸贴墙走（与旧行为一致）
+    int budget = MAX_GLOBAL_FLOW_PER_FRAME;
+    for (auto& [key, d] : pending) {
+        if (budget <= 0 || (int)goal_flow_cache.size() >= MAX_GLOBAL_FLOW_CACHE) break;
 
         FlowEntry entry;
         entry.version = map->obstacle_version();
@@ -411,15 +450,12 @@ void MoveSystem::update_local_flow_cache() {
         Vector2 center = obj->get_collision_box().get_center_position();
         float dist = (mv->target - center).length();
 
-        // 准入条件：目标在局部半径内，
-        // **或者** 直线走不通（障碍横在中间）。
-        // 第二条是关键：单位/障碍/目标连成一线时，若因距离太远而不生成流场，
-        // get_flow_direction 就只能退化成"直冲障碍"，前面又只有 RVO 硬挡，
-        // 最终表现为顶在墙上不动 —— 这就是"一线停滞"的结构性成因
-        // 近距离单位本来就准入，不必再付一次射线检测的开销
+        // 准入条件：目标在局部流场覆盖半径（20 格 ≈ 200px）内才建场。
+        // 原来“视线不通也建场”会把远目标（>600px）也拉进来：
+        // 建出来的场半径上限 60 格覆盖不到单位，get_flow_direction 也不会采样
+        // （它只在 20 格内查局部场），纯属每帧白算 Dijkstra。
+        // 超过 20 格的受阻目标改由 update_global_flow_cache 建全图流场兜底
         bool need_local = (dist < LOCAL_FLOW_RADIUS_CELLS * cell_size);
-        if (!need_local && !line_of_sight(id, center, mv->target))
-            need_local = true;
         if (!need_local) continue;
 
         uint64_t key = pos_key(mv->target, cell_size);
@@ -592,10 +628,12 @@ Vector2 MoveSystem::steer_around_obstacles(uint64_t id, const Vector2& center,
 
     // ---- 受阻：在 ±90° 范围内采样偏转方向 ----
     // CANDIDATES = 每侧候选数，MAX_DEFLECT = 最大偏转角。
-    // 偏转角上限 90° 意味着宁可"横着贴墙走"也不后退，避免原地打转
-    static constexpr int   CANDIDATES  = 4;
+    // 偏转角上限 90° 意味着宁可"横着贴墙走"也不后退，避免原地打转。
+    // 采样步长从 22.5° 加密到 15°：贴着墙斜行时能找到更贴合的切线，
+    // 减少"贴墙反复蹭角度"的锯齿感（SC2 绕建筑拐角是顺滑的一条弧）
+    static constexpr int   CANDIDATES  = 6;
     static constexpr float MAX_DEFLECT = 1.5707963f;              // 90°
-    const float step_angle = MAX_DEFLECT / (float)CANDIDATES;      // 22.5°
+    const float step_angle = MAX_DEFLECT / (float)CANDIDATES;      // 15°
 
     const AvoidState* prev = nullptr;
     auto it = m_avoid_side.find(id);
@@ -641,6 +679,55 @@ Vector2 MoveSystem::steer_around_obstacles(uint64_t id, const Vector2& center,
     // 短期内继续往左，直到前方重新通畅（快路径会清掉记忆），否则会左右抽搐
     m_avoid_side[id] = AvoidState{ best_side, m_frame + 50 };
     return out;
+}
+
+// ========== 卡死逃逸 ==========
+// 当看门狗判定单位“顶死”时，全周（16 方向）采样，选 clearance 足够、
+// 又尽量贴近目标的方向，让单位离开局部极小点。相比 steer_around_obstacles
+// 的 ±90° 限制，这里允许向任何方向（包括接近回头的角度）脱困，
+// 就像星际里单位发现自己钻进了死胡同会主动退出来重找路。
+Vector2 MoveSystem::escape_stuck(uint64_t id, const Vector2& center,
+    const Vector2& target, float probe_dist)
+{
+    // 重新评估环境：清掉绕行侧记忆与视线缓存（缓存可能记的是“撞墙前”的旧结论）
+    m_avoid_side.erase(id);
+    m_line_ok.erase(id);
+
+    static constexpr int ESCAPE_DIRS = 16;
+    const float cell = (float)map->get_cell_size();
+    Vector2 to_target = target - center;
+    Vector2 to_target_dir = to_target.length() > 1.0f ? to_target.normalize() : Vector2(1.0f, 0.0f);
+
+    Vector2 best(0.0f, 0.0f);
+    float best_score = -1e9f;
+    int   best_k = -1;
+
+    for (int k = 0; k < ESCAPE_DIRS; ++k) {
+        const float a = k * (6.2831853f / (float)ESCAPE_DIRS);
+        const Vector2 d(std::cos(a), std::sin(a));
+        const float clr = clearance(map, center, d, probe_dist);
+        if (clr < cell * 2.0f) continue;                  // 至少能走 2 格才有意义
+
+        // clearance 优先（能脱困比方向重要），再轻微偏好贴近目标的方向
+        const float score = clr + dot(d, to_target_dir) * cell * 0.5f;
+        if (score > best_score) {
+            best_score = score;
+            best = d;
+            best_k = k;
+        }
+    }
+
+    if (best_k < 0) {
+        // 所有方向都被堵死：沿障碍边缘滑行，交给切向逃逸继续处理
+        best = wall_tangent(map, center, to_target_dir);
+    }
+
+    // 记住这次选中的绕行侧，避免恢复后立刻又左右摇摆
+    const float cross = to_target_dir.x * best.y - to_target_dir.y * best.x;
+    const int side = cross > 0.05f ? 1 : (cross < -0.05f ? -1 : 0);
+    m_avoid_side[id] = AvoidState{ side, m_frame + 50 };
+
+    return best;
 }
 
 // ========== 核心移动逻辑 ==========
@@ -723,15 +810,29 @@ void MoveSystem::compute_pref_velocities()
             desired_dir = get_flow_direction(obj, mv->target, mv->flow_target, dist);
         }
 
-        // ---- 切向逃逸：把撞墙的方向偏转到可通行的切向 ----
-        // 只改方向、不降速。RVO 拿到的因此是本来就安全的首选速度，
-        // 不需要靠削减速度大小来避让 —— 这是"靠近障碍就变慢"的治本手段
         float diagonal = std::sqrt(cb.width * cb.width + cb.height * cb.height);
         float probe_dist = std::max(diagonal, mv->speed * PROBE_TIME);
-        desired_dir = steer_around_obstacles(id, center, desired_dir, probe_dist);
+
+        // ---- 卡死看门狗：逃逸窗口内改用全向搜索出的脱困方向 ----
+        {
+            auto it = m_stuck.find(id);
+            if (it != m_stuck.end() && it->second.escape_until_frame > m_frame) {
+                desired_dir = escape_stuck(id, center, mv->target, probe_dist);
+            }
+        }
+
+        // ---- 切向逃逸：把撞墙的方向偏转到可通行的切向 ----
+        // 只改方向、不降速。RVO 拿到的因此是本来就安全的首选速度，
+        // 不需要靠削减速度大小来避让 —— 这是"靠近障碍就变慢"的治本手段。
+        // 但到达减速带内要跳过：贴障碍站位点（采集/提交点）的直线方向
+        // 必然穿过障碍，clearance 探测永远"不合格"，转向会把单位永远
+        // 偏转在目标旁打转、到不了点。目标点本身可通行，最后十几像素
+        // 直线走进即可（分轴回退兜底）
+        float slow_radius = mv->speed * ARRIVE_SLOW_TIME;
+        if (dist_to_goal > slow_radius + ARRIVE_EPS)
+            desired_dir = steer_around_obstacles(id, center, desired_dir, probe_dist);
 
         // ---- 到达减速带 ----
-        float slow_radius = mv->speed * ARRIVE_SLOW_TIME;
         float scale = (dist_to_goal < slow_radius)
             ? std::max(MIN_ARRIVE_SCALE, dist_to_goal / slow_radius) : 1.0f;
 
@@ -749,6 +850,23 @@ void MoveSystem::integrate_positions(float delta)
     float map_w = (float)map->get_width() * map->get_cell_size();
     float map_h = (float)map->get_height() * map->get_cell_size();
 
+    // ===== 第 1 遍：平滑速度 → 积分出“意向中心点”，并收集本帧参与分离的单位 =====
+    // 注意：静止单位（已到达/待命）也进入 recs —— 它们不积分速度，
+    // 但要参与软推挤并被行进中的单位“挤开”。这正是 SC2 的手感：
+    // 后来者能推开堵在目标点上的同伴，而不是被一堵“人墙”挡在
+    // 二三十像素外原地抽搐（RVO 只会让双方互相避让，静止方永不挪动）
+    struct MoveRec {
+        uint64_t id;
+        GameObject* obj;
+        Movable* mv;
+        Vector2 center;     // 意向中心点（尚未处理推挤/障碍）
+        float half_w, half_h;
+        float push_radius;  // 外接圆半径 × PUSH_RADIUS_SCALE
+    };
+    std::vector<MoveRec> recs;
+    recs.reserve(pool.size());
+    std::unordered_map<uint64_t, int> rec_index;   // id -> recs 下标
+
     for (auto& [id, obj] : pool)
     {
         if (!obj->check_valid()) continue;
@@ -760,38 +878,118 @@ void MoveSystem::integrate_positions(float delta)
         if (mode_ == MoveModeKind::FlowRVO)
             mv->velocity = rvo->get_agent_velocity(id);
 
-        if (!mv->is_moving()) continue;
+        const CollisionBox& cb = obj->get_collision_box();
+        Vector2 half(cb.width * 0.5f, cb.height * 0.5f);
+        Vector2 center = cb.position + half;
 
-        // ---- 速度限幅：每帧最多改变 max_dv，消除急停/急起与转向抖动 ----
-        // RVO 每 0.05s 才刷新一次速度，定步切换的瞬间会有一个台阶；
-        // 转向时方向突变也会产生抽搐。限幅后速度连续，观感平滑。
-        // 注意只限制"变化量"，不降低目标速度，因此不影响通过能力
+        if (mv->is_moving())
         {
-            Vector2 dv = mv->velocity - mv->smooth_velocity;
-            float max_dv = (std::max(mv->speed, 1.0f) / ACCEL_TIME) * delta;
-            if (dv.length() > max_dv) dv = dv.length() > 0.01f ? dv.normalize() * max_dv : Vector2(0.0f, 0.0f);
-            mv->smooth_velocity = mv->smooth_velocity + dv;
+            // ---- 速度限幅：每帧最多改变 max_dv，消除急停/急起与转向抖动 ----
+            // RVO 每 0.05s 才刷新一次速度，定步切换的瞬间会有一个台阶；
+            // 转向时方向突变也会产生抽搐。限幅后速度连续，观感平滑。
+            // 注意只限制"变化量"，不降低目标速度，因此不影响通过能力
+            {
+                Vector2 dv = mv->velocity - mv->smooth_velocity;
+                float max_dv = (std::max(mv->speed, 1.0f) / ACCEL_TIME) * delta;
+                if (dv.length() > max_dv) dv = dv.length() > 0.01f ? dv.normalize() * max_dv : Vector2(0.0f, 0.0f);
+                mv->smooth_velocity = mv->smooth_velocity + dv;
+            }
+
+            center = center + mv->smooth_velocity * delta;
+            center.x = std::clamp(center.x, half.x, map_w - half.x);
+            center.y = std::clamp(center.y, half.y, map_h - half.y);
         }
 
-        CollisionBox cb = obj->get_collision_box();
-        Vector2 new_pos = cb.position + mv->smooth_velocity * delta;
-        new_pos.x = std::max(0.0f, std::min(new_pos.x, map_w - cb.width));
-        new_pos.y = std::max(0.0f, std::min(new_pos.y, map_h - cb.height));
+        float diagonal = std::sqrt(cb.width * cb.width + cb.height * cb.height);
+        rec_index[id] = (int)recs.size();
+        recs.push_back(MoveRec{ id, obj, mv, center, half.x, half.y,
+                                diagonal * 0.5f * PUSH_RADIUS_SCALE });
+    }
+
+    // ===== 第 2 遍：软推挤分离 =====
+    // 两个单位（无论行进还是静止）的意向中心距离小于双方推挤半径之和时，
+    // 按重叠量对半推开。这是 SC2/RA2 的关键手感：人群是“实体互相挤”，
+    // 而不是 RVO 的“礼貌让行”，后者在密集队形里会把整个队伍拖到近乎停住。
+    // 每帧位移封顶，防止穿模抖动。
+    // 推挤位移按“每帧最多 PUSH_MAX_STEP 像素（60Hz 基准）”换算成每秒速率，
+    // 与帧率无关，避免高刷下推挤过猛
+    const float max_push_step = PUSH_MAX_STEP * delta * 60.0f;
+    for (size_t i = 0; i < recs.size(); ++i)
+    {
+        MoveRec& a = recs[i];
+        // 查询框：自身推挤半径 + 允许的最大单位半径，保证任何可能相交的单位都在结果里
+        const float query_r = a.push_radius + 60.0f;
+        CollisionBox area{
+            { a.center.x - query_r, a.center.y - query_r },
+            query_r * 2.0f, query_r * 2.0f };
+        std::vector<GameObject*> nearby;
+        WorldEntityMgr::instance()->query_area(area, nearby);
+
+        for (GameObject* o : nearby)
+        {
+            if (!o || !o->check_valid() || o->get_id() == a.id) continue;
+            auto it = rec_index.find(o->get_id());
+            if (it == rec_index.end()) continue;      // 不是可推挤的单位（建筑/资源等）
+            int j = it->second;
+            if (j <= (int)i) continue;                // 每对只处理一次（对称推开）
+
+            MoveRec& b = recs[j];
+            Vector2 diff = a.center - b.center;
+            float dist = diff.length();
+            float min_dist = a.push_radius + b.push_radius;
+            if (dist >= min_dist || dist < 0.01f) continue;
+
+            float overlap = min_dist - dist;
+            float push = std::min(overlap * 0.5f, max_push_step);
+            Vector2 dir = diff.normalize();
+            a.center += dir * push;
+            b.center -= dir * push;
+        }
+    }
+
+    // ===== 第 3 遍：障碍回退 + 卡死看门狗 + 写回位置 =====
+    for (MoveRec& rec : recs)
+    {
+        Vector2 new_pos(rec.center.x - rec.half_w, rec.center.y - rec.half_h);
+        Vector2 old_center = rec.obj->get_collision_box().position
+            + Vector2(rec.half_w, rec.half_h);
 
         // 障碍回退：新位置的中心若进入不可通行格，先尝试单轴滑动，避免贴墙卡死。
         // 若当前中心本就不可通行（例如正站在资源格上），则放行，否则会永久卡住
-        Vector2 half(cb.width * 0.5f, cb.height * 0.5f);
-        if (center_passable(cb.position + half, map) && !center_passable(new_pos + half, map))
+        if (center_passable(old_center, map) && !center_passable(rec.center, map))
         {
-            Vector2 try_x(new_pos.x, cb.position.y);
-            Vector2 try_y(cb.position.x, new_pos.y);
-            if (center_passable(try_x + half, map))      new_pos = try_x;
-            else if (center_passable(try_y + half, map)) new_pos = try_y;
-            else                                         new_pos = cb.position;
+            Vector2 try_x(new_pos.x, old_center.y - rec.half_h);
+            Vector2 try_y(old_center.x - rec.half_w, new_pos.y);
+            if (center_passable(Vector2(try_x.x + rec.half_w, try_x.y + rec.half_h), map))      new_pos = try_x;
+            else if (center_passable(Vector2(try_y.x + rec.half_w, try_y.y + rec.half_h), map)) new_pos = try_y;
+            else                                                                                new_pos = old_center - Vector2(rec.half_w, rec.half_h);
         }
 
+        CollisionBox cb = rec.obj->get_collision_box();
         cb.position = new_pos;
-        obj->set_collision_box(cb);
+        rec.obj->set_collision_box(cb);
+
+        // ---- 卡死看门狗（仅行进中的单位）：远离目标但长时间几乎不动 → 触发逃逸窗口 ----
+        // 阈值取满速的 22%，排除了人群里正常“慢行让路”的情况；
+        // 到达减速带内（ARRIVE_EPS*3）不判定，避免终点附近误触发
+        if (!rec.mv->is_moving()) continue;
+        float dist_to_goal = (rec.mv->target - rec.center).length();
+        float sp = rec.mv->smooth_velocity.length();
+        if (m_stuck.size() > 1024) m_stuck.clear();   // 防止已销毁实体的条目堆积
+        StuckState& st = m_stuck[rec.id];
+        if (!rec.mv->is_arranging && dist_to_goal > ARRIVE_EPS * 3.0f &&
+            sp < rec.mv->speed * STUCK_SPEED_SCALE)
+        {
+            st.slow_time += delta;
+            if (st.slow_time >= STUCK_TIME) {
+                st.slow_time = 0.0f;
+                st.escape_until_frame = m_frame + STUCK_ESCAPE_FRAMES;
+            }
+        }
+        else
+        {
+            st.slow_time = 0.0f;
+        }
     }
 }
 

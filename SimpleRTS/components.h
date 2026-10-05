@@ -166,6 +166,14 @@ struct Gatherer : public Component {
 
     uint64_t target_resource_id = 0;   // 采集目标实体 ID
     uint64_t dropoff_target_id = 0;    // 提交目标建筑实体 ID
+
+    // 拥堵自愈：长时间无法贴近目标时，由 HarvestSystem 触发换位。
+    // blocked_time 累计“无明显推进”的时长；last_target_dist 是推进量快照
+    float blocked_time = 0.0f;
+    float last_target_dist = 0.0f;
+
+    // 分配的周界站位点：被挤离后优先走回自己的点，而不是换新点
+    Vector2 stand_target = { -1.0f, -1.0f };
 };
 
 // 标记建筑实体

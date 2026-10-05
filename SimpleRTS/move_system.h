@@ -33,25 +33,44 @@ private:
     static constexpr float MAX_LOCAL_FLOW_RADIUS_CELLS = 60.0f;
 
     // 到达判定阈值（像素）。比原来的 5.0 略宽松，用于抵消后续 RVO 的横向抖动
-    static constexpr float ARRIVE_EPS = 6.0f;
+    static constexpr float ARRIVE_EPS = 5.0f;
 
     // 到达减速带：距目标小于 speed*ARRIVE_SLOW_TIME 时线性收尾，
     // 且速度不低于 MIN_ARRIVE_SCALE —— 保留一个下限，避免在障碍附近
-    // 反复"减速到 0 → 再启动"的抽搐，也保证贴着目标时仍能挤进去
-    static constexpr float ARRIVE_SLOW_TIME = 0.35f;
-    static constexpr float MIN_ARRIVE_SCALE = 0.30f;
+    // 反复"减速到 0 → 再启动"的抽搐，也保证贴着目标时仍能挤进去。
+    // SC2 手感：刹车带很短（0.22s ≈ 13px），收尾干脆，到达即停，
+    // 不像 AoE4 那样长距离滑行
+    static constexpr float ARRIVE_SLOW_TIME = 0.22f;
+    static constexpr float MIN_ARRIVE_SCALE = 0.45f;
 
     // 速度变化率平滑：从静止加速到满速所需时间（秒）。
-    // 对速度做每帧限幅，消除急停急起与转向抖动
-    static constexpr float ACCEL_TIME = 0.12f;
+    // 对速度做每帧限幅，消除急停急起与转向抖动。
+    // SC2 手感：加速/转向都很快（0.07s 到满速，180° 掉头约 0.16s），
+    // 既有肉眼可见的顺滑，又不会像漂移一样拖泥带水
+    static constexpr float ACCEL_TIME = 0.07f;
 
     // 切向逃逸的前瞻距离 = max(单位外接圆直径, speed * PROBE_TIME)
-    static constexpr float PROBE_TIME = 0.50f;
+    static constexpr float PROBE_TIME = 0.55f;
+
+    // ===== 软推挤分离（SC2 式“挤开”而非停下） =====
+    // 触发半径 = 双方外接圆半径之和 × PUSH_RADIUS_SCALE。
+    // 当两单位进入该距离时按重叠量对半推开（每帧位移封顶 PUSH_MAX_STEP），
+    // 保证人群互相让路、像实体一样“挤”过去，而不是像排队一样原地等
+    static constexpr float PUSH_RADIUS_SCALE = 0.90f;
+    static constexpr float PUSH_MAX_STEP = 1.0f;   // 每帧单侧最大推开距离（像素）
+
+    // ===== 卡死看门狗 =====
+    // 单位速度持续低于满速的 STUCK_SPEED_SCALE、且远离目标超过 STUCK_TIME 秒，
+    // 判定为“卡死”（顶墙/被夹/局部极小），触发 STUCK_ESCAPE_FRAMES 帧的
+    // 全向逃逸方向搜索，避免经典 RTS 里单位顶墙不动的观感
+    static constexpr float STUCK_SPEED_SCALE = 0.22f;
+    static constexpr float STUCK_TIME = 0.45f;
+    static constexpr uint32_t STUCK_ESCAPE_FRAMES = 60;
     // 流场缓存上限与每帧生成预算（防止单帧生成多张全图流场造成卡顿）。
-    // 上限必须大于"同时存在的不同目标点数"，否则缓存会抖动：
-    // 每帧淘汰旧场又重建新场，表现为持续的高 CPU 占用。
-    // 经验值：一局内不同目标点通常不超过 10 个
-    static constexpr int MAX_GLOBAL_FLOW_CACHE = 6;
+    // 缓存已满时不再生成新场（见 update_global_flow_cache），因此上限
+    // 同时是“同时被全图流场服务的目标点数”的上限；装不下的目标回退切向逃逸。
+    // 每张全图流场 ≈ 480KB，8 张 ≈ 3.8MB，可接受
+    static constexpr int MAX_GLOBAL_FLOW_CACHE = 8;
     static constexpr int MAX_LOCAL_FLOW_CACHE = 8;
     static constexpr int MAX_GLOBAL_FLOW_PER_FRAME = 1;
     static constexpr int MAX_LOCAL_FLOW_PER_FRAME = 2;
@@ -73,6 +92,10 @@ private:
     Vector2 steer_around_obstacles(uint64_t id, const Vector2& center,
         const Vector2& desired_dir, float probe_dist);
 
+    // 卡死逃逸：全向采样，选既有足够 clearance、又尽量贴近目标的方向
+    Vector2 escape_stuck(uint64_t id, const Vector2& center,
+        const Vector2& target, float probe_dist);
+
     // 带 TTL 的直线可达查询（缓存 is_line_passable 的结果）
     bool line_of_sight(uint64_t id, const Vector2& from, const Vector2& to);
 
@@ -83,6 +106,11 @@ private:
 
     // 视线查询缓存：id -> {检查时的帧号, 是否通视}
     std::unordered_map<uint64_t, std::pair<uint32_t, bool>> m_line_ok;
+
+    // 卡死看门狗状态：连续低速累计时间；逃逸激活期间的首选方向由
+    // escape_stuck 提供，直到 escape_until_frame 过期
+    struct StuckState { float slow_time = 0.0f; uint32_t escape_until_frame = 0; };
+    std::unordered_map<uint64_t, StuckState> m_stuck;
 
     // 编队排列（到达后自动排成方阵）
     void arrange_units(float delta);

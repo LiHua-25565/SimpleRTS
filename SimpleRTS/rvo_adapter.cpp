@@ -87,18 +87,19 @@ RVOAdapter* RVOAdapter::instance() {
 
 // RVO 邻居与时间窗参数。
 //
-// 关键配平关系：timeHorizon * maxSpeed 必须与 neighborDist 同量级。
-// timeHorizon 是“向前看多久内可能相撞”，它决定 VO（速度障碍）锥的大小：
+// 手感目标（星际争霸 2 风格）：单位“贴身才让、一让就过”，而不是老远就开始
+// 礼貌性地减速。关键配平关系：timeHorizon * maxSpeed 必须与 neighborDist 同量级。
 //   timeHorizon 越大 → VO 锥越大 → 可行速度空间被切得越多 → 单位越早、越狠地减速。
-// 原先的 5.0s / 3.0s 对 speed≈60px/s、neighborDist=80px 完全失配
-// （5s 可走 300px，远大于 80px 的感知半径），于是只要 80px 内出现任何
-// 邻居或障碍，可行速度几乎被切光，输出速度趋近于 0 —— 这就是
-// “靠近障碍物速度骤降、整体运动迟缓”的直接来源。
-static constexpr float  RVO_NEIGHBOR_DIST     = 70.0f;  // 邻居查询半径（像素）
-static constexpr size_t RVO_MAX_NEIGHBORS     = 10;     // 单个 agent 最多考虑的邻居数
-static constexpr float  RVO_TIME_HORIZON      = 1.5f;   // 与其它单位：向前看 1.5s（≈90px 行程）
-static constexpr float  RVO_TIME_HORIZON_OBST = 1.2f;   // 与静态障碍：略短，避免贴墙时过度减速
-static constexpr float  RVO_RADIUS_SCALE      = 0.75f;  // agent 半径 = 外接圆半径 × 该系数
+// 原先的 5.0s/3.0s 失配（5s 可走 300px >> 感知半径 80px）导致“靠近任何东西
+// 速度骤降”；1.5s/1.2s 仍有明显余量——实测贴墙单次绕行平均只有满速的 85%。
+// 这里进一步收短：与其它单位向前看 0.9s（≈54px），与静态障碍 0.7s（≈42px），
+// 让减速只发生在真正需要避让的最后一刻；配合上层切向转向与软推挤，
+// 单位贴近障碍/同伴时仍能保持速度，像 SC2 一样“挤”过去而不是停下来排队。
+static constexpr float  RVO_NEIGHBOR_DIST     = 52.0f;  // 邻居查询半径（像素）
+static constexpr size_t RVO_MAX_NEIGHBORS     = 8;      // 单个 agent 最多考虑的邻居数
+static constexpr float  RVO_TIME_HORIZON      = 0.9f;   // 与其它单位：向前看 0.9s（≈54px 行程）
+static constexpr float  RVO_TIME_HORIZON_OBST = 0.7f;   // 与静态障碍：≈42px 行程，贴墙保持速度
+static constexpr float  RVO_RADIUS_SCALE      = 0.70f;  // agent 半径 = 外接圆半径 × 该系数
 
 void RVOAdapter::init(GameMap* map) {
     shutdown();
