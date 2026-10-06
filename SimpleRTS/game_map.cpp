@@ -394,7 +394,9 @@ Vector2 GameMap::find_nearest_passable(const Vector2& world_goal) const
 }
 
 void GameMap::generate_static_obstacle_field() {
-    static_obstacle_field.resize(height, std::vector<float>(width, 0.0f));
+    // 用 assign 而非 resize：尺寸不变时 resize 是空操作，会把上次的 -1（水）残留下来，
+    // 导致"水域改回陆地"后仍被当作障碍（如地图正中央默认水块在载入自定义地图后未被清除）。
+    static_obstacle_field.assign(height, std::vector<float>(width, 0.0f));
     for (int y = 0; y < height; ++y)
         for (int x = 0; x < width; ++x)
             if (grid[y][x] == TerrainType::Water)

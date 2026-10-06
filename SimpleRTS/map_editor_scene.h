@@ -32,7 +32,9 @@ private:
         // 兵种
         Villager, Archer, Crossbowman,
         // 建筑
-        TownCenter, ArcheryRange
+        TownCenter, ArcheryRange,
+        // 操作
+        Eraser
     };
 
     enum class MapSize : int { Small, Medium, Large };
@@ -77,7 +79,10 @@ private:
     // ---- 交互状态 ----
     bool panning_ = false;
     float last_pan_x_ = 0.0f, last_pan_y_ = 0.0f;
-    bool painting_ = false;
+    bool painting_ = false;                    // 地形涂刷按住中
+    bool placing_ = false;                     // 资源批量放置按住中（长按连续放置）
+    bool erasing_ = false;                     // 橡皮擦按住中（拖动连续擦除）
+    int last_place_gx_ = -1, last_place_gy_ = -1;   // 上次连续放置的格子原点（避免同格重复放置）
     float mouse_x_ = 0.0f, mouse_y_ = 0.0f;   // 最近一次鼠标位置（逻辑坐标）
 
     // ---- UI 布局常量 ----
@@ -110,6 +115,7 @@ private:
     float tools_top_ = 0.0f, tools_bottom_ = 0.0f;   // 工具列表可视区域
     float tools_content_h_ = 0.0f;                   // 工具内容总高
     float map_list_top_ = 0.0f, map_list_bottom_ = 0.0f; // 地图文件列表可视区域
+    SDL_FRect minimap_rect_{};                       // 小地图（右下角）
 
     // ---- 方法 ----
     void layout();
@@ -125,6 +131,7 @@ private:
 
     void place_at(float mx, float my);
     void paint_terrain_at(float mx, float my);
+    void erase_at(float mx, float my);          // 橡皮擦：删除鼠标下的实体
     bool cell_occupied(int cx, int cy) const;         // 该格是否被实体（资源/建筑/单位）占据
     bool placement_valid(float mx, float my) const;   // 当前工具在鼠标处能否放置（用于预览红/绿）
     CollisionBox entity_placement_box(float mx, float my) const;   // 实体放置盒（以鼠标所在格为中心，供预览/校验/放置共用）
@@ -154,6 +161,9 @@ private:
     void render_terrain();
     void render_grid_overlay();
     void render_entities();
+    void render_minimap();
+    bool point_in_minimap(float x, float y) const;
+    void minimap_click(float x, float y);
     void render_ui();
     void draw_button(const SDL_FRect& r, const std::string& label, bool active, bool hover);
     bool point_in(const SDL_FRect& r, float x, float y) const;

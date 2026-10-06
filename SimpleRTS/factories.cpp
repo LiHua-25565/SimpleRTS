@@ -6,6 +6,17 @@ void ObjectFactory::init(GameMap* map) {
     this->map = map;
 }
 
+void ObjectFactory::set_player_color(int player_id, Color c) {
+    if (c == Color::None) color_overrides_.erase(player_id);
+    else color_overrides_[player_id] = c;
+}
+
+Color ObjectFactory::player_color(int player_id) const {
+    auto it = color_overrides_.find(player_id);
+    if (it != color_overrides_.end()) return it->second;
+    return get_player_color(player_id);
+}
+
 GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const {
     std::vector<GameObject*> candidates;
     WorldEntityMgr::instance()->query_area(box, candidates);
@@ -30,11 +41,11 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
     Color color;
 
     switch (type) {
-    case ResourceEntityType::Wood:    size_cells = 4;  health = 20;  output = ResourceType::Wood;  color = Color::Green;  break;
+    case ResourceEntityType::Wood:    size_cells = 2;  health = 20;  output = ResourceType::Wood;  color = Color::Green;  break;
     case ResourceEntityType::SGold:   size_cells = 10; health = 3000; output = ResourceType::Gold;  color = Color::Yellow; break;
     case ResourceEntityType::LGold:   size_cells = 15; health = 8000; output = ResourceType::Gold;  color = Color::Yellow; break;
     case ResourceEntityType::Stone:   size_cells = 10; health = 3000; output = ResourceType::Stone; color = Color::Gray;   break;
-    case ResourceEntityType::Berries: size_cells = 5;  health = 500;   output = ResourceType::Food;  color = Color::Orange; break;
+    case ResourceEntityType::Berries: size_cells = 4;  health = 500;   output = ResourceType::Food;  color = Color::Orange; break;
     default: return nullptr;
     }
 
@@ -116,7 +127,7 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color unit_color = get_player_color(current_player_id);
+    Color unit_color = player_color(current_player_id);
     render->color = unit_color;
 
     SDL_Color sdl_color = to_sdl_color(unit_color);
@@ -176,7 +187,7 @@ GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_ove
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color unit_color = get_player_color(current_player_id);
+    Color unit_color = player_color(current_player_id);
     render->color = unit_color;
 
     SDL_Color sdl_color = to_sdl_color(unit_color);
@@ -232,7 +243,7 @@ GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allo
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color unit_color = get_player_color(current_player_id);
+    Color unit_color = player_color(current_player_id);
     render->color = unit_color;
 
     SDL_Color sdl_color = to_sdl_color(unit_color);
@@ -296,7 +307,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color tc_color = get_player_color(current_player_id);
+    Color tc_color = player_color(current_player_id);
     render->color = tc_color;
 
     SDL_Color sdl_color = to_sdl_color(tc_color);
@@ -353,7 +364,7 @@ GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool all
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color tc_color = get_player_color(current_player_id);
+    Color tc_color = player_color(current_player_id);
     render->color = tc_color;
 
     SDL_Color sdl_color = to_sdl_color(tc_color);
@@ -407,7 +418,7 @@ uint64_t ObjectFactory::create_arrow(const Vector2& start, const Vector2& target
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color arrow_color = get_player_color(current_player_id);
+    Color arrow_color = player_color(current_player_id);
     render->color = arrow_color;   // ¼ýÊ¸ÎÞÎÆÀí£¬´¿É«
 
     auto* proj = obj->add_component<Projectile>();

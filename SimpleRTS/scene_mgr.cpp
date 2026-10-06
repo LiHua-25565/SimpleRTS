@@ -44,6 +44,12 @@ void SceneMgr::on_render()
 		current_scene->on_render();
 }
 
+void SceneMgr::on_render_overlay()
+{
+	if (current_scene)
+		current_scene->on_render_overlay();
+}
+
 void SceneMgr::on_update(float delta)
 {
 	if (current_scene)

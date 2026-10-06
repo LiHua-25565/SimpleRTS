@@ -15,9 +15,15 @@ static bool try_spawn_unit_circles(GameObject* building, UnitEntityType type, Ob
     const float build_half_w = build_box.width * 0.5f;
     const float build_half_h = build_box.height * 0.5f;
 
-    constexpr float UNIT_WIDTH = 32.0f;
-    constexpr float UNIT_HEIGHT = 32.0f;
-    constexpr float HALF_UNIT = UNIT_WIDTH * 0.5f;
+    auto* map = WorldEntityMgr::instance()->get_map();
+    if (!map) return false;
+    const int cell_size = map->get_cell_size();
+
+    // 单位尺寸：2×2 格，与木一致
+    const float UNIT_WIDTH = (float)(cell_size * UNIT_SIZE_CELLS);
+    const float UNIT_HEIGHT = UNIT_WIDTH;
+    constexpr float HALF_UNIT_MULT = 0.5f;
+    const float HALF_UNIT = UNIT_WIDTH * HALF_UNIT_MULT;
     constexpr float GAP = 3.0f;        // 单位之间的额外间隙
 
     const float step = UNIT_WIDTH + GAP;
@@ -25,9 +31,6 @@ static bool try_spawn_unit_circles(GameObject* building, UnitEntityType type, Ob
     // 第一圈紧贴建筑边缘，外圈逐步增加一个单位宽度
     const float base_offset = HALF_UNIT + 5.0f;   // 建筑边缘到槽位中心的距离
 
-    auto* map = WorldEntityMgr::instance()->get_map();
-    if (!map) return false;
-    const int cell_size = map->get_cell_size();
     const float map_w = map->get_width() * cell_size;
     const float map_h = map->get_height() * cell_size;
 

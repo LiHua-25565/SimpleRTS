@@ -139,6 +139,7 @@ int main(int argc, char* argv[])
         SDL_RenderClear(renderer);
         SceneMgr::instance()->on_render();
         RenderMgr::instance()->end_frame(renderer);
+        SceneMgr::instance()->on_render_overlay();
         SDL_RenderPresent(renderer);
 
         last_tick = frame_start;

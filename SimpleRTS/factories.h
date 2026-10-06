@@ -4,6 +4,7 @@
 #include "game_object.h"
 #include "world_entity_mgr.h"
 #include <string>
+#include <unordered_map>
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -33,11 +34,17 @@ public:
     void set_player_id(int playerId) { current_player_id = playerId; }
     GameObject* check_overlap(const CollisionBox& box) const;
 
+    // 按玩家覆盖颜色（开局自定义各玩家颜色）；传 Color::None 表示清除该玩家覆盖
+    void set_player_color(int player_id, Color c);
+    void clear_color_overrides() { color_overrides_.clear(); }
+    Color player_color(int player_id) const;   // 优先覆盖色，否则默认色
+
 public:
     static Color get_player_color(int player_id);
 
 private:
     GameMap* map = nullptr;
     int current_player_id = 0;   // 当前创建实体所属玩家
+    std::unordered_map<int, Color> color_overrides_;
 };
 #endif // !_FACTORIES_H_

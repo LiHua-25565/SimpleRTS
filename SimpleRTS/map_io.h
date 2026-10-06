@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include "game_map.h"
+#include "match_config.h"
 
 // 一条地图实体记录（资源/建筑/单位的统一表示）。
 // 编辑器以此作为权威数据，可序列化到 .srmap 文本文件。
@@ -27,5 +28,12 @@ bool save_map(const std::string& path, const GameMap& map, const std::vector<Ent
 // 玩家数量写入 player_count（旧格式无此字段时默认为 2）。
 // 要求文件的宽/高与 map 一致，否则返回 false。
 bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count);
+
+// 读取地图（自动按文件头 W/H resize map），成功返回 true。
+bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count);
+
+// 计算 player_count 个起始位置：优先取地图上城镇中心的位置（按 player 排序），
+// 不足则用默认分布（经典 RTS 布局）补齐。返回数量 == player_count。
+std::vector<SpawnPoint> compute_spawn_points(const GameMap& map, const std::vector<EntityRecord>& entities, int player_count);
 
 #endif // !_MAP_IO_H_

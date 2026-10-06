@@ -21,6 +21,8 @@ public:
 	virtual void on_input(const SDL_Event& event) {};
 	virtual void on_update(float delta) {};
 	virtual void on_render() {};
+	// Overlay pass: rendered after RenderMgr::end_frame so it stays on top
+	virtual void on_render_overlay() {};
 	virtual void on_enter() {};
 	virtual void on_exit() {};
 

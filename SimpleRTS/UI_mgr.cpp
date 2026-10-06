@@ -624,8 +624,12 @@ void UIMgr::update_selection_panel() {
             icon_region.h_percent = icon_size * (info_w / info_h);
             icon_region.bg_color = { 0, 0, 0, 0 };
 
-            // 图标纹理颜色使用该阵营颜色
-            Color player_color = ObjectFactory::get_player_color(player_id);
+            // 图标纹理颜色取实体实际渲染颜色（与场上单位颜色一致，含选色覆盖）
+            Color player_color = Color::White;
+            if (!units.empty()) {
+                auto* rr = units[0]->get_component<Renderable>();
+                if (rr) player_color = rr->color;
+            }
             uint32_t icon_id = TextureCache::instance()->get_unit_texture(
                 type, to_sdl_color(player_color), tex_w, tex_h);
             icon_region.texture_id = icon_id;
@@ -724,16 +728,16 @@ void UIMgr::update_selection_panel() {
     int tex_w = 64, tex_h = 64;
     uint32_t tex_id = 0;
     if (auto* unit_type = obj->get_component<UnitType>()) {
-        Color player_color = ObjectFactory::get_player_color(
-            obj->get_component<Ownership>() ? obj->get_component<Ownership>()->player_id : 0);
+        Color player_color = Color::White;
+        if (auto* rr = obj->get_component<Renderable>()) player_color = rr->color;
         tex_id = TextureCache::instance()->get_unit_texture(unit_type->type, to_sdl_color(player_color), tex_w, tex_h);
     }
     else if (auto* harvestable = obj->get_component<Harvestable>()) {
         tex_id = TextureCache::instance()->get_resource_texture(harvestable->entity_type, tex_w, tex_h);
     }
     else if (auto* building_type = obj->get_component<BuildingType>()) {
-        Color player_color = ObjectFactory::get_player_color(
-            obj->get_component<Ownership>() ? obj->get_component<Ownership>()->player_id : 0);
+        Color player_color = Color::White;
+        if (auto* rr = obj->get_component<Renderable>()) player_color = rr->color;
         tex_id = TextureCache::instance()->get_building_texture(
             building_type->type, to_sdl_color(player_color), tex_w, tex_h);
     }

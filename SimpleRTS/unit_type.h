@@ -11,4 +11,7 @@ enum class UnitEntityType : uint8_t {
     Count
 };
 
+// 单位占地：2×2 格，与木（Wood 2×2）一致
+constexpr int UNIT_SIZE_CELLS = 2;
+
 #endif // !_UNIT_TYPE_H_

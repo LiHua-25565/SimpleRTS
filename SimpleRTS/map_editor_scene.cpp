@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <sstream>
 
@@ -24,6 +25,56 @@ static SDL_Color player_frame_color(int pid) {
     case 8:  return { 240, 110, 220, 255 };  // 品红
     default: return { 150, 150, 150, 255 };  // 中立灰
     }
+}
+
+// 放置阻塞诊断：把「无法放置」的具体原因写进 placement_debug.log（ASCII，避免编码问题）。
+// force=true 表示强制输出（点击放置失败时），否则按 1 秒节流（预览时每帧都会调用）。
+static void log_placement_block(const GameMap& map, const ObjectFactory& factory, const CollisionBox& box, bool force) {
+    static uint64_t last_ms = 0;
+    uint64_t now = SDL_GetTicks();
+    if (!force && now - last_ms < 1000) return;
+    last_ms = now;
+
+    FILE* f = fopen("placement_debug.log", "a");
+    auto emit = [&](const char* s) { printf("%s", s); if (f) fputs(s, f); };
+
+    int cs = map.get_cell_size();
+    int minx = (int)(box.position.x / cs);
+    int miny = (int)(box.position.y / cs);
+    int maxx = (int)((box.position.x + box.width) / cs) - 1;
+    int maxy = (int)((box.position.y + box.height) / cs) - 1;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "[placement block] box world(%.1f,%.1f %.0fx%.0f) cells x[%d..%d] y[%d..%d]\n",
+        box.position.x, box.position.y, box.width, box.height, minx, miny, maxx, maxy);
+    emit(buf);
+
+    if (!map.is_box_passable(box)) {
+        for (int y = miny; y <= maxy; ++y) {
+            for (int x = minx; x <= maxx; ++x) {
+                if (x < 0 || y < 0 || x >= map.get_width() || y >= map.get_height()) {
+                    snprintf(buf, sizeof(buf), "  cell(%d,%d) out-of-bounds\n", x, y); emit(buf);
+                    continue;
+                }
+                if (!map.is_cell_passable(x, y)) {
+                    bool water = (map.get_grid()[y][x] == TerrainType::Water);
+                    snprintf(buf, sizeof(buf), "  cell(%d,%d) blocked by %s\n", x, y,
+                        water ? "WATER" : "dynamic-obstacle(resource/building)");
+                    emit(buf);
+                }
+            }
+        }
+    }
+    GameObject* ov = factory.check_overlap(box);
+    if (ov) {
+        const auto& b = ov->get_collision_box();
+        snprintf(buf, sizeof(buf), "  overlap entity id=%llu box=(%.0f,%.0f %.0fx%.0f)\n",
+            (unsigned long long)ov->get_id(), b.position.x, b.position.y, b.width, b.height);
+        emit(buf);
+    }
+    if (map.is_box_passable(box) && !ov)
+        emit("  (no block found - should be placeable)\n");
+    if (f) fclose(f);
 }
 
 // ==================== 工具辅助 ====================
@@ -64,11 +115,11 @@ BuildingEntityType MapEditorScene::tool_to_building(Tool t) const {
 // 与 factories.cpp 中的尺寸保持一致（资源/建筑占用格数）
 int MapEditorScene::resource_size_cells(ResourceEntityType t) {
     switch (t) {
-    case ResourceEntityType::Wood:    return 4;
+    case ResourceEntityType::Wood:    return 2;
     case ResourceEntityType::SGold:   return 10;
     case ResourceEntityType::LGold:   return 15;
     case ResourceEntityType::Stone:   return 10;
-    case ResourceEntityType::Berries: return 5;
+    case ResourceEntityType::Berries: return 4;
     }
     return 4;
 }
@@ -110,6 +161,10 @@ void MapEditorScene::on_enter() {
     terrain_dirty_ = true;
     tool_scroll_ = 0.0f;
     map_scroll_ = 0.0f;
+    placing_ = false;
+    last_place_gx_ = -1;
+    last_place_gy_ = -1;
+    erasing_ = false;
     status_msg_.clear();
     status_timer_ = 0.0f;
     layout();
@@ -252,6 +307,7 @@ void MapEditorScene::layout() {
     {
         ToolSection s; s.title = u8"操作";
         s.entries.push_back({ Tool::Select, u8"选择", SDL_FRect{} });
+        s.entries.push_back({ Tool::Eraser, u8"橡皮擦", SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
 
@@ -269,6 +325,14 @@ void MapEditorScene::layout() {
         y += 6.0f;   // 分区间隔
     }
     tools_content_h_ = y - tools_top_;   // 工具内容总高（用于滚动范围）
+
+    // 小地图：固定 180 宽、按地图纵横比定高，停靠在画布右下角
+    {
+        float mw = 180.0f;
+        float ratio = (float)editor_map_.get_height() / (float)std::max(1, editor_map_.get_width());
+        float mh = std::clamp(mw * ratio, 60.0f, 160.0f);
+        minimap_rect_ = { LOGICAL_W - mw - 12.0f, LOGICAL_H - mh - 12.0f, mw, mh };
+    }
 }
 
 // ==================== 内容管理 ====================
@@ -350,8 +414,9 @@ GameObject* MapEditorScene::spawn_record(const EntityRecord& r) {
     }
     else if (r.kind == EntityRecord::Kind::Unit) {
         factory_.set_player_id(r.player);
+        float us = (float)(editor_map_.get_cell_size() * UNIT_SIZE_CELLS);
         obj = factory_.create_unit_by_type((UnitEntityType)r.type,
-            { { r.wx, r.wy }, 32.0f, 32.0f }, false);
+            { { r.wx, r.wy }, us, us }, false);
     }
     return obj;
 }
@@ -488,6 +553,56 @@ void MapEditorScene::select_at(float mx, float my) {
     selected_id_ = found;
 }
 
+void MapEditorScene::erase_at(float mx, float my) {
+    Vector2 world = viewport_to_world(mx, my);
+    int cs = editor_map_.get_cell_size();
+    int gx = (int)std::floor(world.x / cs);
+    int gy = (int)std::floor(world.y / cs);
+    int half = (brush_size_ - 1) / 2;
+
+    // 笔刷范围盒（世界坐标，与预览 ghost 框一致）
+    CollisionBox brush{
+        { (float)((gx - half) * cs), (float)((gy - half) * cs) },
+        (float)(brush_size_ * cs), (float)(brush_size_ * cs)
+    };
+
+    // 1) 擦除笔刷范围内所有实体（与笔刷有重叠即擦除，不再是单个鼠标点命中）
+    std::vector<uint64_t> to_erase;
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool) {
+        if (!obj || !obj->check_valid()) continue;
+        if (!obj->get_component<Renderable>()) continue;
+        if (obj->get_collision_box().intersects(brush)) to_erase.push_back(id);
+    }
+    bool erased = false;
+    for (uint64_t id : to_erase) {
+        GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+        if (!obj) continue;
+        WorldEntityMgr::instance()->destroy_object(obj);
+        remove_record(id);
+        if (selected_id_ == id) selected_id_ = 0;
+        erased = true;
+    }
+    if (erased) WorldEntityMgr::instance()->on_update();   // 清理失效实体 + 重建动态障碍
+
+    // 2) 叉掉地形：把笔刷范围内的水变回陆地（Mud）
+    bool changed = false;
+    for (int dy = 0; dy < brush_size_; ++dy) {
+        for (int dx = 0; dx < brush_size_; ++dx) {
+            int cx = gx - half + dx;
+            int cy = gy - half + dy;
+            if (cx < 0 || cy < 0 || cx >= editor_map_.get_width() || cy >= editor_map_.get_height()) continue;
+            if (editor_map_.get_grid()[cy][cx] != TerrainType::Water) continue;
+            editor_map_.set_grid_by_pos(cx, cy, TerrainType::Mud);
+            changed = true;
+        }
+    }
+    if (changed) {
+        terrain_dirty_ = true;
+        static_dirty_ = true;
+    }
+}
+
 bool MapEditorScene::cell_occupied(int cx, int cy) const {
     int cs = editor_map_.get_cell_size();
     CollisionBox cell{ { (float)(cx * cs), (float)(cy * cs) }, (float)cs, (float)cs };
@@ -524,21 +639,27 @@ void MapEditorScene::paint_terrain_at(float mx, float my) {
 CollisionBox MapEditorScene::entity_placement_box(float mx, float my) const {
     Vector2 world = viewport_to_world(mx, my);
     int cs = editor_map_.get_cell_size();
-    int gx = (int)std::floor(world.x / cs);
-    int gy = (int)std::floor(world.y / cs);
 
     if (is_unit_tool(cur_tool_)) {
-        // 单位 32×32：以鼠标所在格中心为锚点，让指针落在单位盒中心
-        float cx = (gx + 0.5f) * cs;
-        float cy = (gy + 0.5f) * cs;
-        return CollisionBox{ { cx - 16.0f, cy - 16.0f }, 32.0f, 32.0f };
+        // 单位 2×2（与木一致）：用 lround 吸附，让指针落在单位盒中心
+        int gx = (int)std::lround(world.x / cs);
+        int gy = (int)std::lround(world.y / cs);
+        int ox = gx - UNIT_SIZE_CELLS / 2;
+        int oy = gy - UNIT_SIZE_CELLS / 2;
+        return CollisionBox{ { (float)(ox * cs), (float)(oy * cs) },
+            (float)(UNIT_SIZE_CELLS * cs), (float)(UNIT_SIZE_CELLS * cs) };
     }
 
     int n = 0;
     if (is_resource_tool(cur_tool_)) n = resource_size_cells(tool_to_resource(cur_tool_));
     else if (is_building_tool(cur_tool_)) n = building_size_cells(tool_to_building(cur_tool_));
 
-    // 资源/建筑 n×n 格：以鼠标所在格为中心，左上角格 = gx - n/2（向下取整，偶数尺寸仍视觉居中）
+    // 资源/建筑 n×n 格：与对局内放置（input_system::placement_anchor_cell）保持一致，
+    // 先把指针吸附到最近格中心，再回退半个占用宽，让指针落在盒子中心。
+    // 之前用 floor 会让偶数尺寸（木 2×2、浆果 4×4、石/金 10×10）的盒子整体偏移半格，
+    // 指针落在盒子右/下边缘而非中心，紧贴空腔时就放不进去。
+    int gx = (int)std::lround(world.x / cs);
+    int gy = (int)std::lround(world.y / cs);
     int ox = gx - n / 2;
     int oy = gy - n / 2;
     return CollisionBox{ { (float)(ox * cs), (float)(oy * cs) }, (float)(n * cs), (float)(n * cs) };
@@ -565,6 +686,7 @@ void MapEditorScene::place_at(float mx, float my) {
         obj = factory_.create_unit_by_type(tool_to_unit(cur_tool_), box, false);
     }
     if (obj) entities_.push_back(make_record(obj));
+    else log_placement_block(editor_map_, factory_, box, true);   // 点击放置失败：强制输出阻塞原因
 }
 
 bool MapEditorScene::placement_valid(float mx, float my) const {
@@ -574,8 +696,8 @@ bool MapEditorScene::placement_valid(float mx, float my) const {
     int gx = (int)std::floor(world.x / cs);
     int gy = (int)std::floor(world.y / cs);
 
-    // 地形涂刷：只需笔刷范围全部在界内
-    if (is_terrain_tool(cur_tool_)) {
+    // 地形涂刷 / 橡皮擦：只需笔刷范围全部在界内
+    if (is_terrain_tool(cur_tool_) || cur_tool_ == Tool::Eraser) {
         int half = (brush_size_ - 1) / 2;
         return (gx - half >= 0) && (gy - half >= 0)
             && (gx - half + brush_size_ <= editor_map_.get_width())
@@ -583,8 +705,14 @@ bool MapEditorScene::placement_valid(float mx, float my) const {
     }
 
     CollisionBox box = entity_placement_box(mx, my);
-    if (!editor_map_.is_box_passable(box)) return false;
-    if (factory_.check_overlap(box)) return false;
+    if (!editor_map_.is_box_passable(box)) {
+        log_placement_block(editor_map_, factory_, box, false);
+        return false;
+    }
+    if (factory_.check_overlap(box)) {
+        log_placement_block(editor_map_, factory_, box, false);
+        return false;
+    }
     return true;
 }
 
@@ -730,6 +858,7 @@ void MapEditorScene::apply_size(MapSize s) {
     camera_.set_scale(fit);
     camera_.set_position({ 0.0f, 0.0f });
 
+    layout();   // 地图尺寸变了，重建小地图矩形等布局
     set_status(u8"已切换地图尺寸: " + std::to_string(w) + u8"x" + std::to_string(h));
 }
 
@@ -840,11 +969,30 @@ void MapEditorScene::on_input(const SDL_Event& event) {
         else if (painting_) {
             if (inside_viewport(x, y)) paint_terrain_at(x, y);
         }
+        else if (placing_) {
+            // 资源批量：长按连续放置，鼠标移动到新格子时再放一个
+            if (inside_viewport(x, y) && is_resource_tool(cur_tool_)) {
+                int cs = editor_map_.get_cell_size();
+                CollisionBox box = entity_placement_box(x, y);
+                int gx = (int)std::floor(box.position.x / cs);
+                int gy = (int)std::floor(box.position.y / cs);
+                if (gx != last_place_gx_ || gy != last_place_gy_) {
+                    last_place_gx_ = gx;
+                    last_place_gy_ = gy;
+                    if (placement_valid(x, y)) place_at(x, y);
+                }
+            }
+        }
+        else if (erasing_) {
+            // 橡皮擦：按住拖动连续擦除扫过的实体
+            if (inside_viewport(x, y)) erase_at(x, y);
+        }
     }
     else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         float x = event.button.x, y = event.button.y;
         if (event.button.button == SDL_BUTTON_LEFT) {
             if (handle_ui_click(x, y)) return;
+            if (point_in_minimap(x, y)) { minimap_click(x, y); return; }   // 小地图点击跳转（优先于放置/选择）
             if (inside_viewport(x, y)) {
                 if (is_terrain_tool(cur_tool_)) {
                     if (place_mode_ == PlaceMode::Single) {
@@ -857,9 +1005,21 @@ void MapEditorScene::on_input(const SDL_Event& event) {
                     }
                 }
                 else if (cur_tool_ == Tool::Select) select_at(x, y);
+                else if (cur_tool_ == Tool::Eraser) {
+                    erasing_ = true;
+                    erase_at(x, y);
+                }
                 else {
                     place_at(x, y);
                     if (place_mode_ == PlaceMode::Single) cur_tool_ = Tool::Select;
+                    else if (is_resource_tool(cur_tool_)) {
+                        // 资源批量：按下后进入长按连续放置
+                        placing_ = true;
+                        int cs = editor_map_.get_cell_size();
+                        CollisionBox box = entity_placement_box(x, y);
+                        last_place_gx_ = (int)std::floor(box.position.x / cs);
+                        last_place_gy_ = (int)std::floor(box.position.y / cs);
+                    }
                 }
             }
         }
@@ -871,6 +1031,8 @@ void MapEditorScene::on_input(const SDL_Event& event) {
             if (cur_tool_ != Tool::Select) {
                 cur_tool_ = Tool::Select;
                 painting_ = false;
+                placing_ = false;
+                erasing_ = false;
             }
         }
         else if (event.button.button == SDL_BUTTON_MIDDLE) {
@@ -880,6 +1042,8 @@ void MapEditorScene::on_input(const SDL_Event& event) {
     else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
         if (event.button.button == SDL_BUTTON_LEFT) {
             if (painting_) { painting_ = false; cleanup_invalid(); }
+            if (placing_) { placing_ = false; last_place_gx_ = -1; last_place_gy_ = -1; }
+            if (erasing_) { erasing_ = false; }
         }
         else if (event.button.button == SDL_BUTTON_MIDDLE) {
             panning_ = false;
@@ -1102,6 +1266,85 @@ void MapEditorScene::render_entities() {
     }
 }
 
+bool MapEditorScene::point_in_minimap(float x, float y) const {
+    return x >= minimap_rect_.x && x <= minimap_rect_.x + minimap_rect_.w
+        && y >= minimap_rect_.y && y <= minimap_rect_.y + minimap_rect_.h;
+}
+
+void MapEditorScene::minimap_click(float x, float y) {
+    int cs = editor_map_.get_cell_size();
+    float mw_world = (float)(editor_map_.get_width() * cs);
+    float mh_world = (float)(editor_map_.get_height() * cs);
+    float u = (x - minimap_rect_.x) / minimap_rect_.w;
+    float v = (y - minimap_rect_.y) / minimap_rect_.h;
+    float wx = u * mw_world;
+    float wy = v * mh_world;
+    float vw = camera_.get_screen_w() / camera_.get_scale();
+    float vh = camera_.get_screen_h() / camera_.get_scale();
+    camera_.set_position({ wx - vw * 0.5f, wy - vh * 0.5f });   // 相机中心对准点击点（内部会夹取/居中）
+}
+
+void MapEditorScene::render_minimap() {
+    const SDL_FRect& mm = minimap_rect_;
+    if (mm.w <= 0 || mm.h <= 0) return;
+
+    // 半透明背景 + 边框
+    ui_fill_rect(renderer, mm, { 12, 16, 28, 220 }, { 120, 140, 190, 255 }, 2);
+
+    // 地形缩略：直接复用整图地形纹理，缩放到小地图区域
+    if (terrain_dirty_) bake_terrain();
+    SDL_Texture* tex = TextureCache::instance()->get_texture_by_id(terrain_bake_.get_texture_id());
+    if (tex) {
+        SDL_Rect clip{ (int)mm.x, (int)mm.y, (int)mm.w, (int)mm.h };
+        SDL_SetRenderClipRect(renderer, &clip);
+        SDL_RenderTexture(renderer, tex, nullptr, &mm);
+        SDL_SetRenderClipRect(renderer, nullptr);
+    }
+
+    // 实体小点：资源绿 / 建筑黄 / 单位按玩家色
+    int cs = editor_map_.get_cell_size();
+    float mw_world = (float)(editor_map_.get_width() * cs);
+    float mh_world = (float)(editor_map_.get_height() * cs);
+    auto to_mini = [&](float wx, float wy) -> Vector2 {
+        return { mm.x + (wx / mw_world) * mm.w, mm.y + (wy / mh_world) * mm.h };
+        };
+    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+    for (auto& [id, obj] : pool) {
+        if (!obj || !obj->check_valid()) continue;
+        if (!obj->get_component<Renderable>()) continue;
+        const auto& box = obj->get_collision_box();
+        Vector2 p = to_mini(box.position.x + box.width * 0.5f, box.position.y + box.height * 0.5f);
+        SDL_Color c;
+        if (obj->get_component<Harvestable>())        c = { 80, 200, 80, 255 };   // 资源绿
+        else if (obj->get_component<BuildingType>())  c = { 230, 200, 60, 255 };  // 建筑黄
+        else {
+            auto* own = obj->get_component<Ownership>();
+            c = player_frame_color(own ? own->player_id : 0);                     // 单位按玩家色
+        }
+        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
+        SDL_FRect dot{ p.x - 1.5f, p.y - 1.5f, 3.0f, 3.0f };
+        SDL_RenderFillRect(renderer, &dot);
+    }
+
+    // 当前视口范围框（白色）
+    float visible_w = camera_.get_screen_w() / camera_.get_scale();
+    float visible_h = camera_.get_screen_h() / camera_.get_scale();
+    Vector2 vpos = camera_.get_position();
+    float vx = mm.x + (vpos.x / mw_world) * mm.w;
+    float vy = mm.y + (vpos.y / mh_world) * mm.h;
+    float vw = (visible_w / mw_world) * mm.w;
+    float vh = (visible_h / mh_world) * mm.h;
+    float left = std::max(mm.x, vx);
+    float top = std::max(mm.y, vy);
+    float right = std::min(mm.x + mm.w, vx + vw);
+    float bottom = std::min(mm.y + mm.h, vy + vh);
+    if (right > left && bottom > top) {
+        SDL_FRect vp_rect{ left, top, right - left, bottom - top };
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+        SDL_RenderRect(renderer, &vp_rect);
+    }
+}
+
 void MapEditorScene::draw_button(const SDL_FRect& r, const std::string& label, bool active, bool hover) {
     SDL_Color bg = active ? SDL_Color{ 62, 122, 62, 255 }
         : (hover ? SDL_Color{ 52, 70, 120, 255 } : SDL_Color{ 36, 48, 84, 255 });
@@ -1263,10 +1506,29 @@ void MapEditorScene::on_render() {
         int cs = editor_map_.get_cell_size();
         int gx = (int)std::floor(world.x / cs);
         int gy = (int)std::floor(world.y / cs);
+        int half = (brush_size_ - 1) / 2;
+        // 橡皮擦：高亮笔刷范围内所有将被擦除的实体（红色，可擦除指示）
+        if (cur_tool_ == Tool::Eraser) {
+            CollisionBox brush{
+                { (float)((gx - half) * cs), (float)((gy - half) * cs) },
+                (float)(brush_size_ * cs), (float)(brush_size_ * cs) };
+            const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+            for (auto& [id, obj] : pool) {
+                if (!obj || !obj->check_valid()) continue;
+                if (!obj->get_component<Renderable>()) continue;
+                const auto& box = obj->get_collision_box();
+                if (!box.intersects(brush)) continue;
+                Vector2 tl = world_to_viewport(box.position);
+                SDL_FRect hr{ tl.x, tl.y, box.width * camera_.get_scale(), box.height * camera_.get_scale() };
+                SDL_SetRenderDrawColor(renderer, 220, 80, 80, 90);
+                SDL_RenderFillRect(renderer, &hr);
+                SDL_SetRenderDrawColor(renderer, 220, 80, 80, 255);
+                SDL_RenderRect(renderer, &hr);
+            }
+        }
         float pw = 0, ph = 0;
         float ox = (float)(gx * cs), oy = (float)(gy * cs);
-        if (is_terrain_tool(cur_tool_)) {
-            int half = (brush_size_ - 1) / 2;
+        if (is_terrain_tool(cur_tool_) || cur_tool_ == Tool::Eraser) {
             pw = ph = (float)(cs * brush_size_);
             ox = (float)((gx - half) * cs);
             oy = (float)((gy - half) * cs);
@@ -1311,9 +1573,26 @@ void MapEditorScene::on_render() {
                     }
                 }
             }
+            // 橡皮擦预览：标记笔刷范围内是水、将被叉回陆地的格子（橙色）
+            else if (cur_tool_ == Tool::Eraser) {
+                int half = (brush_size_ - 1) / 2;
+                for (int dy = 0; dy < brush_size_; ++dy) {
+                    for (int dx = 0; dx < brush_size_; ++dx) {
+                        int cx = gx - half + dx;
+                        int cy = gy - half + dy;
+                        if (cx < 0 || cy < 0 || cx >= editor_map_.get_width() || cy >= editor_map_.get_height()) continue;
+                        if (editor_map_.get_grid()[cy][cx] != TerrainType::Water) continue;
+                        Vector2 w_tl = world_to_viewport({ (float)(cx * cs), (float)(cy * cs) });
+                        SDL_FRect wc{ w_tl.x, w_tl.y, (float)cs * camera_.get_scale(), (float)cs * camera_.get_scale() };
+                        SDL_SetRenderDrawColor(renderer, 255, 165, 60, 170);
+                        SDL_RenderFillRect(renderer, &wc);
+                    }
+                }
+            }
         }
     }
     SDL_SetRenderClipRect(renderer, nullptr);
 
+    render_minimap();
     render_ui();
 }

@@ -8,6 +8,8 @@
 #include "camera_controller.h"
 #include "factories.h"
 #include "render_texture.h"
+#include "map_io.h"
+#include "player_palette.h"
 
 #include "render_system.h"
 #include "move_system.h"
@@ -30,6 +32,7 @@ public:
 	void on_input(const SDL_Event& event);
 	void on_update(float delta);
 	void on_render();
+	void on_render_overlay();   // 覆盖层（暂停菜单/结算）在 end_frame 之后绘制
 	void on_enter();
 	void on_exit();
 
@@ -83,6 +86,26 @@ private:
 	void apply_ai_difficulty();
 	// 相机对准人类基地
 	void center_camera_on_human();
+
+	// 载入选定地图（地形 + 实体 + 起始位置）
+	void load_selected_map();
+	// 铺设地图实体（资源/中立建筑/中立单位，城镇中心作为起始标记跳过）
+	void spawn_map_entities();
+
+	// 胜负判定（歼灭模式）：某阵营所有建筑被毁即失败
+	void check_win_lose();
+	// 覆盖层（暂停菜单 / 胜负结算）渲染
+	void render_overlay();
+	// 覆盖层按钮命中
+	void handle_overlay_click(float x, float y);
+
+	std::vector<EntityRecord> map_entities_;   // 本局地图实体
+
+	bool paused_ = false;      // 是否处于暂停菜单（Esc 开关）
+	bool game_over_ = false;   // 是否已分胜负
+	bool won_ = false;         // 结果：true=胜利 false=失败
+
+	SDL_FRect resume_btn_{}, quit_btn_{};   // 覆盖层按钮矩形（逻辑坐标）
 };
 
 #endif // !_GAME_SCENE_H_

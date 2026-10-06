@@ -1,0 +1,152 @@
+[placement block] box world(1240.0,900.0 20x20) cells x[124..90] y[125..91]
+  cell(124,90) blocked by dynamic-obstacle(resource/building)
+  cell(125,90) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=32 box=(1240,890 20x20)
+[placement block] box world(1430.0,960.0 20x20) cells x[143..96] y[144..97]
+  cell(143,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(143,97) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1240.0,890.0 20x20) cells x[124..89] y[125..90]
+  cell(124,89) blocked by dynamic-obstacle(resource/building)
+  cell(125,89) blocked by dynamic-obstacle(resource/building)
+  cell(124,90) blocked by dynamic-obstacle(resource/building)
+  cell(125,90) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=32 box=(1240,890 20x20)
+[placement block] box world(1320.0,910.0 20x20) cells x[132..91] y[133..92]
+  cell(133,91) blocked by dynamic-obstacle(resource/building)
+  cell(133,92) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=20 box=(1330,910 20x20)
+[placement block] box world(1340.0,890.0 20x20) cells x[134..89] y[135..90]
+  cell(135,89) blocked by dynamic-obstacle(resource/building)
+  cell(135,90) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=50 box=(1350,890 20x20)
+[placement block] box world(1340.0,890.0 20x20) cells x[134..89] y[135..90]
+  cell(135,89) blocked by dynamic-obstacle(resource/building)
+  cell(135,90) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=50 box=(1350,890 20x20)
+[placement block] box world(1400.0,900.0 20x20) cells x[140..90] y[141..91]
+  cell(140,90) blocked by dynamic-obstacle(resource/building)
+  cell(141,90) blocked by dynamic-obstacle(resource/building)
+  cell(140,91) blocked by dynamic-obstacle(resource/building)
+  cell(141,91) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,930.0 20x20) cells x[143..93] y[144..94]
+  cell(143,93) blocked by dynamic-obstacle(resource/building)
+  cell(144,93) blocked by dynamic-obstacle(resource/building)
+  cell(143,94) blocked by dynamic-obstacle(resource/building)
+  cell(144,94) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,950.0 20x20) cells x[143..95] y[144..96]
+  cell(143,95) blocked by dynamic-obstacle(resource/building)
+  cell(144,95) blocked by dynamic-obstacle(resource/building)
+  cell(143,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,960.0 20x20) cells x[144..96] y[145..97]
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(145,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+  cell(145,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,960.0 20x20) cells x[144..96] y[145..97]
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(145,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+  cell(145,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,960.0 20x20) cells x[144..96] y[145..97]
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(145,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+  cell(145,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,960.0 20x20) cells x[144..96] y[145..97]
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(145,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+  cell(145,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,960.0 20x20) cells x[144..96] y[145..97]
+  cell(144,96) blocked by dynamic-obstacle(resource/building)
+  cell(145,96) blocked by dynamic-obstacle(resource/building)
+  cell(144,97) blocked by dynamic-obstacle(resource/building)
+  cell(145,97) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,940.0 20x20) cells x[144..94] y[145..95]
+  cell(144,94) blocked by dynamic-obstacle(resource/building)
+  cell(145,94) blocked by dynamic-obstacle(resource/building)
+  cell(144,95) blocked by dynamic-obstacle(resource/building)
+  cell(145,95) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1440.0,940.0 20x20) cells x[144..94] y[145..95]
+  cell(144,94) blocked by dynamic-obstacle(resource/building)
+  cell(145,94) blocked by dynamic-obstacle(resource/building)
+  cell(144,95) blocked by dynamic-obstacle(resource/building)
+  cell(145,95) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1450.0,940.0 20x20) cells x[145..94] y[146..95]
+  cell(145,94) blocked by dynamic-obstacle(resource/building)
+  cell(146,94) blocked by dynamic-obstacle(resource/building)
+  cell(145,95) blocked by dynamic-obstacle(resource/building)
+  cell(146,95) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1460.0,880.0 20x20) cells x[146..88] y[147..89]
+  cell(146,89) blocked by dynamic-obstacle(resource/building)
+  cell(147,89) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1350.0,940.0 20x20) cells x[135..94] y[136..95]
+  cell(135,94) blocked by dynamic-obstacle(resource/building)
+  cell(136,94) blocked by dynamic-obstacle(resource/building)
+  cell(135,95) blocked by dynamic-obstacle(resource/building)
+  cell(136,95) blocked by dynamic-obstacle(resource/building)
+  overlap entity id=52 box=(1350,930 20x20)
+[placement block] box world(1410.0,940.0 20x20) cells x[141..94] y[142..95]
+  cell(141,94) blocked by dynamic-obstacle(resource/building)
+  cell(142,94) blocked by dynamic-obstacle(resource/building)
+  cell(141,95) blocked by dynamic-obstacle(resource/building)
+  cell(142,95) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1410.0,930.0 20x20) cells x[141..93] y[142..94]
+  cell(141,93) blocked by dynamic-obstacle(resource/building)
+  cell(142,93) blocked by dynamic-obstacle(resource/building)
+  cell(141,94) blocked by dynamic-obstacle(resource/building)
+  cell(142,94) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1400.0,890.0 20x20) cells x[140..89] y[141..90]
+  cell(140,89) blocked by dynamic-obstacle(resource/building)
+  cell(141,89) blocked by dynamic-obstacle(resource/building)
+  cell(140,90) blocked by dynamic-obstacle(resource/building)
+  cell(141,90) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,900.0 20x20) cells x[143..90] y[144..91]
+  cell(143,90) blocked by dynamic-obstacle(resource/building)
+  cell(144,90) blocked by dynamic-obstacle(resource/building)
+  cell(143,91) blocked by dynamic-obstacle(resource/building)
+  cell(144,91) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,890.0 20x20) cells x[143..89] y[144..90]
+  cell(143,89) blocked by dynamic-obstacle(resource/building)
+  cell(144,89) blocked by dynamic-obstacle(resource/building)
+  cell(143,90) blocked by dynamic-obstacle(resource/building)
+  cell(144,90) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,880.0 20x20) cells x[143..88] y[144..89]
+  cell(143,89) blocked by dynamic-obstacle(resource/building)
+  cell(144,89) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1470.0,880.0 20x20) cells x[147..88] y[148..89]
+  cell(147,89) blocked by dynamic-obstacle(resource/building)
+  cell(148,89) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1470.0,920.0 20x20) cells x[147..92] y[148..93]
+  cell(147,92) blocked by dynamic-obstacle(resource/building)
+  cell(148,92) blocked by dynamic-obstacle(resource/building)
+  cell(147,93) blocked by dynamic-obstacle(resource/building)
+  cell(148,93) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1470.0,970.0 20x20) cells x[147..97] y[148..98]
+  cell(147,97) blocked by dynamic-obstacle(resource/building)
+  cell(148,97) blocked by dynamic-obstacle(resource/building)
+  cell(147,98) blocked by dynamic-obstacle(resource/building)
+  cell(148,98) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1470.0,970.0 20x20) cells x[147..97] y[148..98]
+  cell(147,97) blocked by dynamic-obstacle(resource/building)
+  cell(148,97) blocked by dynamic-obstacle(resource/building)
+  cell(147,98) blocked by dynamic-obstacle(resource/building)
+  cell(148,98) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1390.0,970.0 20x20) cells x[139..97] y[140..98]
+  cell(139,97) blocked by dynamic-obstacle(resource/building)
+  cell(140,97) blocked by dynamic-obstacle(resource/building)
+  cell(139,98) blocked by dynamic-obstacle(resource/building)
+  cell(140,98) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1390.0,930.0 20x20) cells x[139..93] y[140..94]
+  cell(139,93) blocked by dynamic-obstacle(resource/building)
+  cell(140,93) blocked by dynamic-obstacle(resource/building)
+  cell(139,94) blocked by dynamic-obstacle(resource/building)
+  cell(140,94) blocked by dynamic-obstacle(resource/building)
+[placement block] box world(1430.0,940.0 20x20) cells x[143..94] y[144..95]
+  cell(143,94) blocked by dynamic-obstacle(resource/building)
+  cell(144,94) blocked by dynamic-obstacle(resource/building)
+  cell(143,95) blocked by dynamic-obstacle(resource/building)
+  cell(144,95) blocked by dynamic-obstacle(resource/building)

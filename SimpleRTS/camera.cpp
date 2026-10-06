@@ -77,8 +77,19 @@ void Camera::clamp_position()
     float visible_w = screen_w / scale;
     float visible_h = screen_h / scale;
 
-    if (position.x < 0) position.x = 0;
-    if (position.y < 0) position.y = 0;
-    if (position.x > map_w - visible_w) position.x = map_w - visible_w;
-    if (position.y > map_h - visible_h) position.y = map_h - visible_h;
+    // Center the map when it is smaller than the viewport (allow negative offset); otherwise clamp to [0, map-visible]
+    if (map_w <= visible_w) {
+        position.x = (map_w - visible_w) * 0.5f;
+    }
+    else {
+        if (position.x < 0) position.x = 0;
+        if (position.x > map_w - visible_w) position.x = map_w - visible_w;
+    }
+    if (map_h <= visible_h) {
+        position.y = (map_h - visible_h) * 0.5f;
+    }
+    else {
+        if (position.y < 0) position.y = 0;
+        if (position.y > map_h - visible_h) position.y = map_h - visible_h;
+    }
 }
