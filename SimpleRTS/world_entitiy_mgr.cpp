@@ -29,6 +29,20 @@ void WorldEntityMgr::init_world(GameMap* map)
     quadtree = new QuadTree(0, { 0,0 }, map->get_width(), map->get_height(), map->get_cell_size());
 }
 
+void WorldEntityMgr::reset_world()
+{
+    for (auto& [id, obj] : object_pool) {
+        if (obj) delete obj;
+    }
+    object_pool.clear();
+    if (quadtree) {
+        delete quadtree;
+        quadtree = nullptr;
+    }
+    next_id_ = 1;
+    map = nullptr;
+}
+
 void WorldEntityMgr::on_update()
 {
     if (!quadtree || !map)

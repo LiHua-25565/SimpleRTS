@@ -3,6 +3,7 @@
 
 #include "game_map.h"
 #include "scene_mgr.h"
+#include "match_config.h"
 #include "selection_box.h"
 #include "camera_controller.h"
 #include "factories.h"
@@ -35,6 +36,10 @@ public:
 	void set_local_player_id(int id) { local_player_id = id; }
 	int get_local_player_id() const { return local_player_id; }
 
+	// 阵容配置（由 SelectorScene 在进入对局前设置）
+	void set_match_config(const MatchConfig& cfg) { match_config = cfg; }
+	const MatchConfig& get_match_config() const { return match_config; }
+
 private:
 	int screen_w_ = 1280, screen_h_ = 720;   // 当前逻辑分辨率
 
@@ -45,6 +50,7 @@ private:
 
 private:
 	int local_player_id = 1;
+	MatchConfig match_config;           // 本局阵容配置（默认蓝方 2v2 普通）
 	SelectionBox selection_box;
 	Camera camera;
 	CameraController camera_controller;
@@ -70,6 +76,13 @@ private:
 	void camera_input(const bool* keyState);
 
 	void bake_terrain();
+
+	// 根据 match_config 铺设基地/单位/资源并注册 AI 玩家
+	void setup_match();
+	// 根据难度配置 AI
+	void apply_ai_difficulty();
+	// 相机对准人类基地
+	void center_camera_on_human();
 };
 
 #endif // !_GAME_SCENE_H_

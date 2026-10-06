@@ -4,10 +4,29 @@
 #include "world_entity_mgr.h"
 #include "texture_cache.h"
 #include "factories.h"
+#include "util.h"
 #include <algorithm>
 #include <unordered_map>
 #include <sstream>
 #include <map>
+
+// 计算区域内纹理的实际绘制位置（左上角）。on_render 与布局期的角标吸附
+// 都走这里，保证"贴住汉字右下角"的判断与实际绘制完全一致
+static void resolve_region_tex_pos(const ui_region& region, float& out_x, float& out_y) {
+    if (region.tex_align == TexAlign::BottomRight) {
+        out_x = region.abs_rect.x + region.abs_rect.w - region.tex_w;
+        out_y = region.abs_rect.y + region.abs_rect.h - region.tex_h;
+    }
+    else {
+        float offset_x = 0.0f;
+        if (region.x_percent == 0.0f) offset_x = 5.0f;
+        else if (region.x_percent == 1.0f) offset_x = -5.0f - region.tex_w;
+        out_x = region.abs_rect.x + offset_x;
+        out_y = region.abs_rect.y + (region.abs_rect.h - region.tex_h) * 0.5f;
+    }
+    out_x += region.nudge_x;
+    out_y += region.nudge_y;
+}
 
 // ========== 单例 ==========
 UIMgr* UIMgr::instance() {
@@ -56,6 +75,7 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
     int new_font_size = static_cast<int>(screen_h * font_size_percent);
     if (new_font_size != font_size) {
         font_size = new_font_size;
+        gather_badge_font_size = std::max(10, font_size * 2 / 3);
         panels.clear();
     }
 
@@ -91,6 +111,22 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
             region.abs_rect.w = panel.abs_rect.w * region.w_percent;
             region.abs_rect.h = panel.abs_rect.h * region.h_percent;
         }
+
+        // 依附型区域（资源角标）：右下角对齐参照区域内纹理的右下角。
+        // 必须等上面所有 abs_rect 算完再处理
+        for (auto& region : panel.regions) {
+            int ref_idx = region.attach_to_region;
+            if (ref_idx < 0 || ref_idx >= (int)panel.regions.size()) continue;
+            const ui_region& ref = panel.regions[ref_idx];
+            if (!ref.texture_id) continue;
+
+            float ref_x = 0.0f, ref_y = 0.0f;
+            resolve_region_tex_pos(ref, ref_x, ref_y);
+            if (region.tex_align == TexAlign::BottomRight) {
+                region.abs_rect.x = ref_x + ref.tex_w - region.abs_rect.w;
+                region.abs_rect.y = ref_y + ref.tex_h - region.abs_rect.h;
+            }
+        }
     }
 }
 
@@ -117,14 +153,9 @@ void UIMgr::on_render() {
                 tex_cmd.border_color = region.border_color;
                 tex_cmd.border_width = region.border_width;
 
-                float offset_x = 0.0f;
-                if (region.x_percent == 0.0f) offset_x = 5.0f;
-                else if (region.x_percent == 1.0f) offset_x = -5.0f - region.tex_w;
-
-                tex_cmd.position = {
-                    region.abs_rect.x + offset_x,
-                    region.abs_rect.y + (region.abs_rect.h - region.tex_h) * 0.5f
-                };
+                float tex_x = 0.0f, tex_y = 0.0f;
+                resolve_region_tex_pos(region, tex_x, tex_y);
+                tex_cmd.position = { tex_x, tex_y };
                 tex_cmd.w = region.tex_w;
                 tex_cmd.h = region.tex_h;
                 RenderMgr::instance()->push_main_cmd(tex_cmd);
@@ -272,13 +303,27 @@ void UIMgr::build_resource_panel() {
             }
         }
         panel.regions.push_back(name_region);
+        int name_region_index = (int)panel.regions.size() - 1;
 
         ui_region value_region;
         value_region.x_percent = 1.0f; value_region.y_percent = i * bar_h;
         value_region.w_percent = 0.0f; value_region.h_percent = bar_h;
         value_region.bg_color = { 0, 0, 0, 0 };
         panel.regions.push_back(value_region);
+
+        // 采集农民数角标：右下角贴在汉字纹理的右下角，内容在 update_content 刷新
+        ui_region gather_badge;
+        gather_badge.x_percent = 0.0f; gather_badge.y_percent = i * bar_h;
+        gather_badge.w_percent = 0.0f; gather_badge.h_percent = bar_h;
+        gather_badge.bg_color = { 0, 0, 0, 0 };
+        gather_badge.tex_align = TexAlign::BottomRight;
+        gather_badge.attach_to_region = name_region_index;
+        // 往外挪一点点，避免小数字压在汉字笔画上（想让它正好压在角上就把这两行改 0）
+        gather_badge.nudge_x = 4.0f;
+        gather_badge.nudge_y = 1.0f;
+        panel.regions.push_back(gather_badge);
     }
+    last_gather_count_cache.assign(count, -1);
     update_content();
 }
 
@@ -289,25 +334,57 @@ void UIMgr::update_content() {
 
     if (last_resource_value_cache.size() != types.size())
         last_resource_value_cache.resize(types.size(), -1);
+    if (last_gather_count_cache.size() != types.size())
+        last_gather_count_cache.resize(types.size(), -1);
+
+    // 本玩家当前各资源类型上"正在采集"的农民数量
+    int gather_counts[static_cast<int>(ResourceType::Count)] = { 0 };
+    count_gatherers_by_resource(player, gather_counts);
+
+    auto* panel = find_panel("resources");
+    if (!panel) return;
 
     for (size_t i = 0; i < types.size(); ++i) {
+        const int base = (int)i * resource_regions_per_bar;
+        if (base + 3 >= (int)panel->regions.size()) break;   // 底/名/数值/角标 共 4 个
+
+        // 资源数值（右侧）
         int val = res->get_resource(player, types[i]);
-        if (val == last_resource_value_cache[i]) continue;
-        last_resource_value_cache[i] = val;
+        if (val != last_resource_value_cache[i]) {
+            last_resource_value_cache[i] = val;
+            auto& value_region = panel->regions[base + 2];
 
-        auto* panel = find_panel("resources");
-        if (!panel || i * 3 + 2 >= panel->regions.size()) continue;
-        auto& value_region = panel->regions[i * 3 + 2];
+            SDL_Color yellow = to_sdl_color(Color::Gold);
+            std::string text = std::to_string(val);
+            uint32_t tex_id = TextureCache::instance()->get_text_texture(text, yellow, font_size);
+            if (tex_id) {
+                value_region.texture_id = tex_id;
+                float tw, th;
+                if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
+                    value_region.tex_w = tw;
+                    value_region.tex_h = th;
+                }
+            }
+        }
 
-        SDL_Color yellow = to_sdl_color(Color::Gold);
-        std::string text = std::to_string(val);
-        uint32_t tex_id = TextureCache::instance()->get_text_texture(text, yellow, font_size);
-        if (tex_id) {
-            value_region.texture_id = tex_id;
-            float tw, th;
-            if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
-                value_region.tex_w = tw;
-                value_region.tex_h = th;
+        // 采集农民数角标（汉字右下角）：0 用暗灰，有人采集用亮色
+        int gatherers = gather_counts[static_cast<int>(types[i])];
+        if (gatherers != last_gather_count_cache[i]) {
+            last_gather_count_cache[i] = gatherers;
+            auto& badge_region = panel->regions[base + 3];
+
+            SDL_Color badge_color = (gatherers > 0)
+                ? to_sdl_color(Color::Silver) : to_sdl_color(Color::Gray);
+            std::string text = std::to_string(gatherers);
+            uint32_t tex_id = TextureCache::instance()->get_text_texture(
+                text, badge_color, gather_badge_font_size);
+            if (tex_id) {
+                badge_region.texture_id = tex_id;
+                float tw, th;
+                if (TextureCache::instance()->get_texture_size(tex_id, tw, th)) {
+                    badge_region.tex_w = tw;
+                    badge_region.tex_h = th;
+                }
             }
         }
     }

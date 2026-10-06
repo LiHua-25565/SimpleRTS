@@ -235,6 +235,20 @@ GameObject* find_nearest_resource_of_type(ResourceType type, const Vector2& cent
     return best;
 }
 
+// 找离 center 最近、任意类型且血量>0 的资源（供目标死亡后的自动换矿使用）
+GameObject* find_nearest_any_resource(const Vector2& center, float radius) {
+    GameObject* best = nullptr;
+    float best_d = 1e9f;
+    const ResourceType types[3] = { ResourceType::Food, ResourceType::Gold, ResourceType::Wood };
+    for (ResourceType t : types) {
+        GameObject* r = find_nearest_resource_of_type(t, center, radius);
+        if (!r) continue;
+        float d = (r->get_collision_box().get_center_position() - center).length();
+        if (d < best_d) { best_d = d; best = r; }
+    }
+    return best;
+}
+
 // 查找最近的可提交建筑（直线优先，被阻则 BFS）
 GameObject* find_nearest_dropoff(const Vector2& center, int player_id, ResourceType carried_type, float radius_cells) {
     GameMap* map = WorldEntityMgr::instance()->get_map();
@@ -525,4 +539,42 @@ Vector2 compute_perimeter_target(uint64_t requester_id,
 }
 
 
+// 统计某玩家当前"正在采集"各资源类型的农民数量（资源面板角标用）
+void count_gatherers_by_resource(int player_id, int* out_counts)
+{
+    if (!out_counts) return;
 
+    const int type_count = static_cast<int>(ResourceType::Count);
+    for (int i = 0; i < type_count; ++i) out_counts[i] = 0;
+
+    auto* world = WorldEntityMgr::instance();
+    const auto& pool = world->get_object_pool();
+    for (const auto& [id, obj] : pool)
+    {
+        if (!obj || !obj->check_valid()) continue;
+
+        auto* gatherer = obj->get_component<Gatherer>();
+        if (!gatherer) continue;
+
+        // 只统计指定玩家的农民
+        auto* own = obj->get_component<Ownership>();
+        if (!own || own->player_id != player_id) continue;
+
+        ResourceType type = ResourceType::None;
+        if (gatherer->target_resource_id != 0)
+        {
+            GameObject* target = world->get_object_by_id(gatherer->target_resource_id);
+            if (target && target->check_valid())
+            {
+                auto* harvestable = target->get_component<Harvestable>();
+                if (harvestable) type = harvestable->output_type;
+            }
+        }
+        // 目标是空的（正在送货回城）但手里有货：仍算作该资源的采集者
+        if (type == ResourceType::None && gatherer->carried_amount > 0)
+            type = gatherer->carried_type;
+
+        const int idx = static_cast<int>(type);
+        if (idx > 0 && idx < type_count) out_counts[idx]++;
+    }
+}

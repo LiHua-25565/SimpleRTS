@@ -204,7 +204,9 @@ void RenderMgr::update_minimap_content_rect()
 
 void RenderMgr::sort_cmds()
 {
-	std::sort(main_cmd_list.begin(), main_cmd_list.end(),
+	// 必须用稳定排序：同一 layer 内（例如 UI 面板的背景与文字/角标）绘制顺序
+	// 就等于提交顺序，否则同层元素可能被重排，出现角标/文字被背景盖住
+	std::stable_sort(main_cmd_list.begin(), main_cmd_list.end(),
 		[](const RenderCmd& a, const RenderCmd& b) {
 			return (int)a.layer < (int)b.layer;
 		});

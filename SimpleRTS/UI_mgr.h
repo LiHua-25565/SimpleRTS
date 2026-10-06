@@ -8,6 +8,12 @@
 #include "resources_mgr.h"
 #include "production_data.h"
 
+// ========== 纹理对齐方式 ==========
+enum class TexAlign {
+    Auto,        // 旧规则：x_percent=0 时左缩进 5px、=1 时右缩进 5px，垂直居中
+    BottomRight  // 纹理右下角对齐区域右下角
+};
+
 // ========== UI 最小单元 ==========
 struct ui_region {
     float x_percent = 0.0f;
@@ -25,6 +31,14 @@ struct ui_region {
 
     SDL_FRect abs_rect{ 0.0f, 0.0f, 0.0f, 0.0f };
     std::function<void()> on_click;
+
+    // 纹理对齐方式（仅对 texture_id 生效）
+    TexAlign tex_align = TexAlign::Auto;
+    // >= 0 时：本区域右下角对齐"同面板内该序号区域"中纹理的右下角（角标用）
+    int      attach_to_region = -1;
+    // 在最终位置基础上再做的像素微调（正数 = 向右 / 向下），不随分辨率缩放
+    float    nudge_x = 0.0f;
+    float    nudge_y = 0.0f;
 
     // 按钮按下状态（用于高亮反馈）
     SDL_Color original_color{ 0, 0, 0, 0 };
@@ -116,6 +130,12 @@ private:
 
     uint64_t last_selected_id = 0;
     std::vector<int> last_resource_value_cache;
+
+    // ========== 资源面板：采集农民数角标 ==========
+    // 每条资源配置 4 个区域：0=底 1=汉字 2=数值 3=采集农民数角标
+    static constexpr int resource_regions_per_bar = 4;
+    int gather_badge_font_size = 12;              // 角标字号，随 font_size 缩放
+    std::vector<int> last_gather_count_cache;     // 各资源条上次显示的农民数
 
     std::vector<ui_attribute_row> attribute_rows;
 

@@ -56,10 +56,19 @@ Vector2 compute_ranged_outer_target(const Vector2& unit_center,
 // 查找最近的可攻击敌人（基于 team_id，直线优先，被阻则 BFS）
 GameObject* find_nearest_enemy(const Vector2& center, int attacker_team_id, float radius_cells);
 
+// 找离 center 最近、任意类型且血量>0 的资源（目标死亡后自动换矿用）
+GameObject* find_nearest_any_resource(const Vector2& center, float radius_cells);
+
 // 在单位周围搜索最近的同类型且血量>0的资源实体
 GameObject* find_nearest_resource_of_type(ResourceType type, const Vector2& center, float radius);
 
 // 在单位周围搜索最近的可提交建筑（己方、接受指定资源类型）
 GameObject* find_nearest_dropoff(const Vector2& center, int player_id, ResourceType carried_type, float radius_cells);
+
+// 统计某玩家当前"正在采集"各资源类型的农民数量（资源面板角标用）。
+// out_counts 按 ResourceType 索引，长度至少为 static_cast<int>(ResourceType::Count)。
+// 判定口径：农民有采集目标且目标资源的产出类型匹配；正在返程卸货（手里有货、
+// 暂无目标）的农民计入其携带类型，避免满载返程时角标来回跳。
+void count_gatherers_by_resource(int player_id, int* out_counts);
 
 #endif // !_UTIL_H_

@@ -27,6 +27,13 @@ void AISystem::add_ai_player(int player_id, const Vector2& rally_point)
     players_[player_id] = st;
 }
 
+void AISystem::reset()
+{
+    players_.clear();
+    attack_signals_.clear();
+    defense_signals_.clear();
+}
+
 const AISystem::TeamSignal& AISystem::get_attack_signal(int team_id) const
 {
     static const TeamSignal empty;
@@ -99,12 +106,17 @@ void AISystem::run_decision(PlayerState& st)
 // ============================ 经济 ============================
 
 // 分配闲置农民：按 食物(3) → 金(4) → 木(其余) 的目标配比，
-// 每人挑离自己最近的对应资源，站位点走周界分配（复用采集拥堵治理）
+// 每人挑离自己最近的对应资源，站位点走周界分配（复用采集拥堵治理）。
+//
+// 发呆修复的要点：
+// 1) 首选资源类型采空了，就退而求其次采其它还有矿的类型（食物→金→木），
+//    而不是原地 continue 让农民永久闲置（此前只在“不是木”时才回退到木，
+//    木采空时农民就彻底罢工了）。
+// 2) 全图都没矿可采时，把农民叫回基地集结区待命——发呆也要发在家里，
+//    不要站在采空的资源坑旁一动不动。
 void AISystem::assign_idle_villagers(PlayerState& st)
 {
-    auto& pool = WorldEntityMgr::instance()->get_object_pool();
-
-    // 统计当前各类资源上的农民数
+    // 统计当前各类资源上的农民数（只统计目标资源仍然存活的）
     int on_food = 0, on_gold = 0, on_wood = 0;
     for (auto* v : villagers_of(st.player_id))
     {
@@ -114,21 +126,75 @@ void AISystem::assign_idle_villagers(PlayerState& st)
         else if (t == (int)ResourceType::Wood) ++on_wood;
     }
 
+    // 选矿偏好：优先选血量还够一车（40）的矿，避免把农民派去马上
+    // 要采空的矿上，人到矿没了又白跑一趟（来回空跑看起来就像发呆）
+    auto pick_resource = [this](const Vector2& c, ResourceType t) -> GameObject* {
+        GameObject* healthy = nullptr;   float healthy_d = 1e9f;
+        GameObject* fallback = nullptr;  float fallback_d = 1e9f;
+        auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, o] : pool)
+        {
+            if (!o->check_valid()) continue;
+            auto* h = o->get_component<Harvestable>();
+            if (!h || h->output_type != t) continue;
+            auto* hp = o->get_component<Health>();
+            if (!hp || hp->current_health <= 0) continue;
+            float d = (o->get_collision_box().get_center_position() - c).length();
+            if (hp->current_health >= 40)
+            {
+                if (d < healthy_d) { healthy_d = d; healthy = o; }
+            }
+            else if (d < fallback_d)
+            {
+                fallback_d = d; fallback = o;
+            }
+        }
+        return healthy ? healthy : fallback;
+    };
+
+    // 每类资源当前是否还有存活矿（本决策周期只查一次）
+    const bool has_food = pick_resource(st.rally, ResourceType::Food) != nullptr;
+    const bool has_gold = pick_resource(st.rally, ResourceType::Gold) != nullptr;
+    const bool has_wood = pick_resource(st.rally, ResourceType::Wood) != nullptr;
+
     for (auto* v : villagers_of(st.player_id))
     {
         auto* g = v->get_component<Gatherer>();
         if (!g || g->target_resource_id != 0 || g->carried_amount > 0 || g->dropoff_target_id != 0)
             continue;
 
-        // 需要哪一类资源：优先补不足的配额
+        // 需要哪一类资源：优先补不足的配额；配额类型已枯竭时直接跳到下一优先类型
         ResourceType want = ResourceType::Wood;
-        if (on_food < config_.food_villagers) want = ResourceType::Food;
-        else if (on_gold < config_.gold_villagers) want = ResourceType::Gold;
+        if (on_food < config_.food_villagers && has_food) want = ResourceType::Food;
+        else if (on_gold < config_.gold_villagers && has_gold) want = ResourceType::Gold;
+        else if (!has_wood)
+        {
+            if (has_food) want = ResourceType::Food;
+            else if (has_gold) want = ResourceType::Gold;
+        }
 
-        GameObject* res = nearest_resource_of(v->get_collision_box().get_center_position(), want);
-        if (!res && want != ResourceType::Wood)
-            res = nearest_resource_of(v->get_collision_box().get_center_position(), ResourceType::Wood);
-        if (!res) continue;
+        const Vector2 center = v->get_collision_box().get_center_position();
+        GameObject* res = pick_resource(center, want);
+        // 首选类型没找到活矿：按 食物→金→木 顺序找任一还活着的矿
+        if (!res && want != ResourceType::Food) res = pick_resource(center, ResourceType::Food);
+        if (!res && want != ResourceType::Gold) res = pick_resource(center, ResourceType::Gold);
+        if (!res && want != ResourceType::Wood) res = pick_resource(center, ResourceType::Wood);
+
+        if (!res)
+        {
+            // 全图无矿可采：回基地集结区待命，别站在野地里发呆
+            auto* mv = v->get_component<Movable>();
+            if (mv)
+            {
+                const Vector2 dest = st.rally + spread_offset(v->get_id());
+                if ((dest - center).length() > 60.0f)
+                {
+                    mv->target = dest;
+                    mv->flow_target = dest;
+                }
+            }
+            continue;
+        }
 
         // 占一个配额坑，避免一个决策周期内全员分去同一种资源
         if (want == ResourceType::Food) ++on_food;
@@ -159,7 +225,10 @@ int AISystem::gatherer_target_type(GameObject* villager) const
     GameObject* res = WorldEntityMgr::instance()->get_object_by_id(g->target_resource_id);
     if (!res || !res->check_valid()) return -1;
     auto* h = res->get_component<Harvestable>();
-    return h ? (int)h->output_type : -1;
+    if (!h) return -1;
+    auto* hp = res->get_component<Health>();
+    if (hp && hp->current_health <= 0) return -1;   // 已采空的不计入配额
+    return (int)h->output_type;
 }
 
 // 生产：农民补到目标数；黄金富裕就持续出兵到常备军上限

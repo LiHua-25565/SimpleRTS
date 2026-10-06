@@ -15,6 +15,7 @@ public:
 	static WorldEntityMgr* instance();
 
 	void init_world(GameMap* map);
+	void reset_world();      // 清理所有实体与四叉树（重新开局前调用）
 	void on_update();
 
 	void insert_object(GameObject* obj);

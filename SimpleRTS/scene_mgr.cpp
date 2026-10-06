@@ -32,6 +32,9 @@ void SceneMgr::on_switch(SceneType type)
 	case SceneType::Selector:
 		set_current_scene(selector_scene);
 		break;
+	case SceneType::MapEditor:
+		set_current_scene(map_editor_scene);
+		break;
 	}
 }
 

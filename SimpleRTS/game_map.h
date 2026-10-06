@@ -45,7 +45,10 @@ public:
     }
 
     // 查询某一格子是否可通行
-    bool is_cell_passable(int x, int y) const;  
+    bool is_cell_passable(int x, int y) const;
+
+    // 查询一个碰撞盒覆盖的所有格子是否都可通行（放置建筑/资源/单位时校验整块脚印）
+    bool is_box_passable(const CollisionBox& box) const;
 
     // 为目标点生成方向场
     std::vector<std::vector<Vector2>> generate_goal_flow_field(const Vector2& world_goal) const;
@@ -102,6 +105,18 @@ public:
     // 不用 remove_object_from_dynamic_obstacle_field：它会把格子盲清为 0，
     // 重叠的建筑会互相擦掉对方的格子
     void rebuild_dynamic_obstacle_field();
+
+    // 清空动态障碍场（重新开局前调用）
+    void clear_dynamic_obstacle_field();
+
+    // 将整张地形重置为指定类型（地图编辑器用）
+    void reset_terrain(TerrainType type);
+
+    // 调整地图尺寸（地图编辑器切换大/中/小用）：重建 grid、世界边界、静态+动态障碍场，全部重置为 Mud
+    void resize(int new_width, int new_height);
+
+    // 依据 grid 重建静态障碍场（地形被编辑/导入后调用）
+    void rebuild_static_obstacle_field();
 
 private:
     int cell_size = 10;       // 格子边长

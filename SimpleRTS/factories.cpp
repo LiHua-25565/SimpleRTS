@@ -45,10 +45,8 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
 
     CollisionBox box{ {x, y}, w, h };
 
-    for (int row = 0; row < size_cells; ++row)
-        for (int col = 0; col < size_cells; ++col)
-            if (!map->is_cell_passable(grid_x + col, grid_y + row))
-                return nullptr;
+    if (!map->is_box_passable(box))
+        return nullptr;
 
     if (!allow_overlap && check_overlap(box))
         return nullptr;
@@ -111,9 +109,7 @@ GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_o
 {
     if (!map) return nullptr;
 
-    int cx = (int)(box.position.x / map->get_cell_size());
-    int cy = (int)(box.position.y / map->get_cell_size());
-    if (!map->is_cell_passable(cx, cy)) return nullptr;
+    if (!map->is_box_passable(box)) return nullptr;
 
     if (!allow_overlap && check_overlap(box)) return nullptr;
 
@@ -173,9 +169,7 @@ GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_ove
 {
     if (!map) return nullptr;
 
-    int cx = (int)(box.position.x / map->get_cell_size());
-    int cy = (int)(box.position.y / map->get_cell_size());
-    if (!map->is_cell_passable(cx, cy)) return nullptr;
+    if (!map->is_box_passable(box)) return nullptr;
 
     if (!allow_overlap && check_overlap(box)) return nullptr;
 
@@ -233,9 +227,7 @@ GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allo
     if (!map) return nullptr;
     if (!allow_overlap && check_overlap(box)) return nullptr;
 
-    int cx = (int)(box.position.x / map->get_cell_size());
-    int cy = (int)(box.position.y / map->get_cell_size());
-    if (!map->is_cell_passable(cx, cy)) return nullptr;
+    if (!map->is_box_passable(box)) return nullptr;
 
     auto* obj = new GameObject(box);
 
@@ -297,10 +289,7 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     CollisionBox box{ {x, y}, w, h };
 
     if (!allow_overlap) {
-        for (int row = 0; row < size_cells; ++row)
-            for (int col = 0; col < size_cells; ++col)
-                if (!map->is_cell_passable(grid_x + col, grid_y + row))
-                    return nullptr;
+        if (!map->is_box_passable(box)) return nullptr;
         if (check_overlap(box)) return nullptr;
     }
 
@@ -357,10 +346,7 @@ GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool all
     CollisionBox box{ {x, y}, w, h };
 
     if (!allow_overlap) {
-        for (int row = 0; row < size_cells; ++row)
-            for (int col = 0; col < size_cells; ++col)
-                if (!map->is_cell_passable(grid_x + col, grid_y + row))
-                    return nullptr;
+        if (!map->is_box_passable(box)) return nullptr;
         if (check_overlap(box)) return nullptr;
     }
 
@@ -381,8 +367,7 @@ GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool all
     obj->add_component<FlashComponent>();
     obj->add_component<BuildingType>()->type = BuildingEntityType::ArcheryRange;
 
-    auto* dropoff = obj->add_component<ResourceDropoff>();
-    dropoff->accept_mask = ALL_MASK;
+    // 靶场不是资源提交点（只有城镇中心收资源），不挂 ResourceDropoff
 
     obj->add_component<Selectable>();
     obj->add_component<ProductionQueue>();
@@ -444,6 +429,12 @@ Color ObjectFactory::get_player_color(int player_id)
     switch (player_id) {
     case 1:  return Color::DarkBlue;
     case 2:  return Color::DarkRed;
+    case 3:  return Color::LeafGreen;
+    case 4:  return Color::Gold;
+    case 5:  return Color::Purple;
+    case 6:  return Color::Orange;
+    case 7:  return Color::Cyan;
+    case 8:  return Color::Magenta;
     default: return Color::LightGray;
     }
 }

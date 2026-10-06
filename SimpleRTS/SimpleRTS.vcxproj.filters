@@ -81,6 +81,15 @@
     <ClCompile Include="game_scene.cpp">
       <Filter>头文件\Content\Scenes</Filter>
     </ClCompile>
+    <ClCompile Include="menu_scene.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="map_editor_scene.cpp">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="map_io.cpp">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClCompile>
     <ClCompile Include="selection_mgr.cpp">
       <Filter>头文件\Content\Selection</Filter>
     </ClCompile>
@@ -183,6 +192,18 @@
       <Filter>头文件\Content\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="menu_scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="match_config.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="map_editor_scene.h">
+      <Filter>头文件\Content\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="map_io.h">
+      <Filter>头文件\Content\Map, World And Trees</Filter>
+    </ClInclude>
+    <ClInclude Include="scene_ui.h">
       <Filter>头文件\Content\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="selector_scene.h">

@@ -9,6 +9,23 @@ bool GameMap::is_cell_passable(int x, int y) const {
     return static_obstacle_field[y][x] >= 0.0f && dynamic_obstacle_field[y][x] >= 0.0f;
 }
 
+bool GameMap::is_box_passable(const CollisionBox& box) const {
+    int minx = (int)(box.position.x / cell_size);
+    int miny = (int)(box.position.y / cell_size);
+    int maxx = (int)((box.position.x + box.width) / cell_size);
+    int maxy = (int)((box.position.y + box.height) / cell_size);
+
+    // 右/下边界恰好落在格子边界上时不包含该格
+    const float eps = 0.0001f;
+    if ((box.position.x + box.width) - maxx * cell_size < eps) maxx--;
+    if ((box.position.y + box.height) - maxy * cell_size < eps) maxy--;
+
+    for (int y = miny; y <= maxy; ++y)
+        for (int x = minx; x <= maxx; ++x)
+            if (!is_cell_passable(x, y)) return false;
+    return true;
+}
+
 std::vector<std::vector<float>> GameMap::compute_distance_field(const Vector2& world_goal, float radius) const
 {
     static const float INF = 1e20f;
@@ -384,6 +401,30 @@ void GameMap::generate_static_obstacle_field() {
                 static_obstacle_field[y][x] = -1.0f;
 }
 
+void GameMap::reset_terrain(TerrainType type) {
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            grid[y][x] = type;
+    generate_static_obstacle_field();
+}
+
+void GameMap::resize(int new_width, int new_height) {
+    if (new_width <= 0 || new_height <= 0) return;
+    width = new_width;
+    height = new_height;
+
+    grid.assign(height, std::vector<TerrainType>(width, TerrainType::Mud));
+    world_bounds = CollisionBox{ {0.0f, 0.0f},
+                                 (float)(width * cell_size),
+                                 (float)(height * cell_size) };
+    generate_static_obstacle_field();
+    dynamic_obstacle_field.assign(height, std::vector<float>(width, 0.0f));
+}
+
+void GameMap::rebuild_static_obstacle_field() {
+    generate_static_obstacle_field();
+}
+
 void GameMap::fill_dynamic_box(const CollisionBox& box)
 {
     int minx = (int)(box.position.x / cell_size);
@@ -425,6 +466,14 @@ void GameMap::rebuild_dynamic_obstacle_field()
         if (obj->get_component<Structure>() || obj->get_component<Harvestable>())
             fill_dynamic_box(obj->get_collision_box());
     }
+    ++obstacle_version_;
+}
+
+void GameMap::clear_dynamic_obstacle_field()
+{
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            dynamic_obstacle_field[y][x] = 0.0f;
     ++obstacle_version_;
 }
 

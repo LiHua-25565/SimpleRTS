@@ -17,9 +17,68 @@ void HarvestSystem::on_update(float delta)
         uint64_t res_id = gatherer->target_resource_id;
         if (res_id == 0) continue;
         GameObject* target_resource = WorldEntityMgr::instance()->get_object_by_id(res_id);
+
+        const auto& unit_box = obj->get_collision_box();
+        Vector2 unit_center = unit_box.get_center_position();
+
+        // ===== 目标死亡/失效的恢复 =====
+        // 农民在赶往资源的路上目标被采空/摧毁时，以前只是清掉任务、让单位
+        // 继续走向尸体然后原地发呆。现在：背着货就改道去提交点；空手就
+        // 自动换矿（同类型优先，其次任意活矿）；全图无矿才停下
         if (!target_resource || !target_resource->check_valid())
         {
             gatherer->target_resource_id = 0;
+            if (gatherer->carried_amount > 0)
+            {
+                // 背着货：改道去提交点，别抱着货走向尸体
+                GameObject* dropoff = nullptr;
+                uint64_t did = gatherer->dropoff_target_id;
+                if (did != 0)
+                    dropoff = WorldEntityMgr::instance()->get_object_by_id(did);
+                if (!dropoff || !dropoff->check_valid())
+                {
+                    auto* own = obj->get_component<Ownership>();
+                    int pid = own ? own->player_id : 0;
+                    dropoff = find_nearest_dropoff(unit_center, pid, gatherer->carried_type, 50.0f);
+                    gatherer->dropoff_target_id = dropoff ? dropoff->get_id() : 0;
+                }
+                if (dropoff)
+                {
+                    gatherer->stand_target = compute_perimeter_target(
+                        obj->get_id(), unit_center, unit_box,
+                        dropoff->get_collision_box(), 2.0f, movable->target);
+                    movable->target = gatherer->stand_target;
+                    movable->flow_target = movable->target;
+                }
+                else
+                {
+                    // 没有提交点：就地停下，至少别走向尸体
+                    movable->target = { -1.0f, -1.0f };
+                    movable->flow_target = { -1.0f, -1.0f };
+                }
+            }
+            else
+            {
+                // 空手：自动换矿（同类型优先，其次任意类型）
+                GameObject* alt = nullptr;
+                if (gatherer->carried_type != ResourceType::None)
+                    alt = find_nearest_resource_of_type(gatherer->carried_type, unit_center, 60.0f);
+                if (!alt) alt = find_nearest_any_resource(unit_center, 60.0f);
+                if (alt)
+                {
+                    gatherer->target_resource_id = alt->get_id();
+                    gatherer->stand_target = compute_perimeter_target(
+                        obj->get_id(), unit_center, unit_box,
+                        alt->get_collision_box(), 2.0f);
+                    movable->target = gatherer->stand_target;
+                    movable->flow_target = movable->target;
+                }
+                else
+                {
+                    movable->target = { -1.0f, -1.0f };
+                    movable->flow_target = { -1.0f, -1.0f };
+                }
+            }
             continue;
         }
 
@@ -30,8 +89,6 @@ void HarvestSystem::on_update(float delta)
             continue;
         }
 
-        const auto& unit_box = obj->get_collision_box();
-        Vector2 unit_center = unit_box.get_center_position();
         const auto& res_box = target_resource->get_collision_box();
         Vector2 res_center = res_box.get_center_position();
 
@@ -185,22 +242,34 @@ void HarvestSystem::on_update(float delta)
             gatherer->carried_amount += resource_health->current_health;
             resource_health->current_health = 0;
 
-            // 搜索同类型新资源
-            float search_radius = 20.0f;
-            GameObject* new_target = find_nearest_resource_of_type(resource_type, unit_center, search_radius);
-            if (new_target)
+            if (gatherer->carried_amount >= gatherer->carry_capacity)
             {
-                gatherer->target_resource_id = new_target->get_id();
-                gatherer->stand_target = compute_perimeter_target(
-                    obj->get_id(), unit_center, unit_box,
-                    new_target->get_collision_box(), 2.0f);
-                movable->target = gatherer->stand_target;
-                movable->flow_target = movable->target;
+                // 装满了：优先交货，别背着货赶往下一个矿白跑一趟
+                gatherer->target_resource_id = 0;
+                need_to_find_dropoff = true;
             }
             else
             {
-                gatherer->target_resource_id = 0;
-                need_to_find_dropoff = true;
+                // 搜索同类型新资源（60 格），没有就换任意活矿；
+                // 全图无矿才放下任务去交手里的零头
+                float search_radius = 60.0f;
+                GameObject* new_target = find_nearest_resource_of_type(resource_type, unit_center, search_radius);
+                if (!new_target)
+                    new_target = find_nearest_any_resource(unit_center, search_radius);
+                if (new_target)
+                {
+                    gatherer->target_resource_id = new_target->get_id();
+                    gatherer->stand_target = compute_perimeter_target(
+                        obj->get_id(), unit_center, unit_box,
+                        new_target->get_collision_box(), 2.0f);
+                    movable->target = gatherer->stand_target;
+                    movable->flow_target = movable->target;
+                }
+                else
+                {
+                    gatherer->target_resource_id = 0;
+                    need_to_find_dropoff = true;
+                }
             }
         }
         else

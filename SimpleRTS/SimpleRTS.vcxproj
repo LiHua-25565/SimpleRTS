@@ -142,6 +142,9 @@
     <ClCompile Include="harvest_system.cpp" />
     <ClCompile Include="input_system.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="map_editor_scene.cpp" />
+    <ClCompile Include="map_io.cpp" />
+    <ClCompile Include="menu_scene.cpp" />
     <ClCompile Include="factories.cpp" />
     <ClCompile Include="move_feedback_system.cpp" />
     <ClCompile Include="move_system.cpp" />
@@ -182,6 +185,10 @@
     <ClInclude Include="harvest_system.h" />
     <ClInclude Include="input_system.h" />
     <ClInclude Include="menu_scene.h" />
+    <ClInclude Include="match_config.h" />
+    <ClInclude Include="map_editor_scene.h" />
+    <ClInclude Include="map_io.h" />
+    <ClInclude Include="scene_ui.h" />
     <ClInclude Include="move_feedback_system.h" />
     <ClInclude Include="move_system.h" />
     <ClInclude Include="production_data.h" />

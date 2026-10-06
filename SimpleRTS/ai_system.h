@@ -56,6 +56,7 @@ public:
     };
 
     void add_ai_player(int player_id, const Vector2& rally_point);
+    void reset();   // 清空所有 AI 玩家状态（重新开局前调用）
     void set_factory(ObjectFactory* factory) { factory_ = factory; }
     void set_config(const AIConfig& cfg) { config_ = cfg; }
     const AIConfig& get_config() const { return config_; }

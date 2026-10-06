@@ -7,6 +7,7 @@
 #include "game_scene.h"
 #include "menu_scene.h"
 #include "selector_scene.h"
+#include "map_editor_scene.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -51,19 +52,30 @@ int main(int argc, char* argv[])
         SDL_Log("FATAL: TTF_OpenFont failed: %s", SDL_GetError());
     }
     UIMgr::instance()->init();
+    // 提前初始化纹理/字体缓存，供菜单与选择场景渲染文字
+    TextureCache::instance()->init(renderer, font);
 
     auto game_scene = new GameScene();
     game_scene->set_font(font);
     game_scene->set_renderer(renderer);
-    auto menu_scene = new MenuScene();      // 如果有的话
+    auto menu_scene = new MenuScene();
+    menu_scene->set_font(font);
+    menu_scene->set_renderer(renderer);
     auto selector_scene = new SelectorScene();
+    selector_scene->set_font(font);
+    selector_scene->set_renderer(renderer);
+    auto map_editor_scene = new MapEditorScene();
+    map_editor_scene->set_font(font);
+    map_editor_scene->set_renderer(renderer);
 
     // 注册到 SceneMgr
     SceneMgr::instance()->set_menu_scene(menu_scene);
     SceneMgr::instance()->set_game_scene(game_scene);
     SceneMgr::instance()->set_selector_scene(selector_scene);
+    SceneMgr::instance()->set_map_editor_scene(map_editor_scene);
 
-    SceneMgr::instance()->set_current_scene(game_scene);
+    // 从主菜单启动
+    SceneMgr::instance()->set_current_scene(menu_scene);
 
     bool is_fullscreen = false;
 
@@ -107,6 +119,10 @@ int main(int argc, char* argv[])
 
             SceneMgr::instance()->on_input(event);
         }
+
+        // 退出请求（菜单“退出游戏”按钮触发）
+        if (SceneMgr::instance()->should_quit())
+            is_quit = true;
 
         // 逻辑
 
