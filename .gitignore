@@ -34,6 +34,10 @@ TestResults/
 *.exp
 *.resources
 
+# CMake 构建目录
+build/
+build-*/
+
 # VS Code
 .vscode/
 !.vscode/extensions.json
