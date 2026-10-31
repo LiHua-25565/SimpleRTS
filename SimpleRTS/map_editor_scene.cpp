@@ -227,6 +227,7 @@ void MapEditorScene::layout() {
     btn_load_.rect  = { 472.0f, 12.0f, 72.0f, 32.0f };  btn_load_.label  = u8"载入";
     btn_clear_.rect = { 552.0f, 12.0f, 72.0f, 32.0f };  btn_clear_.label = u8"清空";
     btn_back_.rect  = { 632.0f, 12.0f, 110.0f, 32.0f }; btn_back_.label  = u8"返回主菜单";
+    btn_resources_.rect = { 750.0f, 12.0f, 110.0f, 32.0f }; btn_resources_.label = u8"初始资源";
 
     // 地图尺寸
     size_label_y_ = 58.0f;
@@ -251,9 +252,10 @@ void MapEditorScene::layout() {
 
     // 玩家数量
     pc_label_y_ = 366.0f;
-    pc_2_ = { 8.0f, 386.0f, 56.0f, 22.0f };
-    pc_4_ = { 68.0f, 386.0f, 56.0f, 22.0f };
-    pc_8_ = { 128.0f, 386.0f, 56.0f, 22.0f };
+    pc_2_ = { 8.0f, 386.0f, 43.0f, 22.0f };
+    pc_4_ = { 56.0f, 386.0f, 43.0f, 22.0f };
+    pc_6_ = { 104.0f, 386.0f, 43.0f, 22.0f };
+    pc_8_ = { 152.0f, 386.0f, 43.0f, 22.0f };
 
     // 归属玩家（4 列网格，最多 8 玩家 + 中立 = 9 项 = 3 行）
     owner_label_y_ = 414.0f;
@@ -370,6 +372,7 @@ void MapEditorScene::reset_to_empty() {
     factory_.init(&editor_map_);
     entities_.clear();
     selected_id_ = 0;
+    start_resources_.assign(player_count_, PlayerStartResources{});
     terrain_dirty_ = true;
     static_dirty_ = false;
 }
@@ -750,6 +753,138 @@ void MapEditorScene::delete_selected() {
     WorldEntityMgr::instance()->on_update();   // 清理失效实体 + 重建动态障碍
 }
 
+void MapEditorScene::ensure_start_resources() {
+    if ((int)start_resources_.size() < player_count_)
+        start_resources_.resize(player_count_, PlayerStartResources{});
+    if ((int)start_resources_.size() > player_count_)
+        start_resources_.resize(player_count_);
+    if (res_player_ < 1) res_player_ = 1;
+    if (res_player_ > player_count_) res_player_ = player_count_;
+}
+
+void MapEditorScene::open_resources_modal() {
+    ensure_start_resources();
+    resources_modal_ = true;
+    res_field_ = -1;
+    res_input_.clear();
+    res_player_ = (place_player_ >= 1 && place_player_ <= player_count_) ? place_player_ : 1;
+}
+
+void MapEditorScene::append_res_text(const char* txt) {
+    if (!txt) return;
+    if (res_replace_on_type_) {
+        res_input_.clear();
+        res_replace_on_type_ = false;
+    }
+    for (const char* p = txt; *p; ++p) {
+        char c = *p;
+        if (c < '0' || c > '9') continue;
+        if (res_input_.size() >= 7) break;
+        res_input_.push_back(c);
+    }
+}
+
+void MapEditorScene::apply_res_input() {
+    if (res_field_ < 0 || !resources_modal_) return;
+    ensure_start_resources();
+    int v = 0;
+    for (char c : res_input_) {
+        if (c >= '0' && c <= '9') {
+            v = v * 10 + (c - '0');
+            if (v > 999999) { v = 999999; break; }
+        }
+    }
+    if (res_player_ >= 1 && res_player_ <= (int)start_resources_.size()) {
+        PlayerStartResources& sr = start_resources_[res_player_ - 1];
+        switch (res_field_) {
+        case 0: sr.wood = v; break;
+        case 1: sr.food = v; break;
+        case 2: sr.gold = v; break;
+        case 3: sr.stone = v; break;
+        }
+    }
+    res_field_ = -1;
+    res_input_.clear();
+}
+
+bool MapEditorScene::handle_resources_click(float x, float y) {
+    if (!resources_modal_) return false;
+    auto hit = [&](const SDL_FRect& r) { return point_in(r, x, y); };
+
+    if (hit(res_close_btn_)) {
+        apply_res_input();
+        resources_modal_ = false;
+        return true;
+    }
+    for (int i = 0; i < player_count_; ++i) {
+        if (i < (int)res_player_btns_.size() && hit(res_player_btns_[i])) {
+            apply_res_input();
+            res_player_ = i + 1;
+            return true;
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (hit(res_fields_[i])) {
+            apply_res_input();
+            res_field_ = i;
+            res_replace_on_type_ = true;
+            ensure_start_resources();
+            const PlayerStartResources& sr = start_resources_[res_player_ - 1];
+            int v = (i == 0) ? sr.wood : (i == 1) ? sr.food : (i == 2) ? sr.gold : sr.stone;
+            res_input_ = std::to_string(v);
+            return true;
+        }
+    }
+    return hit(res_panel_) || resources_modal_;   // 弹窗期间吞掉其他点击
+}
+
+void MapEditorScene::render_resources_modal() {
+    if (!resources_modal_) return;
+    ensure_start_resources();
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+    SDL_FRect full{ 0, 0, LOGICAL_W, LOGICAL_H };
+    SDL_RenderFillRect(renderer, &full);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    res_panel_ = { 360.0f, 150.0f, 560.0f, 380.0f };
+    ui_fill_rect(renderer, res_panel_, { 24, 30, 48, 255 }, { 255, 215, 0, 255 }, 2);
+    ui_draw_text(renderer, u8"玩家初始资源", 30, { 255, 215, 0, 255 },
+        res_panel_.x + 24.0f, res_panel_.y + 20.0f);
+    ui_draw_text(renderer, u8"默认各 2000；保存后写入地图 S 行，游戏开局按此发放", 15,
+        { 160, 178, 205, 255 }, res_panel_.x + 24.0f, res_panel_.y + 62.0f);
+
+    res_player_btns_.clear();
+    for (int i = 0; i < player_count_; ++i) {
+        SDL_FRect b{ res_panel_.x + 24.0f + i * 54.0f, res_panel_.y + 92.0f, 46.0f, 28.0f };
+        res_player_btns_.push_back(b);
+        draw_button(b, std::to_string(i + 1), res_player_ == i + 1, false);
+    }
+
+    const char* names[4] = { u8"木", u8"肉", u8"金", u8"石" };
+    const PlayerStartResources& sr = start_resources_[res_player_ - 1];
+    int values[4] = { sr.wood, sr.food, sr.gold, sr.stone };
+    for (int i = 0; i < 4; ++i) {
+        float col = (i % 2 == 0) ? 0.0f : 1.0f;
+        float row = (float)(i / 2);
+        SDL_FRect label{ res_panel_.x + 40.0f + col * 260.0f,
+                         res_panel_.y + 150.0f + row * 52.0f, 40.0f, 30.0f };
+        res_fields_[i] = { label.x + 42.0f, label.y, 170.0f, 30.0f };
+        ui_draw_text(renderer, names[i], 20, { 230, 238, 250, 255 }, label.x, label.y + 4.0f);
+        std::string text = (res_field_ == i) ? res_input_ : std::to_string(values[i]);
+        ui_fill_rect(renderer, res_fields_[i], { 36, 48, 84, 255 },
+            res_field_ == i ? SDL_Color{ 255, 215, 0, 255 } : SDL_Color{ 90, 110, 160, 255 }, 2);
+        ui_draw_text(renderer, text, 18, { 255, 255, 255, 255 },
+            res_fields_[i].x + 10.0f, res_fields_[i].y + 6.0f);
+    }
+
+    res_close_btn_ = { res_panel_.x + res_panel_.w - 130.0f, res_panel_.y + res_panel_.h - 54.0f, 100.0f, 30.0f };
+    draw_button(res_close_btn_, u8"完成", true, false);
+    ui_draw_text(renderer, u8"点击数字输入，回车确认；Esc 关闭", 14,
+        { 140, 156, 182, 255 }, res_panel_.x + 24.0f, res_panel_.y + res_panel_.h - 44.0f);
+}
+
 void MapEditorScene::apply_health_input() {
     GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(selected_id_);
     if (!obj) return;
@@ -780,7 +915,8 @@ void MapEditorScene::do_save() {
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
         std::string path = (dir / (filename_ + ".srmap")).string();
-        if (save_map(path, editor_map_, entities_, player_count_)) {
+        ensure_start_resources();
+        if (save_map(path, editor_map_, entities_, player_count_, start_resources_)) {
             set_status(u8"已保存: maps/" + filename_ + u8".srmap");
             refresh_map_files();
         }
@@ -793,8 +929,9 @@ void MapEditorScene::do_save() {
 void MapEditorScene::do_load() {
     std::string path = (std::filesystem::path("maps") / (filename_ + ".srmap")).string();
     std::vector<EntityRecord> loaded;
+    std::vector<PlayerStartResources> loaded_resources;
     int loaded_pc = 2;
-    if (!load_map(path, editor_map_, loaded, loaded_pc)) {
+    if (!load_map_resize(path, editor_map_, loaded, loaded_pc, &loaded_resources)) {
         set_status(u8"载入失败: " + filename_ + u8".srmap 不存在或格式不符");
         return;
     }
@@ -806,7 +943,20 @@ void MapEditorScene::do_load() {
     entities_ = std::move(loaded);
     selected_id_ = 0;
     player_count_ = loaded_pc;
+    start_resources_ = std::move(loaded_resources);
+    ensure_start_resources();
     if (place_player_ > player_count_) place_player_ = 0;
+    // 地图文件可能和当前编辑尺寸不同，重新适配相机
+    {
+        float vw = LOGICAL_W - panel_w_;
+        float vh = LOGICAL_H - topbar_h_;
+        camera_.init(vw, vh,
+            (float)(editor_map_.get_width() * editor_map_.get_cell_size()),
+            (float)(editor_map_.get_height() * editor_map_.get_cell_size()));
+        float fit = std::min(vw / camera_.get_map_w(), vh / camera_.get_map_h()) * 0.98f;
+        camera_.set_scale(fit);
+        camera_.set_position({ 0.0f, 0.0f });
+    }
     layout();   // 按载入的玩家数量重建归属按钮
     terrain_dirty_ = true;
     static_dirty_ = false;
@@ -890,6 +1040,8 @@ void MapEditorScene::apply_size(MapSize s) {
 void MapEditorScene::apply_player_count(int n) {
     if (player_count_ == n) return;
     player_count_ = n;
+    start_resources_.resize(n, PlayerStartResources{});
+    ensure_start_resources();
     if (place_player_ > n) place_player_ = n;   // 当前选中玩家超出范围时收缩
     layout();   // 重建归属按钮网格
     set_status(u8"玩家数量: " + std::to_string(n));
@@ -936,6 +1088,31 @@ std::string MapEditorScene::next_default_name() const {
 }
 
 void MapEditorScene::handle_key(int key) {
+    if (resources_modal_) {
+        if (res_field_ >= 0) {
+            if (key == SDLK_BACKSPACE && !res_input_.empty()) {
+                res_replace_on_type_ = false;
+                res_input_.pop_back();
+                return;
+            }
+            if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+                apply_res_input();
+                return;
+            }
+            if (key == SDLK_ESCAPE) {
+                res_field_ = -1;
+                res_input_.clear();
+                return;
+            }
+            return;
+        }
+        if (key == SDLK_ESCAPE) {
+            resources_modal_ = false;
+            return;
+        }
+        return;
+    }
+
     if (hp_focused_) {
         if (key == SDLK_BACKSPACE && !hp_input_.empty()) {
             hp_input_.pop_back();
@@ -1015,6 +1192,10 @@ void MapEditorScene::on_input(const SDL_Event& event) {
     }
     else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         float x = event.button.x, y = event.button.y;
+        if (resources_modal_) {
+            if (event.button.button == SDL_BUTTON_LEFT) handle_resources_click(x, y);
+            return;
+        }
         if (event.button.button == SDL_BUTTON_LEFT) {
             if (handle_ui_click(x, y)) return;
             if (point_in_minimap(x, y)) { minimap_click(x, y); return; }   // 小地图点击跳转（优先于放置/选择）
@@ -1093,12 +1274,18 @@ void MapEditorScene::on_input(const SDL_Event& event) {
         handle_key((int)event.key.key);
     }
     else if (event.type == SDL_EVENT_TEXT_INPUT) {
-        if (hp_focused_) append_hp_text(event.text.text);
+        if (resources_modal_ && res_field_ >= 0) append_res_text(event.text.text);
+        else if (hp_focused_) append_hp_text(event.text.text);
         else if (filename_focused_) append_text(event.text.text);
     }
 }
 
 bool MapEditorScene::handle_ui_click(float x, float y) {
+    if (resources_modal_) {
+        handle_resources_click(x, y);
+        return true;
+    }
+
     // 点击血量输入框以外的任何位置时，退出血量编辑
     if (hp_focused_ && !point_in(hp_input_rect_, x, y)) hp_focused_ = false;
 
@@ -1108,6 +1295,7 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
     if (point_in(btn_load_.rect, x, y))  { filename_focused_ = false; do_load();  return true; }
     if (point_in(btn_clear_.rect, x, y)) { filename_focused_ = false; do_clear(); return true; }
     if (point_in(btn_back_.rect, x, y))  { filename_focused_ = false; do_back();  return true; }
+    if (point_in(btn_resources_.rect, x, y)) { filename_focused_ = false; open_resources_modal(); return true; }
 
     // 地图尺寸
     if (point_in(size_small_, x, y)) { filename_focused_ = false; apply_size(MapSize::Small);  return true; }
@@ -1132,6 +1320,7 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
     // 玩家数量
     if (point_in(pc_2_, x, y)) { apply_player_count(2); return true; }
     if (point_in(pc_4_, x, y)) { apply_player_count(4); return true; }
+    if (point_in(pc_6_, x, y)) { apply_player_count(6); return true; }
     if (point_in(pc_8_, x, y)) { apply_player_count(8); return true; }
 
     // 归属玩家（index 0=中立, 1..N=玩家）
@@ -1401,10 +1590,11 @@ void MapEditorScene::render_ui() {
     draw_button(btn_load_.rect, btn_load_.label, false, false);
     draw_button(btn_clear_.rect, btn_clear_.label, false, false);
     draw_button(btn_back_.rect, btn_back_.label, false, false);
+    draw_button(btn_resources_.rect, btn_resources_.label, false, false);
 
     // 状态消息
     if (!status_msg_.empty())
-        ui_draw_text(renderer, status_msg_, 18, { 150, 220, 150, 255 }, 780.0f, topbar_h_ * 0.5f, false);
+        ui_draw_text(renderer, status_msg_, 18, { 150, 220, 150, 255 }, 880.0f, topbar_h_ * 0.5f, false);
 
     // 左侧面板背景
     ui_fill_rect(renderer, SDL_FRect{ 0, topbar_h_, panel_w_, LOGICAL_H - topbar_h_ }, { 18, 24, 40, 255 });
@@ -1453,6 +1643,7 @@ void MapEditorScene::render_ui() {
     {
         draw_button(pc_2_, u8"2", (player_count_ == 2), false);
         draw_button(pc_4_, u8"4", (player_count_ == 4), false);
+        draw_button(pc_6_, u8"6", (player_count_ == 6), false);
         draw_button(pc_8_, u8"8", (player_count_ == 8), false);
     }
 
@@ -1621,4 +1812,5 @@ void MapEditorScene::on_render() {
 
     render_minimap();
     render_ui();
+    render_resources_modal();
 }

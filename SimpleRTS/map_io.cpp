@@ -19,7 +19,7 @@
 static const std::string MAGIC = "MYSTRMAP";
 static const int VERSION = 1;
 
-bool save_map(const std::string& path, const GameMap& map, const std::vector<EntityRecord>& entities, int player_count) {
+bool save_map(const std::string& path, const GameMap& map, const std::vector<EntityRecord>& entities, int player_count, const std::vector<PlayerStartResources>& start_resources) {
     std::ofstream out(path, std::ios::binary);
     if (!out) return false;
 
@@ -53,10 +53,16 @@ bool save_map(const std::string& path, const GameMap& map, const std::vector<Ent
             break;
         }
     }
+
+    for (int p = 1; p <= player_count; ++p) {
+        PlayerStartResources sr;
+        if (p - 1 < (int)start_resources.size()) sr = start_resources[p - 1];
+        out << "S " << p << " " << sr.wood << " " << sr.food << " " << sr.gold << " " << sr.stone << "\n";
+    }
     return true;
 }
 
-bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count) {
+bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count, std::vector<PlayerStartResources>* start_resources) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
 
@@ -101,6 +107,8 @@ bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& 
         line = first;   // 该行就是第一行地形
     }
 
+    if (start_resources) start_resources->assign(player_count, PlayerStartResources{});
+
     for (int y = 0; y < h; ++y) {
         if (y > 0 && !std::getline(in, line)) return false;
         for (int x = 0; x < w && x < (int)line.size(); ++x)
@@ -134,6 +142,15 @@ bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& 
             r.kind = EntityRecord::Kind::Unit;
             r.type = t; r.wx = wx; r.wy = wy; r.player = p;
         }
+        else if (k == 'S') {
+            int p = 0, wood = 0, food = 0, gold = 0, stone = 0;
+            if (!(es >> p >> wood >> food >> gold >> stone)) continue;
+            if (start_resources && p >= 1) {
+                if ((int)start_resources->size() < p) start_resources->resize(p, PlayerStartResources{});
+                (*start_resources)[p - 1] = PlayerStartResources{ wood, food, gold, stone };
+            }
+            continue;
+        }
         else {
             continue;
         }
@@ -143,7 +160,7 @@ bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& 
     return true;
 }
 
-bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count) {
+bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count, std::vector<PlayerStartResources>* start_resources) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
 
@@ -164,7 +181,7 @@ bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRe
     in.close();
 
     map.resize(w, h);
-    return load_map(path, map, entities, player_count);
+    return load_map(path, map, entities, player_count, start_resources);
 }
 
 std::vector<SpawnPoint> compute_spawn_points(const GameMap& map, const std::vector<EntityRecord>& entities, int player_count) {

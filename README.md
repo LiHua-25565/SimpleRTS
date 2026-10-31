@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/hero.png" alt="MySTR v1.2" width="100%" />
+<img src="docs/images/hero.png" alt="MySTR v1.3" width="100%" />
 
 # MySTR · SimpleRTS
 
@@ -18,7 +18,7 @@
 <br />
 
 <a href="https://github.com/LiHua-25565/SimpleRTS/releases/latest">
-  <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20%E4%B8%8B%E8%BD%BD%20MySTR%20v1.2%20Windows%20x64-2ea043?style=for-the-badge&logo=windows&logoColor=white&labelColor=0b1020" alt="下载 MySTR v1.2" height="56" />
+  <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20%E4%B8%8B%E8%BD%BD%20MySTR%20v1.3%20Windows%20x64-2ea043?style=for-the-badge&logo=windows&logoColor=white&labelColor=0b1020" alt="下载 MySTR v1.3" height="56" />
 </a>
 
 **Windows 10 / 11 · 免安装 · 解压即玩 · 已带运行库与字体**
@@ -37,7 +37,7 @@
 
 点击上方绿色按钮，或直接打开：
 
-[**Releases → v1.2 → SimpleRTS-v1.2-win64.zip**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
+[**Releases → v1.3 → SimpleRTS-v1.3-win64.zip**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
 
 </td>
 <td width="33%" valign="top">
@@ -125,8 +125,8 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 
 它没有使用现成引擎：ECS、地图流场寻路、RVO 局部避让、选择框、生产队列、AI、UI、数据定义与编辑器，全部用 C++17 和 SDL3 手写。你可以在游戏里采集资源、造建筑、研究科技、训练军队，也可以按 `F2` 打开编辑器，把兵种、建筑和科技改成自己想要的样子。
 
-> **v1.2 主题：新手教程与多模式地图。**
-> 新增独立新手教程关卡，以及 1v1 / 2v2 / 3v3 / 4v4 共 8 张新地图；修复全屏后建筑放置预览与鼠标错位的问题。
+> **v1.3 主题：地图编辑与初始资源。**
+> 地图编辑器现在可以载入任意尺寸的新地图，并能为每个玩家设置初始木/肉/金/石；保存时写入地图 S 行，缺省各 2000。
 
 ---
 
@@ -167,6 +167,18 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 <img src="docs/images/modes.png" alt="1v1 到 4v4" />
 <br />
 <b>多模式对战</b> · 1v1 / 2v2 / 3v3 / 4v4 自动配队
+</td>
+</tr>
+<tr>
+<td width="50%">
+<img src="docs/images/map-editor.png" alt="地图编辑器初始资源" />
+<br />
+<b>地图编辑器</b> · 自动载入任意尺寸地图
+</td>
+<td width="50%">
+<img src="docs/images/map-editor-load.png" alt="编辑器载入 4v4 地图" />
+<br />
+<b>载入 4v4 地图</b> · 自动适配尺寸，8 个玩家 / 8 个基地
 </td>
 </tr>
 </table>
@@ -231,7 +243,7 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 ### 方式一：下载 Release（推荐）
 
 1. 打开 [**Releases**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)。
-2. 下载 `SimpleRTS-v1.2-win64.zip`。
+2. 下载 `SimpleRTS-v1.3-win64.zip`。
 3. 解压到任意目录（不要只把 exe 拖出来，`font/`、`maps/`、`defs/` 需要和 exe 放在一起）。
 4. 双击 `SimpleRTS.exe`。
 
@@ -349,6 +361,18 @@ cmake --build build --config Release
 
 > 编辑器保存的定义会真正进入游戏：工厂、生产队列、AI 生产、地图编辑器、选中面板都读取同一份 `EntityCatalog`。
 
+## 地图编辑器
+
+主菜单「地图编辑」进入：
+
+- 可以载入 1v1 / 2v2 / 3v3 / 4v4 地图，编辑器会自动按文件尺寸 resize。
+- 支持 2 / 4 / 6 / 8 玩家数量切换，以及归属玩家 0..N。
+- 右上角「初始资源」打开资源配置：
+  - 按玩家设置木、肉、金、石初始数量；
+  - 缺省每项 2000；
+  - 保存后写入地图 `S <player> <wood> <food> <gold> <stone>` 行。
+- 游戏开局读取这些 S 行；旧地图没有 S 行时按各 2000 发放。
+
 ---
 
 ## 技术实现
@@ -416,6 +440,15 @@ SimpleRTS/
 ## 更新日志
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+### v1.3
+
+- 地图编辑器改用自动 resize 载入，修复 1v1 / 2v2 / 3v3 / 4v4 新地图无法打开的 bug。
+- 地图编辑器支持 6 人地图和 2/4/6/8 玩家切换。
+- 新增「初始资源」弹窗：按玩家设置木/肉/金/石初始数量，缺省各 2000。
+- 初始资源写入 `.srmap` 的 `S <player> <wood> <food> <gold> <stone>` 行；旧地图没有 S 行时默认 2000。
+- 游戏开局按地图 S 行发放资源，不再使用写死的 150/300。
+- 编辑器保存地图时自动写入所有玩家的 S 行。
 
 ### v1.2
 

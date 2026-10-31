@@ -60,7 +60,8 @@ private:
     Tool cur_tool_ = Tool::Select;
     int custom_type_id_ = 0;           // 当前选中的自定义兵种/建筑类型 ID
     int place_player_ = 1;             // 当前归属玩家 id：0=中立, 1..N=玩家
-    int player_count_ = 2;             // 玩家数量（2/4/8）
+    int player_count_ = 2;             // 玩家数量（2/4/6/8）
+    std::vector<PlayerStartResources> start_resources_;   // 每个玩家初始资源（地图 S 行）
 
     MapSize cur_size_ = MapSize::Medium;   // 地图尺寸
     PlaceMode place_mode_ = PlaceMode::Single;  // 放置模式：单个/批量（默认单个）
@@ -97,6 +98,7 @@ private:
     // ---- UI 元素 ----
     Btn btn_save_, btn_load_, btn_clear_, btn_back_;
     Btn btn_delete_map_;
+    Btn btn_resources_;
     bool confirm_delete_ = false;      // 删除地图二次确认
     std::string confirm_delete_name_;  // 待确认删除的地图名
     SDL_FRect filename_rect_{};
@@ -110,8 +112,18 @@ private:
     int brush_size_ = 1;               // 地形笔刷直径（格）：1/5/10
     float size_label_y_ = 0.0f, mode_label_y_ = 0.0f;
     float brush_label_y_ = 0.0f;
-    SDL_FRect pc_2_{}, pc_4_{}, pc_8_{};          // 玩家数量按钮
+    SDL_FRect pc_2_{}, pc_4_{}, pc_6_{}, pc_8_{};          // 玩家数量按钮
     float pc_label_y_ = 0.0f;
+
+    // 初始资源弹窗
+    bool resources_modal_ = false;
+    int  res_player_ = 1;
+    int  res_field_ = -1;              // 0=木 1=肉 2=金 3=石
+    bool res_replace_on_type_ = true;
+    std::string res_input_;
+    SDL_FRect res_panel_{}, res_close_btn_{};
+    SDL_FRect res_fields_[4]{};
+    std::vector<SDL_FRect> res_player_btns_;
     std::vector<SDL_FRect> owner_btns_;           // 归属按钮：index 0=中立, 1..N=玩家N
     float owner_label_y_ = 0.0f, owner_grid_top_ = 0.0f;
     float map_label_y_ = 0.0f;
@@ -141,6 +153,12 @@ private:
     void select_at(float mx, float my);
     void delete_selected();
     void apply_health_input();
+    void ensure_start_resources();
+    void open_resources_modal();
+    void apply_res_input();
+    void append_res_text(const char* txt);
+    bool handle_resources_click(float x, float y);
+    void render_resources_modal();
 
     void do_save();
     void do_load();

@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     using namespace std::chrono;
     init();
 
-    SDL_Window* window = SDL_CreateWindow(u8"MySTR v1.2",
+    SDL_Window* window = SDL_CreateWindow(u8"MySTR v1.3",
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     TTF_Font* font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);

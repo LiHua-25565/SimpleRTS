@@ -181,11 +181,13 @@ void GameScene::load_selected_map()
     map_entities_.clear();
     int pc = 2;
     std::vector<EntityRecord> loaded;
+    std::vector<PlayerStartResources> loaded_resources;
     bool ok = false;
     if (!match_config.map_name.empty())
-        ok = load_map_resize("maps/" + match_config.map_name + ".srmap", game_map, loaded, pc);
+        ok = load_map_resize("maps/" + match_config.map_name + ".srmap", game_map, loaded, pc, &loaded_resources);
     if (ok) {
         map_entities_ = std::move(loaded);
+        start_resources_ = std::move(loaded_resources);
         match_config.map_player_count = pc;
     }
     else {
@@ -193,6 +195,7 @@ void GameScene::load_selected_map()
         pc = 2;
         match_config.map_player_count = pc;
         map_entities_.clear();
+        start_resources_.clear();
     }
 
     // 若槽位数量与玩家上限不符（例如未经过选择界面直接进入对局），重建默认槽位
@@ -297,9 +300,12 @@ void GameScene::setup_match()
 
         factory.set_player_id(pid);
         factory.set_player_color(pid, player_color_enum(slot.color_id));
-        int start_wood = tutorial_mode_ ? 600 : ((match_config.map_name == "map2v2") ? 300 : 150);
-        int start_food = tutorial_mode_ ? 400 : ((match_config.map_name == "map2v2") ? 200 : 100);
-        give(pid, start_wood, start_food);
+        PlayerStartResources sr;
+        if (pid - 1 >= 0 && pid - 1 < (int)start_resources_.size()) sr = start_resources_[pid - 1];
+        ResourcesMgr::instance()->set_resource(pid, ResourceType::Wood, sr.wood);
+        ResourcesMgr::instance()->set_resource(pid, ResourceType::Food, sr.food);
+        ResourcesMgr::instance()->set_resource(pid, ResourceType::Gold, sr.gold);
+        ResourcesMgr::instance()->set_resource(pid, ResourceType::Stone, sr.stone);
 
         // 放置城镇中心；若因重叠/落水失败，螺旋向外偏移重试，保证每个玩家一定有基地
         {

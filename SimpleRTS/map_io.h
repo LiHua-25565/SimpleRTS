@@ -21,16 +21,24 @@ struct EntityRecord {
     uint64_t obj_id = 0;      // 运行期：对应 GameObject id（不参与序列化）
 };
 
+// 每个玩家的初始资源。地图没有 S 行时，默认各 2000。
+struct PlayerStartResources {
+    int wood = 2000;
+    int food = 2000;
+    int gold = 2000;
+    int stone = 2000;
+};
+
 // 将地图（地形 + 实体列表 + 玩家数量）写入 path（.srmap）
-bool save_map(const std::string& path, const GameMap& map, const std::vector<EntityRecord>& entities, int player_count);
+bool save_map(const std::string& path, const GameMap& map, const std::vector<EntityRecord>& entities, int player_count, const std::vector<PlayerStartResources>& start_resources = {});
 
 // 从 path 读取地形（写入 map）与实体列表（追加到 entities）。
 // 玩家数量写入 player_count（旧格式无此字段时默认为 2）。
 // 要求文件的宽/高与 map 一致，否则返回 false。
-bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count);
+bool load_map(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count, std::vector<PlayerStartResources>* start_resources = nullptr);
 
 // 读取地图（自动按文件头 W/H resize map），成功返回 true。
-bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count);
+bool load_map_resize(const std::string& path, GameMap& map, std::vector<EntityRecord>& entities, int& player_count, std::vector<PlayerStartResources>* start_resources = nullptr);
 
 // 计算 player_count 个起始位置：优先取地图上城镇中心的位置（按 player 排序），
 // 不足则用默认分布（经典 RTS 布局）补齐。返回数量 == player_count。

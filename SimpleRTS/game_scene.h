@@ -136,6 +136,7 @@ private:
 	void handle_overlay_click(float x, float y);
 
 	std::vector<EntityRecord> map_entities_;   // 本局地图实体
+	std::vector<PlayerStartResources> start_resources_;   // 地图内每个玩家的初始资源
 
 	bool paused_ = false;      // 是否处于暂停菜单（Esc 开关）
 	bool game_over_ = false;   // 是否已分胜负
