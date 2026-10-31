@@ -1,10 +1,11 @@
-#include "map_editor_scene.h"
+ï»¿#include "map_editor_scene.h"
 #include "scene_mgr.h"
 #include "scene_ui.h"
 #include "world_entity_mgr.h"
 #include "texture_cache.h"
 #include "components.h"
 #include "color.h"
+#include "entity_defs.h"
 
 #include <algorithm>
 #include <cmath>
@@ -12,23 +13,23 @@
 #include <filesystem>
 #include <sstream>
 
-// Íæ¼ÒÍâ¿òÑÕÉ«£¨0=ÖĞÁ¢»Ò£¬1..8=¸÷Íæ¼Ò×¨ÊôÉ«£¬ÓÃÓÚ±à¼­Æ÷Àïµ¥Î»/½¨ÖşµÄÍâ¿òÓëÑ¡ÖĞ¸ßÁÁ£©
+// ç©å®¶å¤–æ¡†é¢œè‰²ï¼ˆ0=ä¸­ç«‹ç°ï¼Œ1..8=å„ç©å®¶ä¸“å±è‰²ï¼Œç”¨äºç¼–è¾‘å™¨é‡Œå•ä½/å»ºç­‘çš„å¤–æ¡†ä¸é€‰ä¸­é«˜äº®ï¼‰
 static SDL_Color player_frame_color(int pid) {
     switch (pid) {
-    case 1:  return { 80, 130, 255, 255 };   // À¶
-    case 2:  return { 255, 90, 90, 255 };    // ºì
-    case 3:  return { 90, 200, 90, 255 };    // ÂÌ
-    case 4:  return { 240, 210, 60, 255 };   // »Æ
-    case 5:  return { 180, 110, 220, 255 };  // ×Ï
-    case 6:  return { 255, 160, 60, 255 };   // ³È
-    case 7:  return { 70, 210, 210, 255 };   // Çà
-    case 8:  return { 240, 110, 220, 255 };  // Æ·ºì
-    default: return { 150, 150, 150, 255 };  // ÖĞÁ¢»Ò
+    case 1:  return { 80, 130, 255, 255 };   // è“
+    case 2:  return { 255, 90, 90, 255 };    // çº¢
+    case 3:  return { 90, 200, 90, 255 };    // ç»¿
+    case 4:  return { 240, 210, 60, 255 };   // é»„
+    case 5:  return { 180, 110, 220, 255 };  // ç´«
+    case 6:  return { 255, 160, 60, 255 };   // æ©™
+    case 7:  return { 70, 210, 210, 255 };   // é’
+    case 8:  return { 240, 110, 220, 255 };  // å“çº¢
+    default: return { 150, 150, 150, 255 };  // ä¸­ç«‹ç°
     }
 }
 
-// ·ÅÖÃ×èÈûÕï¶Ï£º°Ñ¡¸ÎŞ·¨·ÅÖÃ¡¹µÄ¾ßÌåÔ­ÒòĞ´½ø placement_debug.log£¨ASCII£¬±ÜÃâ±àÂëÎÊÌâ£©¡£
-// force=true ±íÊ¾Ç¿ÖÆÊä³ö£¨µã»÷·ÅÖÃÊ§°ÜÊ±£©£¬·ñÔò°´ 1 Ãë½ÚÁ÷£¨Ô¤ÀÀÊ±Ã¿Ö¡¶¼»áµ÷ÓÃ£©¡£
+// æ”¾ç½®é˜»å¡è¯Šæ–­ï¼šæŠŠã€Œæ— æ³•æ”¾ç½®ã€çš„å…·ä½“åŸå› å†™è¿› placement_debug.logï¼ˆASCIIï¼Œé¿å…ç¼–ç é—®é¢˜ï¼‰ã€‚
+// force=true è¡¨ç¤ºå¼ºåˆ¶è¾“å‡ºï¼ˆç‚¹å‡»æ”¾ç½®å¤±è´¥æ—¶ï¼‰ï¼Œå¦åˆ™æŒ‰ 1 ç§’èŠ‚æµï¼ˆé¢„è§ˆæ—¶æ¯å¸§éƒ½ä¼šè°ƒç”¨ï¼‰ã€‚
 static void log_placement_block(const GameMap& map, const ObjectFactory& factory, const CollisionBox& box, bool force) {
     static uint64_t last_ms = 0;
     uint64_t now = SDL_GetTicks();
@@ -77,12 +78,16 @@ static void log_placement_block(const GameMap& map, const ObjectFactory& factory
     if (f) fclose(f);
 }
 
-// ==================== ¹¤¾ß¸¨Öú ====================
+// ==================== å·¥å…·è¾…åŠ© ====================
 
 bool MapEditorScene::is_terrain_tool(Tool t) const { return t == Tool::Land || t == Tool::Water; }
 bool MapEditorScene::is_resource_tool(Tool t) const { return t >= Tool::Wood && t <= Tool::Berries; }
-bool MapEditorScene::is_unit_tool(Tool t) const { return t >= Tool::Villager && t <= Tool::Crossbowman; }
-bool MapEditorScene::is_building_tool(Tool t) const { return t >= Tool::TownCenter && t <= Tool::ArcheryRange; }
+bool MapEditorScene::is_unit_tool(Tool t) const {
+    return (t >= Tool::Villager && t <= Tool::Crossbowman) || t == Tool::CustomUnit;
+}
+bool MapEditorScene::is_building_tool(Tool t) const {
+    return (t >= Tool::TownCenter && t <= Tool::ArcheryRange) || t == Tool::CustomBuilding;
+}
 
 ResourceEntityType MapEditorScene::tool_to_resource(Tool t) const {
     switch (t) {
@@ -100,6 +105,7 @@ UnitEntityType MapEditorScene::tool_to_unit(Tool t) const {
     case Tool::Villager:     return UnitEntityType::Villager;
     case Tool::Archer:       return UnitEntityType::Archer;
     case Tool::Crossbowman:  return UnitEntityType::Crossbowman;
+    case Tool::CustomUnit:   return static_cast<UnitEntityType>(custom_type_id_);
     default: return UnitEntityType::Villager;
     }
 }
@@ -108,11 +114,12 @@ BuildingEntityType MapEditorScene::tool_to_building(Tool t) const {
     switch (t) {
     case Tool::TownCenter:   return BuildingEntityType::TownCenter;
     case Tool::ArcheryRange: return BuildingEntityType::ArcheryRange;
+    case Tool::CustomBuilding: return static_cast<BuildingEntityType>(custom_type_id_);
     default: return BuildingEntityType::TownCenter;
     }
 }
 
-// Óë factories.cpp ÖĞµÄ³ß´ç±£³ÖÒ»ÖÂ£¨×ÊÔ´/½¨ÖşÕ¼ÓÃ¸ñÊı£©
+// ä¸ factories.cpp ä¸­çš„å°ºå¯¸ä¿æŒä¸€è‡´ï¼ˆèµ„æº/å»ºç­‘å ç”¨æ ¼æ•°ï¼‰
 int MapEditorScene::resource_size_cells(ResourceEntityType t) {
     switch (t) {
     case ResourceEntityType::Wood:    return 2;
@@ -124,26 +131,28 @@ int MapEditorScene::resource_size_cells(ResourceEntityType t) {
     return 4;
 }
 
-int MapEditorScene::building_size_cells(BuildingEntityType) {
+int MapEditorScene::building_size_cells(BuildingEntityType t) {
+    if (const BuildingDef* def = EntityCatalog::instance()->find_building(t))
+        return std::clamp(def->size_cells, 1, 80);
     return 20;
 }
 
-// ==================== ÉúÃüÖÜÆÚ ====================
+// ==================== ç”Ÿå‘½å‘¨æœŸ ====================
 
 void MapEditorScene::on_enter() {
-    // ½øÈë±à¼­Æ÷£ºÇå¿ÕÊÀ½çÊµÌå£¬Ê¹ÓÃ±à¼­Æ÷×Ô¼ºµÄµØÍ¼
+    // è¿›å…¥ç¼–è¾‘å™¨ï¼šæ¸…ç©ºä¸–ç•Œå®ä½“ï¼Œä½¿ç”¨ç¼–è¾‘å™¨è‡ªå·±çš„åœ°å›¾
     WorldEntityMgr::instance()->reset_world();
-    editor_map_.clear_dynamic_obstacle_field();   // ÇåµôÉÏ´Î²ĞÁôµÄ¶¯Ì¬ÕÏ°­±ê¼Ç
+    editor_map_.clear_dynamic_obstacle_field();   // æ¸…æ‰ä¸Šæ¬¡æ®‹ç•™çš„åŠ¨æ€éšœç¢æ ‡è®°
     WorldEntityMgr::instance()->init_world(&editor_map_);
     factory_.init(&editor_map_);
 
     if (!initialized_) {
         initialized_ = true;
-        editor_map_.reset_terrain(TerrainType::Mud);   // ¿ÕµØÍ¼Æğ²½
+        editor_map_.reset_terrain(TerrainType::Mud);   // ç©ºåœ°å›¾èµ·æ­¥
         entities_.clear();
     }
 
-    // Ïà»ú£ºÈÃÕûÕÅµØÍ¼¾¡Á¿ÆÌÂú»­²¼
+    // ç›¸æœºï¼šè®©æ•´å¼ åœ°å›¾å°½é‡é“ºæ»¡ç”»å¸ƒ
     float vw = LOGICAL_W - panel_w_;
     float vh = LOGICAL_H - topbar_h_;
     camera_.init(vw, vh,
@@ -169,7 +178,7 @@ void MapEditorScene::on_enter() {
     status_timer_ = 0.0f;
     layout();
     refresh_map_files();
-    filename_ = next_default_name();   // Ã¿´Î½øÈë×Ô¶¯ÃüÃû£ºÎ´Ê¹ÓÃµÄ×î´ó±àºÅ
+    filename_ = next_default_name();   // æ¯æ¬¡è¿›å…¥è‡ªåŠ¨å‘½åï¼šæœªä½¿ç”¨çš„æœ€å¤§ç¼–å·
     map_sel_ = -1;
 
     spawn_from_records();
@@ -179,7 +188,7 @@ void MapEditorScene::on_enter() {
 }
 
 void MapEditorScene::on_exit() {
-    snapshot_entities();   // ÄÚÈİ³Áµíµ½ entities_£¬ÏÂ´Î½øÈë»¹Ô­
+    snapshot_entities();   // å†…å®¹æ²‰æ·€åˆ° entities_ï¼Œä¸‹æ¬¡è¿›å…¥è¿˜åŸ
     WorldEntityMgr::instance()->reset_world();
     SDL_Window* win = SDL_GetRenderWindow(renderer);
     if (win) SDL_StopTextInput(win);
@@ -196,7 +205,7 @@ void MapEditorScene::on_update(float delta) {
         if (status_timer_ <= 0.0f) { status_timer_ = 0.0f; status_msg_.clear(); }
     }
 
-    // ¼üÅÌÆ½ÒÆ
+    // é”®ç›˜å¹³ç§»
     const bool* keys = SDL_GetKeyboardState(nullptr);
     if (keys) {
         float speed = 420.0f / camera_.get_scale() * delta;
@@ -209,44 +218,44 @@ void MapEditorScene::on_update(float delta) {
     }
 }
 
-// ==================== ²¼¾Ö ====================
+// ==================== å¸ƒå±€ ====================
 
 void MapEditorScene::layout() {
-    // ¶¥²¿¹¤¾ßÌõ
+    // é¡¶éƒ¨å·¥å…·æ¡
     filename_rect_ = { 230.0f, 14.0f, 150.0f, 28.0f };
-    btn_save_.rect  = { 392.0f, 12.0f, 72.0f, 32.0f };  btn_save_.label  = u8"±£´æ";
-    btn_load_.rect  = { 472.0f, 12.0f, 72.0f, 32.0f };  btn_load_.label  = u8"ÔØÈë";
-    btn_clear_.rect = { 552.0f, 12.0f, 72.0f, 32.0f };  btn_clear_.label = u8"Çå¿Õ";
-    btn_back_.rect  = { 632.0f, 12.0f, 110.0f, 32.0f }; btn_back_.label  = u8"·µ»ØÖ÷²Ëµ¥";
+    btn_save_.rect  = { 392.0f, 12.0f, 72.0f, 32.0f };  btn_save_.label  = u8"ä¿å­˜";
+    btn_load_.rect  = { 472.0f, 12.0f, 72.0f, 32.0f };  btn_load_.label  = u8"è½½å…¥";
+    btn_clear_.rect = { 552.0f, 12.0f, 72.0f, 32.0f };  btn_clear_.label = u8"æ¸…ç©º";
+    btn_back_.rect  = { 632.0f, 12.0f, 110.0f, 32.0f }; btn_back_.label  = u8"è¿”å›ä¸»èœå•";
 
-    // µØÍ¼³ß´ç
+    // åœ°å›¾å°ºå¯¸
     size_label_y_ = 58.0f;
     size_small_ = { 8.0f, 78.0f, 56.0f, 22.0f };
     size_med_   = { 68.0f, 78.0f, 56.0f, 22.0f };
     size_large_ = { 128.0f, 78.0f, 56.0f, 22.0f };
 
-    // ·ÅÖÃÄ£Ê½
+    // æ”¾ç½®æ¨¡å¼
     mode_label_y_ = 106.0f;
     mode_single_ = { 8.0f, 126.0f, 84.0f, 22.0f };
     mode_batch_  = { 100.0f, 126.0f, 84.0f, 22.0f };
 
-    // ±ÊË¢´óĞ¡£¨µØĞÎ¹¤¾ß£©
+    // ç¬”åˆ·å¤§å°ï¼ˆåœ°å½¢å·¥å…·ï¼‰
     brush_label_y_ = 154.0f;
     brush_1_ = { 8.0f, 174.0f, 56.0f, 22.0f };
     brush_5_ = { 68.0f, 174.0f, 56.0f, 22.0f };
     brush_10_ = { 128.0f, 174.0f, 56.0f, 22.0f };
 
-    // ¹¤¾ßÁĞ±í¿ÉÊÓÇøÓò
+    // å·¥å…·åˆ—è¡¨å¯è§†åŒºåŸŸ
     tools_top_ = 202.0f;
     tools_bottom_ = 360.0f;
 
-    // Íæ¼ÒÊıÁ¿
+    // ç©å®¶æ•°é‡
     pc_label_y_ = 366.0f;
     pc_2_ = { 8.0f, 386.0f, 56.0f, 22.0f };
     pc_4_ = { 68.0f, 386.0f, 56.0f, 22.0f };
     pc_8_ = { 128.0f, 386.0f, 56.0f, 22.0f };
 
-    // ¹éÊôÍæ¼Ò£¨4 ÁĞÍø¸ñ£¬×î¶à 8 Íæ¼Ò + ÖĞÁ¢ = 9 Ïî = 3 ĞĞ£©
+    // å½’å±ç©å®¶ï¼ˆ4 åˆ—ç½‘æ ¼ï¼Œæœ€å¤š 8 ç©å®¶ + ä¸­ç«‹ = 9 é¡¹ = 3 è¡Œï¼‰
     owner_label_y_ = 414.0f;
     owner_grid_top_ = 434.0f;
     {
@@ -263,56 +272,72 @@ void MapEditorScene::layout() {
         }
     }
 
-    // µØÍ¼ÎÄ¼şÁĞ±í¿ÉÊÓÇøÓò
+    // åœ°å›¾æ–‡ä»¶åˆ—è¡¨å¯è§†åŒºåŸŸ
     map_label_y_ = 512.0f;
     map_list_top_ = 532.0f;
     map_list_bottom_ = 584.0f;
-    btn_delete_map_.rect = { 108.0f, 509.0f, 84.0f, 22.0f };  btn_delete_map_.label = u8"É¾³ıµØÍ¼";
+    btn_delete_map_.rect = { 108.0f, 509.0f, 84.0f, 22.0f };  btn_delete_map_.label = u8"åˆ é™¤åœ°å›¾";
 
-    // Ñ¡ÖĞĞÅÏ¢Ãæ°å
+    // é€‰ä¸­ä¿¡æ¯é¢æ¿
     sel_info_rect_ = { 8.0f, 590.0f, panel_w_ - 16.0f, 118.0f };
     hp_input_rect_ = { 16.0f, 636.0f, 168.0f, 28.0f };
     del_btn_       = { 16.0f, 672.0f, 168.0f, 30.0f };
 
-    // ¹¤¾ßÁĞ±í£¨º¬·ÖÇø±êÌâ£©
+    // å·¥å…·åˆ—è¡¨ï¼ˆå«åˆ†åŒºæ ‡é¢˜ï¼‰
     sections_.clear();
     {
-        ToolSection s; s.title = u8"µØĞÎ";
-        s.entries.push_back({ Tool::Land,  u8"Â½µØ", SDL_FRect{} });
-        s.entries.push_back({ Tool::Water, u8"ºÓÁ÷", SDL_FRect{} });
+        auto* catalog = EntityCatalog::instance();
+        ToolSection units_section; units_section.title = u8"è‡ªå®šä¹‰å…µç§";
+        for (const auto& u : catalog->units()) {
+            if (u.builtin()) continue;
+            units_section.entries.push_back({ Tool::CustomUnit, u.name, SDL_FRect{}, u.type_id });
+        }
+        if (!units_section.entries.empty()) sections_.push_back(std::move(units_section));
+
+        ToolSection buildings_section; buildings_section.title = u8"è‡ªå®šä¹‰å»ºç­‘";
+        for (const auto& b : catalog->buildings()) {
+            if (b.builtin()) continue;
+            buildings_section.entries.push_back({ Tool::CustomBuilding, b.name, SDL_FRect{}, b.type_id });
+        }
+        if (!buildings_section.entries.empty()) sections_.push_back(std::move(buildings_section));
+    }
+    {
+        ToolSection s; s.title = u8"åœ°å½¢";
+        s.entries.push_back({ Tool::Land,  u8"é™†åœ°", SDL_FRect{} });
+        s.entries.push_back({ Tool::Water, u8"æ²³æµ", SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
     {
-        ToolSection s; s.title = u8"×ÊÔ´";
-        s.entries.push_back({ Tool::Wood,    u8"Ê÷Ä¾",   SDL_FRect{} });
-        s.entries.push_back({ Tool::SGold,   u8"Ğ¡½ğ¿ó", SDL_FRect{} });
-        s.entries.push_back({ Tool::LGold,   u8"´ó½ğ¿ó", SDL_FRect{} });
-        s.entries.push_back({ Tool::Stone,   u8"Ê¯¿ó",   SDL_FRect{} });
-        s.entries.push_back({ Tool::Berries, u8"½¬¹û´Ô", SDL_FRect{} });
+        ToolSection s; s.title = u8"èµ„æº";
+        s.entries.push_back({ Tool::Wood,    u8"æ ‘æœ¨",   SDL_FRect{} });
+        s.entries.push_back({ Tool::SGold,   u8"å°é‡‘çŸ¿", SDL_FRect{} });
+        s.entries.push_back({ Tool::LGold,   u8"å¤§é‡‘çŸ¿", SDL_FRect{} });
+        s.entries.push_back({ Tool::Stone,   u8"çŸ³çŸ¿",   SDL_FRect{} });
+        s.entries.push_back({ Tool::Berries, u8"æµ†æœä¸›", SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
     {
-        ToolSection s; s.title = u8"±øÖÖ";
-        s.entries.push_back({ Tool::Villager,    u8"Å©Ãñ", SDL_FRect{} });
-        s.entries.push_back({ Tool::Archer,      u8"¹­±ø", SDL_FRect{} });
-        s.entries.push_back({ Tool::Crossbowman, u8"åóÊÖ", SDL_FRect{} });
+        ToolSection s; s.title = u8"å…µç§";
+        s.entries.push_back({ Tool::Villager,    u8"å†œæ°‘", SDL_FRect{} });
+        s.entries.push_back({ Tool::Archer,      u8"å¼“å…µ", SDL_FRect{} });
+        s.entries.push_back({ Tool::Crossbowman, u8"å¼©æ‰‹", SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
     {
-        ToolSection s; s.title = u8"½¨Öş";
-        s.entries.push_back({ Tool::TownCenter,   u8"³ÇÕòÖĞĞÄ", SDL_FRect{} });
-        s.entries.push_back({ Tool::ArcheryRange, u8"°Ğ³¡",     SDL_FRect{} });
+        ToolSection s; s.title = u8"å»ºç­‘";
+        s.entries.push_back({ Tool::TownCenter,   u8"åŸé•‡ä¸­å¿ƒ", SDL_FRect{} });
+        s.entries.push_back({ Tool::ArcheryRange, u8"é¶åœº",     SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
     {
-        ToolSection s; s.title = u8"²Ù×÷";
-        s.entries.push_back({ Tool::Select, u8"Ñ¡Ôñ", SDL_FRect{} });
-        s.entries.push_back({ Tool::Eraser, u8"ÏğÆ¤²Á", SDL_FRect{} });
+        ToolSection s; s.title = u8"æ“ä½œ";
+        s.entries.push_back({ Tool::Select, u8"é€‰æ‹©", SDL_FRect{} });
+        s.entries.push_back({ Tool::Eraser, u8"æ©¡çš®æ“¦", SDL_FRect{} });
         sections_.push_back(std::move(s));
     }
 
     const float btn_h = 22.0f;
-    const float header_h = 22.0f;   // ±êÌâÓëÊ×Ïî¼ä¾à£¬±ÜÃâÎÄ×ÖÖØµş
+    const float header_h = 22.0f;   // æ ‡é¢˜ä¸é¦–é¡¹é—´è·ï¼Œé¿å…æ–‡å­—é‡å 
     const float x0 = 8.0f, x1 = panel_w_ - 8.0f;
     float y = tools_top_;
     for (auto& s : sections_) {
@@ -322,11 +347,11 @@ void MapEditorScene::layout() {
             e.rect = { x0, y, x1 - x0, btn_h };
             y += btn_h + 2.0f;
         }
-        y += 6.0f;   // ·ÖÇø¼ä¸ô
+        y += 6.0f;   // åˆ†åŒºé—´éš”
     }
-    tools_content_h_ = y - tools_top_;   // ¹¤¾ßÄÚÈİ×Ü¸ß£¨ÓÃÓÚ¹ö¶¯·¶Î§£©
+    tools_content_h_ = y - tools_top_;   // å·¥å…·å†…å®¹æ€»é«˜ï¼ˆç”¨äºæ»šåŠ¨èŒƒå›´ï¼‰
 
-    // Ğ¡µØÍ¼£º¹Ì¶¨ 180 ¿í¡¢°´µØÍ¼×İºá±È¶¨¸ß£¬Í£¿¿ÔÚ»­²¼ÓÒÏÂ½Ç
+    // å°åœ°å›¾ï¼šå›ºå®š 180 å®½ã€æŒ‰åœ°å›¾çºµæ¨ªæ¯”å®šé«˜ï¼Œåœé åœ¨ç”»å¸ƒå³ä¸‹è§’
     {
         float mw = 180.0f;
         float ratio = (float)editor_map_.get_height() / (float)std::max(1, editor_map_.get_width());
@@ -335,7 +360,7 @@ void MapEditorScene::layout() {
     }
 }
 
-// ==================== ÄÚÈİ¹ÜÀí ====================
+// ==================== å†…å®¹ç®¡ç† ====================
 
 void MapEditorScene::reset_to_empty() {
     editor_map_.reset_terrain(TerrainType::Mud);
@@ -474,11 +499,11 @@ void MapEditorScene::cleanup_invalid() {
     if (removed) {
         if (selected_id_ && !WorldEntityMgr::instance()->get_object_by_id(selected_id_))
             selected_id_ = 0;
-        WorldEntityMgr::instance()->on_update();   // ÇåÀíÊ§Ğ§ÊµÌå + ÖØ½¨¶¯Ì¬ÕÏ°­
+        WorldEntityMgr::instance()->on_update();   // æ¸…ç†å¤±æ•ˆå®ä½“ + é‡å»ºåŠ¨æ€éšœç¢
     }
 }
 
-// ==================== ÊäÈë ====================
+// ==================== è¾“å…¥ ====================
 
 bool MapEditorScene::inside_viewport(float x, float y) const {
     return x >= panel_w_ && y >= topbar_h_ && x < LOGICAL_W && y < LOGICAL_H;
@@ -560,13 +585,13 @@ void MapEditorScene::erase_at(float mx, float my) {
     int gy = (int)std::floor(world.y / cs);
     int half = (brush_size_ - 1) / 2;
 
-    // ±ÊË¢·¶Î§ºĞ£¨ÊÀ½ç×ø±ê£¬ÓëÔ¤ÀÀ ghost ¿òÒ»ÖÂ£©
+    // ç¬”åˆ·èŒƒå›´ç›’ï¼ˆä¸–ç•Œåæ ‡ï¼Œä¸é¢„è§ˆ ghost æ¡†ä¸€è‡´ï¼‰
     CollisionBox brush{
         { (float)((gx - half) * cs), (float)((gy - half) * cs) },
         (float)(brush_size_ * cs), (float)(brush_size_ * cs)
     };
 
-    // 1) ²Á³ı±ÊË¢·¶Î§ÄÚËùÓĞÊµÌå£¨Óë±ÊË¢ÓĞÖØµş¼´²Á³ı£¬²»ÔÙÊÇµ¥¸öÊó±êµãÃüÖĞ£©
+    // 1) æ“¦é™¤ç¬”åˆ·èŒƒå›´å†…æ‰€æœ‰å®ä½“ï¼ˆä¸ç¬”åˆ·æœ‰é‡å å³æ“¦é™¤ï¼Œä¸å†æ˜¯å•ä¸ªé¼ æ ‡ç‚¹å‘½ä¸­ï¼‰
     std::vector<uint64_t> to_erase;
     const auto& pool = WorldEntityMgr::instance()->get_object_pool();
     for (auto& [id, obj] : pool) {
@@ -583,9 +608,9 @@ void MapEditorScene::erase_at(float mx, float my) {
         if (selected_id_ == id) selected_id_ = 0;
         erased = true;
     }
-    if (erased) WorldEntityMgr::instance()->on_update();   // ÇåÀíÊ§Ğ§ÊµÌå + ÖØ½¨¶¯Ì¬ÕÏ°­
+    if (erased) WorldEntityMgr::instance()->on_update();   // æ¸…ç†å¤±æ•ˆå®ä½“ + é‡å»ºåŠ¨æ€éšœç¢
 
-    // 2) ²æµôµØĞÎ£º°Ñ±ÊË¢·¶Î§ÄÚµÄË®±ä»ØÂ½µØ£¨Mud£©
+    // 2) å‰æ‰åœ°å½¢ï¼šæŠŠç¬”åˆ·èŒƒå›´å†…çš„æ°´å˜å›é™†åœ°ï¼ˆMudï¼‰
     bool changed = false;
     for (int dy = 0; dy < brush_size_; ++dy) {
         for (int dx = 0; dx < brush_size_; ++dx) {
@@ -616,7 +641,7 @@ void MapEditorScene::paint_terrain_at(float mx, float my) {
     int gy = (int)std::floor(world.y / cs);
     TerrainType t = (cur_tool_ == Tool::Water) ? TerrainType::Water : TerrainType::Mud;
     bool is_water = (t == TerrainType::Water);
-    int half = (brush_size_ - 1) / 2;   // ×óÉÏ½ÇÆ«ÒÆ£¬Ê¹ brush_size_¡Ábrush_size_ ·½¿é´óÖÂÒÔÊó±ê¸ñÎªÖĞĞÄ
+    int half = (brush_size_ - 1) / 2;   // å·¦ä¸Šè§’åç§»ï¼Œä½¿ brush_size_Ã—brush_size_ æ–¹å—å¤§è‡´ä»¥é¼ æ ‡æ ¼ä¸ºä¸­å¿ƒ
     bool changed = false;
     for (int dy = 0; dy < brush_size_; ++dy) {
         for (int dx = 0; dx < brush_size_; ++dx) {
@@ -624,7 +649,7 @@ void MapEditorScene::paint_terrain_at(float mx, float my) {
             int cy = gy - half + dy;
             if (cx < 0 || cy < 0 || cx >= editor_map_.get_width() || cy >= editor_map_.get_height()) continue;
             if (editor_map_.get_grid()[cy][cx] == t) continue;
-            // ºÓÁ÷²»ÄÜ·Åµ½ÊµÌå£¨×ÊÔ´/½¨Öş/µ¥Î»£©½ÅÏÂ£º±»ÕÚµ²µÄ¸ñ×ÓÌø¹ı£¬ÆäÓà¸ñ×ÓÕı³£ÉúĞ§
+            // æ²³æµä¸èƒ½æ”¾åˆ°å®ä½“ï¼ˆèµ„æº/å»ºç­‘/å•ä½ï¼‰è„šä¸‹ï¼šè¢«é®æŒ¡çš„æ ¼å­è·³è¿‡ï¼Œå…¶ä½™æ ¼å­æ­£å¸¸ç”Ÿæ•ˆ
             if (is_water && cell_occupied(cx, cy)) continue;
             editor_map_.set_grid_by_pos(cx, cy, t);
             changed = true;
@@ -641,7 +666,7 @@ CollisionBox MapEditorScene::entity_placement_box(float mx, float my) const {
     int cs = editor_map_.get_cell_size();
 
     if (is_unit_tool(cur_tool_)) {
-        // µ¥Î» 2¡Á2£¨ÓëÄ¾Ò»ÖÂ£©£ºÓÃ lround Îü¸½£¬ÈÃÖ¸ÕëÂäÔÚµ¥Î»ºĞÖĞĞÄ
+        // å•ä½ 2Ã—2ï¼ˆä¸æœ¨ä¸€è‡´ï¼‰ï¼šç”¨ lround å¸é™„ï¼Œè®©æŒ‡é’ˆè½åœ¨å•ä½ç›’ä¸­å¿ƒ
         int gx = (int)std::lround(world.x / cs);
         int gy = (int)std::lround(world.y / cs);
         int ox = gx - UNIT_SIZE_CELLS / 2;
@@ -654,10 +679,10 @@ CollisionBox MapEditorScene::entity_placement_box(float mx, float my) const {
     if (is_resource_tool(cur_tool_)) n = resource_size_cells(tool_to_resource(cur_tool_));
     else if (is_building_tool(cur_tool_)) n = building_size_cells(tool_to_building(cur_tool_));
 
-    // ×ÊÔ´/½¨Öş n¡Án ¸ñ£ºÓë¶Ô¾ÖÄÚ·ÅÖÃ£¨input_system::placement_anchor_cell£©±£³ÖÒ»ÖÂ£¬
-    // ÏÈ°ÑÖ¸ÕëÎü¸½µ½×î½ü¸ñÖĞĞÄ£¬ÔÙ»ØÍË°ë¸öÕ¼ÓÃ¿í£¬ÈÃÖ¸ÕëÂäÔÚºĞ×ÓÖĞĞÄ¡£
-    // Ö®Ç°ÓÃ floor »áÈÃÅ¼Êı³ß´ç£¨Ä¾ 2¡Á2¡¢½¬¹û 4¡Á4¡¢Ê¯/½ğ 10¡Á10£©µÄºĞ×ÓÕûÌåÆ«ÒÆ°ë¸ñ£¬
-    // Ö¸ÕëÂäÔÚºĞ×ÓÓÒ/ÏÂ±ßÔµ¶ø·ÇÖĞĞÄ£¬½ôÌù¿ÕÇ»Ê±¾Í·Å²»½øÈ¥¡£
+    // èµ„æº/å»ºç­‘ nÃ—n æ ¼ï¼šä¸å¯¹å±€å†…æ”¾ç½®ï¼ˆinput_system::placement_anchor_cellï¼‰ä¿æŒä¸€è‡´ï¼Œ
+    // å…ˆæŠŠæŒ‡é’ˆå¸é™„åˆ°æœ€è¿‘æ ¼ä¸­å¿ƒï¼Œå†å›é€€åŠä¸ªå ç”¨å®½ï¼Œè®©æŒ‡é’ˆè½åœ¨ç›’å­ä¸­å¿ƒã€‚
+    // ä¹‹å‰ç”¨ floor ä¼šè®©å¶æ•°å°ºå¯¸ï¼ˆæœ¨ 2Ã—2ã€æµ†æœ 4Ã—4ã€çŸ³/é‡‘ 10Ã—10ï¼‰çš„ç›’å­æ•´ä½“åç§»åŠæ ¼ï¼Œ
+    // æŒ‡é’ˆè½åœ¨ç›’å­å³/ä¸‹è¾¹ç¼˜è€Œéä¸­å¿ƒï¼Œç´§è´´ç©ºè…”æ—¶å°±æ”¾ä¸è¿›å»ã€‚
     int gx = (int)std::lround(world.x / cs);
     int gy = (int)std::lround(world.y / cs);
     int ox = gx - n / 2;
@@ -686,7 +711,7 @@ void MapEditorScene::place_at(float mx, float my) {
         obj = factory_.create_unit_by_type(tool_to_unit(cur_tool_), box, false);
     }
     if (obj) entities_.push_back(make_record(obj));
-    else log_placement_block(editor_map_, factory_, box, true);   // µã»÷·ÅÖÃÊ§°Ü£ºÇ¿ÖÆÊä³ö×èÈûÔ­Òò
+    else log_placement_block(editor_map_, factory_, box, true);   // ç‚¹å‡»æ”¾ç½®å¤±è´¥ï¼šå¼ºåˆ¶è¾“å‡ºé˜»å¡åŸå› 
 }
 
 bool MapEditorScene::placement_valid(float mx, float my) const {
@@ -696,7 +721,7 @@ bool MapEditorScene::placement_valid(float mx, float my) const {
     int gx = (int)std::floor(world.x / cs);
     int gy = (int)std::floor(world.y / cs);
 
-    // µØĞÎÍ¿Ë¢ / ÏğÆ¤²Á£ºÖ»Ğè±ÊË¢·¶Î§È«²¿ÔÚ½çÄÚ
+    // åœ°å½¢æ¶‚åˆ· / æ©¡çš®æ“¦ï¼šåªéœ€ç¬”åˆ·èŒƒå›´å…¨éƒ¨åœ¨ç•Œå†…
     if (is_terrain_tool(cur_tool_) || cur_tool_ == Tool::Eraser) {
         int half = (brush_size_ - 1) / 2;
         return (gx - half >= 0) && (gy - half >= 0)
@@ -722,7 +747,7 @@ void MapEditorScene::delete_selected() {
     if (obj) WorldEntityMgr::instance()->destroy_object(obj);
     remove_record(selected_id_);
     selected_id_ = 0;
-    WorldEntityMgr::instance()->on_update();   // ÇåÀíÊ§Ğ§ÊµÌå + ÖØ½¨¶¯Ì¬ÕÏ°­
+    WorldEntityMgr::instance()->on_update();   // æ¸…ç†å¤±æ•ˆå®ä½“ + é‡å»ºåŠ¨æ€éšœç¢
 }
 
 void MapEditorScene::apply_health_input() {
@@ -741,28 +766,28 @@ void MapEditorScene::apply_health_input() {
     v = std::clamp(v, 1, 999999);
     hp->current_health = v;
     hp->max_health = v;
-    // Í¬²½¼ÇÂ¼
+    // åŒæ­¥è®°å½•
     for (auto& r : entities_) if (r.obj_id == selected_id_) { r.health = v; break; }
 }
 
-// ==================== ²Ù×÷ ====================
+// ==================== æ“ä½œ ====================
 
 void MapEditorScene::do_save() {
     cleanup_invalid();
-    snapshot_entities();   // ÒÔÊÀ½çÊµÌåÎª×¼Éú³É¼ÇÂ¼
+    snapshot_entities();   // ä»¥ä¸–ç•Œå®ä½“ä¸ºå‡†ç”Ÿæˆè®°å½•
     try {
         std::filesystem::path dir = "maps";
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
         std::string path = (dir / (filename_ + ".srmap")).string();
         if (save_map(path, editor_map_, entities_, player_count_)) {
-            set_status(u8"ÒÑ±£´æ: maps/" + filename_ + u8".srmap");
+            set_status(u8"å·²ä¿å­˜: maps/" + filename_ + u8".srmap");
             refresh_map_files();
         }
         else
-            set_status(u8"±£´æÊ§°Ü");
+            set_status(u8"ä¿å­˜å¤±è´¥");
     }
-    catch (...) { set_status(u8"±£´æÊ§°Ü"); }
+    catch (...) { set_status(u8"ä¿å­˜å¤±è´¥"); }
 }
 
 void MapEditorScene::do_load() {
@@ -770,10 +795,10 @@ void MapEditorScene::do_load() {
     std::vector<EntityRecord> loaded;
     int loaded_pc = 2;
     if (!load_map(path, editor_map_, loaded, loaded_pc)) {
-        set_status(u8"ÔØÈëÊ§°Ü: " + filename_ + u8".srmap ²»´æÔÚ»ò¸ñÊ½²»·û");
+        set_status(u8"è½½å…¥å¤±è´¥: " + filename_ + u8".srmap ä¸å­˜åœ¨æˆ–æ ¼å¼ä¸ç¬¦");
         return;
     }
-    // Ìæ»»ÄÚÈİ
+    // æ›¿æ¢å†…å®¹
     editor_map_.clear_dynamic_obstacle_field();
     WorldEntityMgr::instance()->reset_world();
     WorldEntityMgr::instance()->init_world(&editor_map_);
@@ -782,45 +807,45 @@ void MapEditorScene::do_load() {
     selected_id_ = 0;
     player_count_ = loaded_pc;
     if (place_player_ > player_count_) place_player_ = 0;
-    layout();   // °´ÔØÈëµÄÍæ¼ÒÊıÁ¿ÖØ½¨¹éÊô°´Å¥
+    layout();   // æŒ‰è½½å…¥çš„ç©å®¶æ•°é‡é‡å»ºå½’å±æŒ‰é’®
     terrain_dirty_ = true;
     static_dirty_ = false;
     spawn_from_records();
-    set_status(u8"ÒÑÔØÈë: " + filename_ + u8".srmap£¨ÊµÌå " + std::to_string(entities_.size()) + u8" ¸ö£¬Íæ¼Ò " + std::to_string(player_count_) + u8"£©");
+    set_status(u8"å·²è½½å…¥: " + filename_ + u8".srmapï¼ˆå®ä½“ " + std::to_string(entities_.size()) + u8" ä¸ªï¼Œç©å®¶ " + std::to_string(player_count_) + u8"ï¼‰");
 }
 
 void MapEditorScene::do_clear() {
     reset_to_empty();
-    set_status(u8"ÒÑÇå¿ÕµØÍ¼");
+    set_status(u8"å·²æ¸…ç©ºåœ°å›¾");
 }
 
 void MapEditorScene::do_delete_map() {
     if (map_sel_ < 0 || map_sel_ >= (int)map_files_.size()) {
         confirm_delete_ = false;
-        set_status(u8"ÇëÏÈÔÚÏÂ·½ÁĞ±íÖĞÑ¡ÔñÒªÉ¾³ıµÄµØÍ¼");
+        set_status(u8"è¯·å…ˆåœ¨ä¸‹æ–¹åˆ—è¡¨ä¸­é€‰æ‹©è¦åˆ é™¤çš„åœ°å›¾");
         return;
     }
     std::string name = map_files_[map_sel_];
     if (!confirm_delete_ || confirm_delete_name_ != name) {
         confirm_delete_ = true;
         confirm_delete_name_ = name;
-        set_status(u8"ÔÙ´Îµã»÷¡¸É¾³ıµØÍ¼¡¹È·ÈÏÉ¾³ı: " + name);
+        set_status(u8"å†æ¬¡ç‚¹å‡»ã€Œåˆ é™¤åœ°å›¾ã€ç¡®è®¤åˆ é™¤: " + name);
         return;
     }
-    // ¶ş´ÎÈ·ÈÏÍ¨¹ı£¬Ö´ĞĞÉ¾³ı
+    // äºŒæ¬¡ç¡®è®¤é€šè¿‡ï¼Œæ‰§è¡Œåˆ é™¤
     confirm_delete_ = false;
     confirm_delete_name_.clear();
     std::error_code ec;
     std::filesystem::path path = std::filesystem::path("maps") / (name + ".srmap");
     std::filesystem::remove(path, ec);
     if (ec) {
-        set_status(u8"É¾³ıÊ§°Ü");
+        set_status(u8"åˆ é™¤å¤±è´¥");
         return;
     }
     refresh_map_files();
     if (filename_ == name)
         filename_ = next_default_name();
-    set_status(u8"ÒÑÉ¾³ıµØÍ¼: " + name);
+    set_status(u8"å·²åˆ é™¤åœ°å›¾: " + name);
 }
 
 void MapEditorScene::do_back() {
@@ -848,7 +873,7 @@ void MapEditorScene::apply_size(MapSize s) {
     terrain_dirty_ = true;
     static_dirty_ = false;
 
-    // ÖØĞÂÊÊÅäÏà»ú£¬ÈÃĞÂ³ß´çÕûÍ¼ÆÌÂú»­²¼
+    // é‡æ–°é€‚é…ç›¸æœºï¼Œè®©æ–°å°ºå¯¸æ•´å›¾é“ºæ»¡ç”»å¸ƒ
     float vw = LOGICAL_W - panel_w_;
     float vh = LOGICAL_H - topbar_h_;
     camera_.init(vw, vh,
@@ -858,16 +883,16 @@ void MapEditorScene::apply_size(MapSize s) {
     camera_.set_scale(fit);
     camera_.set_position({ 0.0f, 0.0f });
 
-    layout();   // µØÍ¼³ß´ç±äÁË£¬ÖØ½¨Ğ¡µØÍ¼¾ØĞÎµÈ²¼¾Ö
-    set_status(u8"ÒÑÇĞ»»µØÍ¼³ß´ç: " + std::to_string(w) + u8"x" + std::to_string(h));
+    layout();   // åœ°å›¾å°ºå¯¸å˜äº†ï¼Œé‡å»ºå°åœ°å›¾çŸ©å½¢ç­‰å¸ƒå±€
+    set_status(u8"å·²åˆ‡æ¢åœ°å›¾å°ºå¯¸: " + std::to_string(w) + u8"x" + std::to_string(h));
 }
 
 void MapEditorScene::apply_player_count(int n) {
     if (player_count_ == n) return;
     player_count_ = n;
-    if (place_player_ > n) place_player_ = n;   // µ±Ç°Ñ¡ÖĞÍæ¼Ò³¬³ö·¶Î§Ê±ÊÕËõ
-    layout();   // ÖØ½¨¹éÊô°´Å¥Íø¸ñ
-    set_status(u8"Íæ¼ÒÊıÁ¿: " + std::to_string(n));
+    if (place_player_ > n) place_player_ = n;   // å½“å‰é€‰ä¸­ç©å®¶è¶…å‡ºèŒƒå›´æ—¶æ”¶ç¼©
+    layout();   // é‡å»ºå½’å±æŒ‰é’®ç½‘æ ¼
+    set_status(u8"ç©å®¶æ•°é‡: " + std::to_string(n));
 }
 
 void MapEditorScene::refresh_map_files() {
@@ -883,13 +908,13 @@ void MapEditorScene::refresh_map_files() {
         map_files_.push_back(entry.path().stem().string());
     }
     std::sort(map_files_.begin(), map_files_.end());
-    // Èôµ±Ç°ÎÄ¼şÃûÔÚÁĞ±íÖĞ£¬Ôò¸ßÁÁ¶ÔÓ¦Ïî
+    // è‹¥å½“å‰æ–‡ä»¶ååœ¨åˆ—è¡¨ä¸­ï¼Œåˆ™é«˜äº®å¯¹åº”é¡¹
     for (size_t i = 0; i < map_files_.size(); ++i)
         if (map_files_[i] == filename_) { map_sel_ = (int)i; break; }
 }
 
 std::string MapEditorScene::next_default_name() const {
-    // ´ÓÒÑÓĞµØÍ¼ÎÄ¼şÃûÀïÌáÈ¡ËùÓĞÁ¬ĞøÊı×Ö¶Î£¬È¡×î´óÖµ×÷Îª"ÒÑÓÃ×î´ó±àºÅ"
+    // ä»å·²æœ‰åœ°å›¾æ–‡ä»¶åé‡Œæå–æ‰€æœ‰è¿ç»­æ•°å­—æ®µï¼Œå–æœ€å¤§å€¼ä½œä¸º"å·²ç”¨æœ€å¤§ç¼–å·"
     int max_num = 0;
     for (const auto& name : map_files_) {
         int num = 0;
@@ -906,7 +931,7 @@ std::string MapEditorScene::next_default_name() const {
     }
     int next = max_num + 1;
     std::string ns = std::to_string(next);
-    if (ns.size() < 2) ns = "0" + ns;   // ÓëÄ¬ÈÏ map01 ±£³ÖÒ»ÖÂ£¬ÖÁÉÙÁ½Î»
+    if (ns.size() < 2) ns = "0" + ns;   // ä¸é»˜è®¤ map01 ä¿æŒä¸€è‡´ï¼Œè‡³å°‘ä¸¤ä½
     return "map" + ns;
 }
 
@@ -922,10 +947,10 @@ void MapEditorScene::handle_key(int key) {
             return;
         }
         if (key == SDLK_ESCAPE) {
-            hp_focused_ = false;   // È¡Ïû£¬²»Ó¦ÓÃ
+            hp_focused_ = false;   // å–æ¶ˆï¼Œä¸åº”ç”¨
             return;
         }
-        return;   // ÑªÁ¿ÊäÈë¿ò¾Û½¹Ê±£¬ÆäÓà°´¼ü²»´¥·¢±à¼­Æ÷¿ì½İ¼ü
+        return;   // è¡€é‡è¾“å…¥æ¡†èšç„¦æ—¶ï¼Œå…¶ä½™æŒ‰é”®ä¸è§¦å‘ç¼–è¾‘å™¨å¿«æ·é”®
     }
 
     if (filename_focused_) {
@@ -937,7 +962,7 @@ void MapEditorScene::handle_key(int key) {
             filename_focused_ = false;
             return;
         }
-        return;   // ÊäÈë¿ò¾Û½¹Ê±£¬ÆäÓà°´¼ü²»´¥·¢±à¼­Æ÷¿ì½İ¼ü
+        return;   // è¾“å…¥æ¡†èšç„¦æ—¶ï¼Œå…¶ä½™æŒ‰é”®ä¸è§¦å‘ç¼–è¾‘å™¨å¿«æ·é”®
     }
 
     switch (key) {
@@ -970,7 +995,7 @@ void MapEditorScene::on_input(const SDL_Event& event) {
             if (inside_viewport(x, y)) paint_terrain_at(x, y);
         }
         else if (placing_) {
-            // ×ÊÔ´ÅúÁ¿£º³¤°´Á¬Ğø·ÅÖÃ£¬Êó±êÒÆ¶¯µ½ĞÂ¸ñ×ÓÊ±ÔÙ·ÅÒ»¸ö
+            // èµ„æºæ‰¹é‡ï¼šé•¿æŒ‰è¿ç»­æ”¾ç½®ï¼Œé¼ æ ‡ç§»åŠ¨åˆ°æ–°æ ¼å­æ—¶å†æ”¾ä¸€ä¸ª
             if (inside_viewport(x, y) && is_resource_tool(cur_tool_)) {
                 int cs = editor_map_.get_cell_size();
                 CollisionBox box = entity_placement_box(x, y);
@@ -984,7 +1009,7 @@ void MapEditorScene::on_input(const SDL_Event& event) {
             }
         }
         else if (erasing_) {
-            // ÏğÆ¤²Á£º°´×¡ÍÏ¶¯Á¬Ğø²Á³ıÉ¨¹ıµÄÊµÌå
+            // æ©¡çš®æ“¦ï¼šæŒ‰ä½æ‹–åŠ¨è¿ç»­æ“¦é™¤æ‰«è¿‡çš„å®ä½“
             if (inside_viewport(x, y)) erase_at(x, y);
         }
     }
@@ -992,12 +1017,12 @@ void MapEditorScene::on_input(const SDL_Event& event) {
         float x = event.button.x, y = event.button.y;
         if (event.button.button == SDL_BUTTON_LEFT) {
             if (handle_ui_click(x, y)) return;
-            if (point_in_minimap(x, y)) { minimap_click(x, y); return; }   // Ğ¡µØÍ¼µã»÷Ìø×ª£¨ÓÅÏÈÓÚ·ÅÖÃ/Ñ¡Ôñ£©
+            if (point_in_minimap(x, y)) { minimap_click(x, y); return; }   // å°åœ°å›¾ç‚¹å‡»è·³è½¬ï¼ˆä¼˜å…ˆäºæ”¾ç½®/é€‰æ‹©ï¼‰
             if (inside_viewport(x, y)) {
                 if (is_terrain_tool(cur_tool_)) {
                     if (place_mode_ == PlaceMode::Single) {
                         paint_terrain_at(x, y);
-                        cur_tool_ = Tool::Select;   // µ¥¸ö·ÅÖÃ£º·ÅÖÃºó»Øµ½Ñ¡Ôñ
+                        cur_tool_ = Tool::Select;   // å•ä¸ªæ”¾ç½®ï¼šæ”¾ç½®åå›åˆ°é€‰æ‹©
                     }
                     else {
                         painting_ = true;
@@ -1013,7 +1038,7 @@ void MapEditorScene::on_input(const SDL_Event& event) {
                     place_at(x, y);
                     if (place_mode_ == PlaceMode::Single) cur_tool_ = Tool::Select;
                     else if (is_resource_tool(cur_tool_)) {
-                        // ×ÊÔ´ÅúÁ¿£º°´ÏÂºó½øÈë³¤°´Á¬Ğø·ÅÖÃ
+                        // èµ„æºæ‰¹é‡ï¼šæŒ‰ä¸‹åè¿›å…¥é•¿æŒ‰è¿ç»­æ”¾ç½®
                         placing_ = true;
                         int cs = editor_map_.get_cell_size();
                         CollisionBox box = entity_placement_box(x, y);
@@ -1024,10 +1049,10 @@ void MapEditorScene::on_input(const SDL_Event& event) {
             }
         }
         else if (event.button.button == SDL_BUTTON_RIGHT) {
-            // ÓÒ¼ü£ºÈ¡ÏûÑ¡ÖĞ£¨Í¬Ê±ÍË³öÑªÁ¿ÊäÈë£©
+            // å³é”®ï¼šå–æ¶ˆé€‰ä¸­ï¼ˆåŒæ—¶é€€å‡ºè¡€é‡è¾“å…¥ï¼‰
             selected_id_ = 0;
             hp_focused_ = false;
-            // Èô´¦ÓÚ·ÅÖÃ¹¤¾ß£¨ÂÌ¿òÔ¤ÀÀ£©½×¶Î£¬Ò»²¢È¡Ïû¹¤¾ßÑ¡Ôñ»Øµ½¡¸Ñ¡Ôñ¡¹¹¤¾ß
+            // è‹¥å¤„äºæ”¾ç½®å·¥å…·ï¼ˆç»¿æ¡†é¢„è§ˆï¼‰é˜¶æ®µï¼Œä¸€å¹¶å–æ¶ˆå·¥å…·é€‰æ‹©å›åˆ°ã€Œé€‰æ‹©ã€å·¥å…·
             if (cur_tool_ != Tool::Select) {
                 cur_tool_ = Tool::Select;
                 painting_ = false;
@@ -1074,42 +1099,42 @@ void MapEditorScene::on_input(const SDL_Event& event) {
 }
 
 bool MapEditorScene::handle_ui_click(float x, float y) {
-    // µã»÷ÑªÁ¿ÊäÈë¿òÒÔÍâµÄÈÎºÎÎ»ÖÃÊ±£¬ÍË³öÑªÁ¿±à¼­
+    // ç‚¹å‡»è¡€é‡è¾“å…¥æ¡†ä»¥å¤–çš„ä»»ä½•ä½ç½®æ—¶ï¼Œé€€å‡ºè¡€é‡ç¼–è¾‘
     if (hp_focused_ && !point_in(hp_input_rect_, x, y)) hp_focused_ = false;
 
-    // ¶¥²¿¹¤¾ßÌõ
+    // é¡¶éƒ¨å·¥å…·æ¡
     if (point_in(filename_rect_, x, y)) { filename_focused_ = true; return true; }
     if (point_in(btn_save_.rect, x, y))  { filename_focused_ = false; do_save();  return true; }
     if (point_in(btn_load_.rect, x, y))  { filename_focused_ = false; do_load();  return true; }
     if (point_in(btn_clear_.rect, x, y)) { filename_focused_ = false; do_clear(); return true; }
     if (point_in(btn_back_.rect, x, y))  { filename_focused_ = false; do_back();  return true; }
 
-    // µØÍ¼³ß´ç
+    // åœ°å›¾å°ºå¯¸
     if (point_in(size_small_, x, y)) { filename_focused_ = false; apply_size(MapSize::Small);  return true; }
     if (point_in(size_med_, x, y))   { filename_focused_ = false; apply_size(MapSize::Medium); return true; }
     if (point_in(size_large_, x, y)) { filename_focused_ = false; apply_size(MapSize::Large);  return true; }
 
-    // ·ÅÖÃÄ£Ê½
+    // æ”¾ç½®æ¨¡å¼
     if (point_in(mode_single_, x, y)) {
         filename_focused_ = false; place_mode_ = PlaceMode::Single;
-        set_status(u8"µ¥¸ö·ÅÖÃ£º·ÅÖÃºó×Ô¶¯»Øµ½Ñ¡Ôñ"); return true;
+        set_status(u8"å•ä¸ªæ”¾ç½®ï¼šæ”¾ç½®åè‡ªåŠ¨å›åˆ°é€‰æ‹©"); return true;
     }
     if (point_in(mode_batch_, x, y)) {
         filename_focused_ = false; place_mode_ = PlaceMode::Batch;
-        set_status(u8"ÅúÁ¿·ÅÖÃ£º¿ÉÁ¬Ğø·ÅÖÃ"); return true;
+        set_status(u8"æ‰¹é‡æ”¾ç½®ï¼šå¯è¿ç»­æ”¾ç½®"); return true;
     }
 
-    // ±ÊË¢´óĞ¡£¨µØĞÎ¹¤¾ß£©
+    // ç¬”åˆ·å¤§å°ï¼ˆåœ°å½¢å·¥å…·ï¼‰
     if (point_in(brush_1_, x, y)) { brush_size_ = 1; return true; }
     if (point_in(brush_5_, x, y)) { brush_size_ = 5; return true; }
     if (point_in(brush_10_, x, y)) { brush_size_ = 10; return true; }
 
-    // Íæ¼ÒÊıÁ¿
+    // ç©å®¶æ•°é‡
     if (point_in(pc_2_, x, y)) { apply_player_count(2); return true; }
     if (point_in(pc_4_, x, y)) { apply_player_count(4); return true; }
     if (point_in(pc_8_, x, y)) { apply_player_count(8); return true; }
 
-    // ¹éÊôÍæ¼Ò£¨index 0=ÖĞÁ¢, 1..N=Íæ¼Ò£©
+    // å½’å±ç©å®¶ï¼ˆindex 0=ä¸­ç«‹, 1..N=ç©å®¶ï¼‰
     for (size_t i = 0; i < owner_btns_.size(); ++i) {
         if (point_in(owner_btns_[i], x, y)) {
             place_player_ = (int)i;
@@ -1117,7 +1142,7 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
         }
     }
 
-    // Ñ¡ÖĞĞÅÏ¢Ãæ°å°´Å¥
+    // é€‰ä¸­ä¿¡æ¯é¢æ¿æŒ‰é’®
     if (selected_id_) {
         GameObject* sel = WorldEntityMgr::instance()->get_object_by_id(selected_id_);
         if (sel && sel->get_component<Harvestable>()) {
@@ -1132,7 +1157,7 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
         if (point_in(del_btn_, x, y)) { delete_selected(); return true; }
     }
 
-    // µØÍ¼ÎÄ¼şÁĞ±í£¨Ñ¡Ôñ±£´æ/ÔØÈëÄ¿±ê / É¾³ı£©
+    // åœ°å›¾æ–‡ä»¶åˆ—è¡¨ï¼ˆé€‰æ‹©ä¿å­˜/è½½å…¥ç›®æ ‡ / åˆ é™¤ï¼‰
     if (point_in(btn_delete_map_.rect, x, y)) { filename_focused_ = false; do_delete_map(); return true; }
 
     if (y >= map_list_top_ && y <= map_list_bottom_) {
@@ -1144,21 +1169,22 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
                 filename_ = map_files_[i];
                 map_sel_ = (int)i;
                 filename_focused_ = false;
-                confirm_delete_ = false;   // ÇĞ»»Ñ¡ÖĞºó£¬È¡ÏûÖ®Ç°µÄÉ¾³ıÈ·ÈÏ
-                set_status(u8"ÒÑÑ¡ÔñµØÍ¼: " + filename_ + u8"£¨µã¡°ÔØÈë¡±´ò¿ª / µã¡°±£´æ¡±¸²¸Ç£©");
+                confirm_delete_ = false;   // åˆ‡æ¢é€‰ä¸­åï¼Œå–æ¶ˆä¹‹å‰çš„åˆ é™¤ç¡®è®¤
+                set_status(u8"å·²é€‰æ‹©åœ°å›¾: " + filename_ + u8"ï¼ˆç‚¹â€œè½½å…¥â€æ‰“å¼€ / ç‚¹â€œä¿å­˜â€è¦†ç›–ï¼‰");
                 return true;
             }
         }
-        return false;   // ÁĞ±í¿Õ°×´¦²»´©Í¸
+        return false;   // åˆ—è¡¨ç©ºç™½å¤„ä¸ç©¿é€
     }
 
-    // ¹¤¾ß°´Å¥£¨½öÔÚ¹¤¾ßÁĞ±í¿ÉÊÓÇøÓòÄÚÏìÓ¦£©
+    // å·¥å…·æŒ‰é’®ï¼ˆä»…åœ¨å·¥å…·åˆ—è¡¨å¯è§†åŒºåŸŸå†…å“åº”ï¼‰
     if (y >= tools_top_ && y <= tools_bottom_) {
         float content_y = y + tool_scroll_;
         for (auto& s : sections_) {
             for (auto& e : s.entries) {
                 if (point_in(e.rect, x, content_y)) {
                     cur_tool_ = e.tool;
+                    custom_type_id_ = e.type_id;
                     return true;
                 }
             }
@@ -1167,7 +1193,7 @@ bool MapEditorScene::handle_ui_click(float x, float y) {
     return false;
 }
 
-// ==================== äÖÈ¾ ====================
+// ==================== æ¸²æŸ“ ====================
 
 void MapEditorScene::bake_terrain() {
     if (!renderer) return;
@@ -1250,7 +1276,7 @@ void MapEditorScene::render_entities() {
             SDL_RenderFillRect(renderer, &dst);
         }
 
-        // µ¥Î»±£ÁôÍâ¿ò£º°´¹éÊôÍæ¼Ò×ÅÉ«£¨0=ÖĞÁ¢»Ò£¬1..N=×¨ÊôÉ«£©£¬ÈÃ 32x32 ½ÅÓ¡¿É¼û
+        // å•ä½ä¿ç•™å¤–æ¡†ï¼šæŒ‰å½’å±ç©å®¶ç€è‰²ï¼ˆ0=ä¸­ç«‹ç°ï¼Œ1..N=ä¸“å±è‰²ï¼‰ï¼Œè®© 32x32 è„šå°å¯è§
         if (obj->get_component<UnitType>()) {
             auto* own = obj->get_component<Ownership>();
             int pid = own ? own->player_id : 0;
@@ -1281,17 +1307,17 @@ void MapEditorScene::minimap_click(float x, float y) {
     float wy = v * mh_world;
     float vw = camera_.get_screen_w() / camera_.get_scale();
     float vh = camera_.get_screen_h() / camera_.get_scale();
-    camera_.set_position({ wx - vw * 0.5f, wy - vh * 0.5f });   // Ïà»úÖĞĞÄ¶Ô×¼µã»÷µã£¨ÄÚ²¿»á¼ĞÈ¡/¾ÓÖĞ£©
+    camera_.set_position({ wx - vw * 0.5f, wy - vh * 0.5f });   // ç›¸æœºä¸­å¿ƒå¯¹å‡†ç‚¹å‡»ç‚¹ï¼ˆå†…éƒ¨ä¼šå¤¹å–/å±…ä¸­ï¼‰
 }
 
 void MapEditorScene::render_minimap() {
     const SDL_FRect& mm = minimap_rect_;
     if (mm.w <= 0 || mm.h <= 0) return;
 
-    // °ëÍ¸Ã÷±³¾° + ±ß¿ò
+    // åŠé€æ˜èƒŒæ™¯ + è¾¹æ¡†
     ui_fill_rect(renderer, mm, { 12, 16, 28, 220 }, { 120, 140, 190, 255 }, 2);
 
-    // µØĞÎËõÂÔ£ºÖ±½Ó¸´ÓÃÕûÍ¼µØĞÎÎÆÀí£¬Ëõ·Åµ½Ğ¡µØÍ¼ÇøÓò
+    // åœ°å½¢ç¼©ç•¥ï¼šç›´æ¥å¤ç”¨æ•´å›¾åœ°å½¢çº¹ç†ï¼Œç¼©æ”¾åˆ°å°åœ°å›¾åŒºåŸŸ
     if (terrain_dirty_) bake_terrain();
     SDL_Texture* tex = TextureCache::instance()->get_texture_by_id(terrain_bake_.get_texture_id());
     if (tex) {
@@ -1301,7 +1327,7 @@ void MapEditorScene::render_minimap() {
         SDL_SetRenderClipRect(renderer, nullptr);
     }
 
-    // ÊµÌåĞ¡µã£º×ÊÔ´ÂÌ / ½¨Öş»Æ / µ¥Î»°´Íæ¼ÒÉ«
+    // å®ä½“å°ç‚¹ï¼šèµ„æºç»¿ / å»ºç­‘é»„ / å•ä½æŒ‰ç©å®¶è‰²
     int cs = editor_map_.get_cell_size();
     float mw_world = (float)(editor_map_.get_width() * cs);
     float mh_world = (float)(editor_map_.get_height() * cs);
@@ -1315,18 +1341,18 @@ void MapEditorScene::render_minimap() {
         const auto& box = obj->get_collision_box();
         Vector2 p = to_mini(box.position.x + box.width * 0.5f, box.position.y + box.height * 0.5f);
         SDL_Color c;
-        if (obj->get_component<Harvestable>())        c = { 80, 200, 80, 255 };   // ×ÊÔ´ÂÌ
-        else if (obj->get_component<BuildingType>())  c = { 230, 200, 60, 255 };  // ½¨Öş»Æ
+        if (obj->get_component<Harvestable>())        c = { 80, 200, 80, 255 };   // èµ„æºç»¿
+        else if (obj->get_component<BuildingType>())  c = { 230, 200, 60, 255 };  // å»ºç­‘é»„
         else {
             auto* own = obj->get_component<Ownership>();
-            c = player_frame_color(own ? own->player_id : 0);                     // µ¥Î»°´Íæ¼ÒÉ«
+            c = player_frame_color(own ? own->player_id : 0);                     // å•ä½æŒ‰ç©å®¶è‰²
         }
         SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
         SDL_FRect dot{ p.x - 1.5f, p.y - 1.5f, 3.0f, 3.0f };
         SDL_RenderFillRect(renderer, &dot);
     }
 
-    // µ±Ç°ÊÓ¿Ú·¶Î§¿ò£¨°×É«£©
+    // å½“å‰è§†å£èŒƒå›´æ¡†ï¼ˆç™½è‰²ï¼‰
     float visible_w = camera_.get_screen_w() / camera_.get_scale();
     float visible_h = camera_.get_screen_h() / camera_.get_scale();
     Vector2 vpos = camera_.get_position();
@@ -1355,14 +1381,14 @@ void MapEditorScene::draw_button(const SDL_FRect& r, const std::string& label, b
 }
 
 void MapEditorScene::render_ui() {
-    // ¶¥²¿¹¤¾ßÌõ±³¾°
+    // é¡¶éƒ¨å·¥å…·æ¡èƒŒæ™¯
     ui_fill_rect(renderer, SDL_FRect{ 0, 0, LOGICAL_W, topbar_h_ }, { 24, 30, 48, 255 });
     ui_fill_rect(renderer, SDL_FRect{ 0, topbar_h_ - 3, LOGICAL_W, 3 }, { 255, 215, 0, 255 });
-    ui_draw_text(renderer, u8"µØÍ¼±à¼­", 26, { 255, 215, 0, 255 }, 64.0f, topbar_h_ * 0.5f, true);
+    ui_draw_text(renderer, u8"åœ°å›¾ç¼–è¾‘", 26, { 255, 215, 0, 255 }, 64.0f, topbar_h_ * 0.5f, true);
 
-    ui_draw_text(renderer, u8"µØÍ¼:", 20, { 200, 210, 230, 255 }, 176.0f, topbar_h_ * 0.5f, true);
+    ui_draw_text(renderer, u8"åœ°å›¾:", 20, { 200, 210, 230, 255 }, 176.0f, topbar_h_ * 0.5f, true);
 
-    // ÎÄ¼şÃûÊäÈë¿ò
+    // æ–‡ä»¶åè¾“å…¥æ¡†
     {
         SDL_Color bg = filename_focused_ ? SDL_Color{ 46, 60, 96, 255 } : SDL_Color{ 34, 44, 74, 255 };
         ui_fill_rect(renderer, filename_rect_, bg, { 120, 140, 190, 255 }, 2);
@@ -1376,39 +1402,39 @@ void MapEditorScene::render_ui() {
     draw_button(btn_clear_.rect, btn_clear_.label, false, false);
     draw_button(btn_back_.rect, btn_back_.label, false, false);
 
-    // ×´Ì¬ÏûÏ¢
+    // çŠ¶æ€æ¶ˆæ¯
     if (!status_msg_.empty())
         ui_draw_text(renderer, status_msg_, 18, { 150, 220, 150, 255 }, 780.0f, topbar_h_ * 0.5f, false);
 
-    // ×ó²àÃæ°å±³¾°
+    // å·¦ä¾§é¢æ¿èƒŒæ™¯
     ui_fill_rect(renderer, SDL_FRect{ 0, topbar_h_, panel_w_, LOGICAL_H - topbar_h_ }, { 18, 24, 40, 255 });
 
-    // µØÍ¼³ß´ç
-    ui_draw_text(renderer, u8"µØÍ¼³ß´ç", 16, { 200, 210, 230, 255 }, 8.0f, size_label_y_, false);
+    // åœ°å›¾å°ºå¯¸
+    ui_draw_text(renderer, u8"åœ°å›¾å°ºå¯¸", 16, { 200, 210, 230, 255 }, 8.0f, size_label_y_, false);
     {
         bool small = (cur_size_ == MapSize::Small), med = (cur_size_ == MapSize::Medium), large = (cur_size_ == MapSize::Large);
-        draw_button(size_small_, u8"Ğ¡", small, false);
-        draw_button(size_med_,   u8"ÖĞ", med,   false);
-        draw_button(size_large_, u8"´ó", large, false);
+        draw_button(size_small_, u8"å°", small, false);
+        draw_button(size_med_,   u8"ä¸­", med,   false);
+        draw_button(size_large_, u8"å¤§", large, false);
     }
 
-    // ·ÅÖÃÄ£Ê½
-    ui_draw_text(renderer, u8"·ÅÖÃÄ£Ê½", 16, { 200, 210, 230, 255 }, 8.0f, mode_label_y_, false);
+    // æ”¾ç½®æ¨¡å¼
+    ui_draw_text(renderer, u8"æ”¾ç½®æ¨¡å¼", 16, { 200, 210, 230, 255 }, 8.0f, mode_label_y_, false);
     {
         bool single = (place_mode_ == PlaceMode::Single), batch = (place_mode_ == PlaceMode::Batch);
-        draw_button(mode_single_, u8"µ¥¸ö", single, false);
-        draw_button(mode_batch_,  u8"ÅúÁ¿", batch,  false);
+        draw_button(mode_single_, u8"å•ä¸ª", single, false);
+        draw_button(mode_batch_,  u8"æ‰¹é‡", batch,  false);
     }
 
-    // ±ÊË¢´óĞ¡
-    ui_draw_text(renderer, u8"±ÊË¢´óĞ¡", 16, { 200, 210, 230, 255 }, 8.0f, brush_label_y_, false);
+    // ç¬”åˆ·å¤§å°
+    ui_draw_text(renderer, u8"ç¬”åˆ·å¤§å°", 16, { 200, 210, 230, 255 }, 8.0f, brush_label_y_, false);
     {
         draw_button(brush_1_,  u8"1x1",   (brush_size_ == 1),  false);
         draw_button(brush_5_,  u8"5x5",   (brush_size_ == 5),  false);
         draw_button(brush_10_, u8"10x10", (brush_size_ == 10), false);
     }
 
-    // ¹¤¾ßÁĞ±í£¨´ø¹ö¶¯£©
+    // å·¥å…·åˆ—è¡¨ï¼ˆå¸¦æ»šåŠ¨ï¼‰
     {
         SDL_Rect clip{ 0, (int)tools_top_, (int)panel_w_, (int)(tools_bottom_ - tools_top_) };
         SDL_SetRenderClipRect(renderer, &clip);
@@ -1422,30 +1448,30 @@ void MapEditorScene::render_ui() {
         SDL_SetRenderClipRect(renderer, nullptr);
     }
 
-    // Íæ¼ÒÊıÁ¿
-    ui_draw_text(renderer, u8"Íæ¼ÒÊıÁ¿", 16, { 200, 210, 230, 255 }, 8.0f, pc_label_y_, false);
+    // ç©å®¶æ•°é‡
+    ui_draw_text(renderer, u8"ç©å®¶æ•°é‡", 16, { 200, 210, 230, 255 }, 8.0f, pc_label_y_, false);
     {
         draw_button(pc_2_, u8"2", (player_count_ == 2), false);
         draw_button(pc_4_, u8"4", (player_count_ == 4), false);
         draw_button(pc_8_, u8"8", (player_count_ == 8), false);
     }
 
-    // ¹éÊôÍæ¼Ò£¨0=ÖĞÁ¢, 1..N=Íæ¼Ò£©
-    ui_draw_text(renderer, u8"¹éÊôÍæ¼Ò", 16, { 200, 210, 230, 255 }, 8.0f, owner_label_y_, false);
+    // å½’å±ç©å®¶ï¼ˆ0=ä¸­ç«‹, 1..N=ç©å®¶ï¼‰
+    ui_draw_text(renderer, u8"å½’å±ç©å®¶", 16, { 200, 210, 230, 255 }, 8.0f, owner_label_y_, false);
     for (size_t i = 0; i < owner_btns_.size(); ++i) {
-        std::string lbl = (i == 0) ? u8"ÖĞÁ¢" : std::to_string(i);
+        std::string lbl = (i == 0) ? u8"ä¸­ç«‹" : std::to_string(i);
         draw_button(owner_btns_[i], lbl, ((int)i == place_player_), false);
     }
 
-    // µØÍ¼ÎÄ¼şÁĞ±í£¨Ñ¡Ôñ±£´æ/ÔØÈëÄ¿±ê£©+ É¾³ı
-    ui_draw_text(renderer, u8"µØÍ¼ÎÄ¼ş", 16, { 200, 210, 230, 255 }, 8.0f, map_label_y_, false);
+    // åœ°å›¾æ–‡ä»¶åˆ—è¡¨ï¼ˆé€‰æ‹©ä¿å­˜/è½½å…¥ç›®æ ‡ï¼‰+ åˆ é™¤
+    ui_draw_text(renderer, u8"åœ°å›¾æ–‡ä»¶", 16, { 200, 210, 230, 255 }, 8.0f, map_label_y_, false);
     draw_button(btn_delete_map_.rect, btn_delete_map_.label, confirm_delete_, false);
     {
         SDL_Rect clip{ 0, (int)map_list_top_, (int)panel_w_, (int)(map_list_bottom_ - map_list_top_) };
         SDL_SetRenderClipRect(renderer, &clip);
         const float entry_h = 26.0f;
         if (map_files_.empty()) {
-            ui_draw_text(renderer, u8"£¨ÔİÎŞµØÍ¼£©", 15, { 150, 160, 180, 255 }, 8.0f, map_list_top_ + 6.0f, false);
+            ui_draw_text(renderer, u8"ï¼ˆæš‚æ— åœ°å›¾ï¼‰", 15, { 150, 160, 180, 255 }, 8.0f, map_list_top_ + 6.0f, false);
         }
         for (size_t i = 0; i < map_files_.size(); ++i) {
             SDL_FRect r{ 8.0f, map_list_top_ + (float)i * entry_h - map_scroll_, panel_w_ - 16.0f, entry_h - 2.0f };
@@ -1454,20 +1480,20 @@ void MapEditorScene::render_ui() {
         SDL_SetRenderClipRect(renderer, nullptr);
     }
 
-    // Ñ¡ÖĞĞÅÏ¢Ãæ°å
+    // é€‰ä¸­ä¿¡æ¯é¢æ¿
     ui_fill_rect(renderer, sel_info_rect_, { 30, 40, 66, 255 }, { 90, 110, 160, 255 }, 2);
     GameObject* sel = selected_id_ ? WorldEntityMgr::instance()->get_object_by_id(selected_id_) : nullptr;
     if (!sel) {
-        ui_draw_text(renderer, u8"Î´Ñ¡ÖĞ", 18, { 160, 170, 190, 255 },
+        ui_draw_text(renderer, u8"æœªé€‰ä¸­", 18, { 160, 170, 190, 255 },
             sel_info_rect_.x + sel_info_rect_.w * 0.5f, sel_info_rect_.y + 40.0f, true);
         return;
     }
 
-    // ÀàĞÍÃû
-    std::string type_name = u8"¶ÔÏó";
+    // ç±»å‹å
+    std::string type_name = u8"å¯¹è±¡";
     if (auto* hb = sel->get_component<Harvestable>()) {
         type_name = TextureCache::instance()->get_resource_name(hb->entity_type);
-        if (type_name == u8"½ğ¿ó") type_name = (hb->entity_type == ResourceEntityType::LGold) ? u8"´ó½ğ¿ó" : u8"Ğ¡½ğ¿ó";
+        if (type_name == u8"é‡‘çŸ¿") type_name = (hb->entity_type == ResourceEntityType::LGold) ? u8"å¤§é‡‘çŸ¿" : u8"å°é‡‘çŸ¿";
     }
     else if (auto* bt = sel->get_component<BuildingType>()) type_name = TextureCache::instance()->get_building_name(bt->type);
     else if (auto* ut = sel->get_component<UnitType>()) type_name = TextureCache::instance()->get_unit_name(ut->type);
@@ -1479,35 +1505,35 @@ void MapEditorScene::render_ui() {
     if (sel->get_component<Harvestable>() && hp) {
         SDL_Color hbg = hp_focused_ ? SDL_Color{ 46, 60, 96, 255 } : SDL_Color{ 34, 44, 74, 255 };
         ui_fill_rect(renderer, hp_input_rect_, hbg, { 120, 140, 190, 255 }, 2);
-        std::string htext = u8"ÑªÁ¿: ";
+        std::string htext = u8"è¡€é‡: ";
         if (hp_focused_) htext += hp_input_ + "_";
         else             htext += std::to_string(hp->current_health);
         ui_draw_text_vcenter(renderer, htext, 16, { 255, 255, 255, 255 },
             hp_input_rect_.x + 8.0f, hp_input_rect_.y + hp_input_rect_.h * 0.5f);
     }
 
-    draw_button(del_btn_, u8"É¾³ı", false, false);
+    draw_button(del_btn_, u8"åˆ é™¤", false, false);
 }
 
 void MapEditorScene::on_render() {
     SDL_SetRenderDrawColor(renderer, 10, 13, 22, 255);
     SDL_RenderClear(renderer);
 
-    // µØÍ¼»­²¼£¨²Ã¼ôµ½ÊÓ¿Ú£©
+    // åœ°å›¾ç”»å¸ƒï¼ˆè£å‰ªåˆ°è§†å£ï¼‰
     SDL_Rect vp{ (int)panel_w_, (int)topbar_h_, (int)(LOGICAL_W - panel_w_), (int)(LOGICAL_H - topbar_h_) };
     SDL_SetRenderClipRect(renderer, &vp);
     render_terrain();
     render_grid_overlay();
     render_entities();
 
-    // ·ÅÖÃÔ¤ÀÀ
+    // æ”¾ç½®é¢„è§ˆ
     if (cur_tool_ != Tool::Select && inside_viewport(mouse_x_, mouse_y_)) {
         Vector2 world = viewport_to_world(mouse_x_, mouse_y_);
         int cs = editor_map_.get_cell_size();
         int gx = (int)std::floor(world.x / cs);
         int gy = (int)std::floor(world.y / cs);
         int half = (brush_size_ - 1) / 2;
-        // ÏğÆ¤²Á£º¸ßÁÁ±ÊË¢·¶Î§ÄÚËùÓĞ½«±»²Á³ıµÄÊµÌå£¨ºìÉ«£¬¿É²Á³ıÖ¸Ê¾£©
+        // æ©¡çš®æ“¦ï¼šé«˜äº®ç¬”åˆ·èŒƒå›´å†…æ‰€æœ‰å°†è¢«æ“¦é™¤çš„å®ä½“ï¼ˆçº¢è‰²ï¼Œå¯æ“¦é™¤æŒ‡ç¤ºï¼‰
         if (cur_tool_ == Tool::Eraser) {
             CollisionBox brush{
                 { (float)((gx - half) * cs), (float)((gy - half) * cs) },
@@ -1556,7 +1582,7 @@ void MapEditorScene::on_render() {
             }
             SDL_RenderRect(renderer, &ghost);
 
-            // ºÓÁ÷Ô¤ÀÀ£º±ê¼Ç±»ÊµÌå£¨×ÊÔ´/½¨Öş/µ¥Î»£©ÕÚµ²¡¢Í¿²»½øÈ¥µÄ¸ñ×Ó
+            // æ²³æµé¢„è§ˆï¼šæ ‡è®°è¢«å®ä½“ï¼ˆèµ„æº/å»ºç­‘/å•ä½ï¼‰é®æŒ¡ã€æ¶‚ä¸è¿›å»çš„æ ¼å­
             if (cur_tool_ == Tool::Water) {
                 int half = (brush_size_ - 1) / 2;
                 for (int dy = 0; dy < brush_size_; ++dy) {
@@ -1564,7 +1590,7 @@ void MapEditorScene::on_render() {
                         int cx = gx - half + dx;
                         int cy = gy - half + dy;
                         if (cx < 0 || cy < 0 || cx >= editor_map_.get_width() || cy >= editor_map_.get_height()) continue;
-                        if (editor_map_.get_grid()[cy][cx] == TerrainType::Water) continue;   // ÒÑÊÇË®Óò
+                        if (editor_map_.get_grid()[cy][cx] == TerrainType::Water) continue;   // å·²æ˜¯æ°´åŸŸ
                         if (!cell_occupied(cx, cy)) continue;
                         Vector2 occ_tl = world_to_viewport({ (float)(cx * cs), (float)(cy * cs) });
                         SDL_FRect occ{ occ_tl.x, occ_tl.y, (float)cs * camera_.get_scale(), (float)cs * camera_.get_scale() };
@@ -1573,7 +1599,7 @@ void MapEditorScene::on_render() {
                     }
                 }
             }
-            // ÏğÆ¤²ÁÔ¤ÀÀ£º±ê¼Ç±ÊË¢·¶Î§ÄÚÊÇË®¡¢½«±»²æ»ØÂ½µØµÄ¸ñ×Ó£¨³ÈÉ«£©
+            // æ©¡çš®æ“¦é¢„è§ˆï¼šæ ‡è®°ç¬”åˆ·èŒƒå›´å†…æ˜¯æ°´ã€å°†è¢«å‰å›é™†åœ°çš„æ ¼å­ï¼ˆæ©™è‰²ï¼‰
             else if (cur_tool_ == Tool::Eraser) {
                 int half = (brush_size_ - 1) / 2;
                 for (int dy = 0; dy < brush_size_; ++dy) {

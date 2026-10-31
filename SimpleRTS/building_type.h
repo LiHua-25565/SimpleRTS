@@ -1,11 +1,12 @@
-#ifndef _BUILDING_TYPE_H_
+ï»¿#ifndef _BUILDING_TYPE_H_
 #define _BUILDING_TYPE_H_
 
 #include <cstdint>
 
-enum class BuildingEntityType : uint8_t {
-    TownCenter,  // ³ÇÕò´óÌü
-    ArcheryRange,   // °Ğ³¡£¨ĞÂÔö£©
+// åŒ UnitEntityTypeï¼š>= 100 çš„ ID è¡¨ç¤ºç¼–è¾‘å™¨åˆ›å»ºçš„å»ºç­‘ã€‚
+enum class BuildingEntityType : uint16_t {
+    TownCenter,  // åŸé•‡å¤§å…
+    ArcheryRange,   // é¶åœºï¼ˆæ–°å¢ï¼‰
     Count
 };
 

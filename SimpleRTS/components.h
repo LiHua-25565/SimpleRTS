@@ -1,4 +1,4 @@
-#ifndef _COMPONENTS_H_
+ï»¿#ifndef _COMPONENTS_H_
 #define _COMPONENTS_H_
 
 #include "color.h"
@@ -7,7 +7,7 @@
 #include "render_def.h"
 #include "resources_type.h"
 #include "unit_type.h"
-#include "armor_type.h"
+#include "damage_type.h"
 #include "building_type.h"
 #include "projectile_type.h"
 #include "production_data.h"
@@ -33,7 +33,7 @@ public:
 struct UnitType : public Component 
 {
     UnitEntityType type = UnitEntityType::Villager;
-    // ÓÃÓÚÍ¬Àà±ğÄÚÅÅĞòµÄ×ÓÓÅÏÈ¼¶
+    // ç”¨äºåŒç±»åˆ«å†…æ’åºçš„å­ä¼˜å…ˆçº§
     int sub_priority = 0;
 };
 
@@ -46,8 +46,8 @@ struct Renderable : public Component
 {
     uint32_t texture_id = 0;
     CollisionBox collision_box;
-    Color color = Color::White;                 // ¾ØĞÎÑÕÉ«£¨»á±»ÎÆÀí¸²¸Ç£©
-    Color border_color = Color::None;           // ±ß¿òÑÕÉ«
+    Color color = Color::White;                 // çŸ©å½¢é¢œè‰²ï¼ˆä¼šè¢«çº¹ç†è¦†ç›–ï¼‰
+    Color border_color = Color::None;           // è¾¹æ¡†é¢œè‰²
     RenderLayer layer = RenderLayer::Ground;
     float scale = 1.0f;
 };
@@ -61,47 +61,47 @@ struct Selectable : public Component
 enum class MoveMode
 {
     Land,
-    Water       // ¿É×ßË®Â·£¬ÔİÎ´ÊµÏÖ
+    Water       // å¯èµ°æ°´è·¯ï¼Œæš‚æœªå®ç°
 };
 
-// ½üÕ½Óë²É¼¯µÄ×²»÷¶¯»­
+// è¿‘æˆ˜ä¸é‡‡é›†çš„æ’å‡»åŠ¨ç”»
 struct ImpactAnimation : public Component {
-    bool is_attacking = false;      // ÊÇ·ñ²¥·ÅÖĞ
-    float anim_pass_time = 0.0f;    // ¶¯»­¼ÆÊ±Æ÷
-    float anim_wait_time = 0.3f;    // ¶¯»­×ÜÊ±³¤£¨Ãë£©
-    float impact_distance = 0.8f;   // Êµ¼Ê×²»÷¾àÀë£¨±ß³¤±ÈÀı£©
-    Vector2 direction = { 1.0f, 0.0f }; // ³å»÷·½Ïò£¨µ¥Î»ÏòÁ¿£©£¬Ä¬ÈÏÏòÓÒ
+    bool is_attacking = false;      // æ˜¯å¦æ’­æ”¾ä¸­
+    float anim_pass_time = 0.0f;    // åŠ¨ç”»è®¡æ—¶å™¨
+    float anim_wait_time = 0.3f;    // åŠ¨ç”»æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
+    float impact_distance = 0.8f;   // å®é™…æ’å‡»è·ç¦»ï¼ˆè¾¹é•¿æ¯”ä¾‹ï¼‰
+    Vector2 direction = { 1.0f, 0.0f }; // å†²å‡»æ–¹å‘ï¼ˆå•ä½å‘é‡ï¼‰ï¼Œé»˜è®¤å‘å³
 };
 
-// ½¨Öş½¨Ôì½ø¶È×é¼ş£¨·ÅÖÃ¶¯»­£©
+// å»ºç­‘å»ºé€ è¿›åº¦ç»„ä»¶ï¼ˆæ”¾ç½®åŠ¨ç”»ï¼‰
 struct BuildProgressComponent : public Component {
-    float total_time = 5.0f;    // ½¨Ôì×ÜÊ±¼ä£¨Ãë£©
-    float elapsed = 0.0f;       // ÒÑ¾­¹ıÊ±¼ä
-    bool active = true;         // ÊÇ·ñÕıÔÚ½¨Ôì
+    float total_time = 5.0f;    // å»ºé€ æ€»æ—¶é—´ï¼ˆç§’ï¼‰
+    float elapsed = 0.0f;       // å·²ç»è¿‡æ—¶é—´
+    bool active = true;         // æ˜¯å¦æ­£åœ¨å»ºé€ 
 };
 
-// ÉÁË¸×é¼ş
+// é—ªçƒç»„ä»¶
 struct FlashComponent : public Component {
-    float flash_timer = 0.0f;       // µ±Ç°ÉÁË¸¼ÆÊ±£¨µ¹¼ÆÊ±£©
-    float flash_duration = 0.5f;    // ×ÜÉÁË¸Ê±¼ä£¨Ãë£©
-    bool flash_active = false;      // ÊÇ·ñÕıÔÚÉÁË¸
-    float blink_interval = 0.1f;    // ÉÁË¸¼ä¸ô£¨ÁÁ/°µÇĞ»»£©
-    float blink_timer = 0.0f;       // µ±Ç°¼ä¸ô¼ÆÊ±
-    bool blink_on = true;           // µ±Ç°ÊÇ·ñÎªÁÁ×´Ì¬
+    float flash_timer = 0.0f;       // å½“å‰é—ªçƒè®¡æ—¶ï¼ˆå€’è®¡æ—¶ï¼‰
+    float flash_duration = 0.5f;    // æ€»é—ªçƒæ—¶é—´ï¼ˆç§’ï¼‰
+    bool flash_active = false;      // æ˜¯å¦æ­£åœ¨é—ªçƒ
+    float blink_interval = 0.1f;    // é—ªçƒé—´éš”ï¼ˆäº®/æš—åˆ‡æ¢ï¼‰
+    float blink_timer = 0.0f;       // å½“å‰é—´éš”è®¡æ—¶
+    bool blink_on = true;           // å½“å‰æ˜¯å¦ä¸ºäº®çŠ¶æ€
 };
 
-// ÒÆ¶¯×é¼ş
+// ç§»åŠ¨ç»„ä»¶
 struct Movable : public Component {
     float speed = 60.0f;
-    Vector2 target = { -1.0f, -1.0f };   // ¸öÈË¾«È·Í£Ö¹µã
-    Vector2 flow_target = { -1.0f, -1.0f };   // Á÷³¡µ¼º½Ä¿±ê£¨ÃüÁîÖĞĞÄ£©
+    Vector2 target = { -1.0f, -1.0f };   // ä¸ªäººç²¾ç¡®åœæ­¢ç‚¹
+    Vector2 flow_target = { -1.0f, -1.0f };   // æµåœºå¯¼èˆªç›®æ ‡ï¼ˆå‘½ä»¤ä¸­å¿ƒï¼‰
     Vector2 velocity = { 0.0f, 0.0f };
-    // Æ½»¬ºóµÄÊµ¼ÊËÙ¶È£ºÃ¿Ö¡Ïò velocity ±Æ½üµ«ÏŞÖÆ±ä»¯Á¿£¬ÓÃÓÚÏû³ı¼±Í£/¶¶¶¯¡£
-    // Î»ÖÃ»ı·ÖÓÃµÄÊÇËü£¬¶ø²»ÊÇÉÏÒ»ĞĞ
+    // å¹³æ»‘åçš„å®é™…é€Ÿåº¦ï¼šæ¯å¸§å‘ velocity é€¼è¿‘ä½†é™åˆ¶å˜åŒ–é‡ï¼Œç”¨äºæ¶ˆé™¤æ€¥åœ/æŠ–åŠ¨ã€‚
+    // ä½ç½®ç§¯åˆ†ç”¨çš„æ˜¯å®ƒï¼Œè€Œä¸æ˜¯ä¸Šä¸€è¡Œ
     Vector2 smooth_velocity = { 0.0f, 0.0f };
     MoveMode move_mode = MoveMode::Land;
 
-    // ÅÅÁĞ×´Ì¬£¨µ½´ïÄ¿±ê¸½½üºóÊ¹ÓÃ£©
+    // æ’åˆ—çŠ¶æ€ï¼ˆåˆ°è¾¾ç›®æ ‡é™„è¿‘åä½¿ç”¨ï¼‰
     bool is_arranging = false;
     int  formation_slot = -1;
 
@@ -115,73 +115,72 @@ struct Movable : public Component {
     }
 };
 
-// ÕóÓª×é¼ş
+// é˜µè¥ç»„ä»¶
 struct Ownership : public Component 
 {
     int player_id = 0;
     int team_id = 0;
 };
 
-// ÉúÃüÖµ×é¼ş
+// ç”Ÿå‘½å€¼ç»„ä»¶
 struct Health : public Component 
 {
     int current_health = 100;
     int max_health = 100;
 };
 
-// ¹¥»÷×é¼ş
+// æ”»å‡»ç»„ä»¶
 struct Attack : public Component {
     bool can_attack = true;
-    float attack_interval = 1.0f;       // ¹¥»÷¼ä¸ô£¨Ãë£©
-    float attack_pass_time = 0.0f;      // µ±Ç°ÀäÈ´¼ÆÊ±
-    int damage = 10;                    // Ã¿´Î¹¥»÷ÉËº¦
-    float range = 30.0f;                // ¹¥»÷·¶Î§£¨ÏñËØ£©£¬½üÕ½Ô¼ 30£¬Ô¶³Ì 200+
-    bool is_ranged = false;             // ÊÇ·ñÔ¶³Ì¹¥»÷£¨Ó°Ïì¾àÀë¼ì²â·½Ê½£©
-    uint64_t target_id = 0;             // ¹¥»÷Ä¿±êµÄÊµÌå ID
+    float attack_interval = 1.0f;       // æ”»å‡»é—´éš”ï¼ˆç§’ï¼‰
+    float attack_pass_time = 0.0f;      // å½“å‰å†·å´è®¡æ—¶
+    int damage = 10;                    // æ¯æ¬¡æ”»å‡»ä¼¤å®³
+    float range = 30.0f;                // æ”»å‡»èŒƒå›´ï¼ˆåƒç´ ï¼‰ï¼Œè¿‘æˆ˜çº¦ 30ï¼Œè¿œç¨‹ 200+
+    bool is_ranged = false;             // æ˜¯å¦è¿œç¨‹æ”»å‡»ï¼ˆå½±å“è·ç¦»æ£€æµ‹æ–¹å¼ï¼‰
+    uint64_t target_id = 0;             // æ”»å‡»ç›®æ ‡çš„å®ä½“ ID
 
-    bool auto_attack = false;           // ÊÇ·ñ×Ô¶¯Ë÷µĞ£¨ÓÒ¼ü¹¥»÷ºóÎª true£¬ÒÆ¶¯/Í£Ö¹ºóÎª false£©
+    bool auto_attack = false;           // æ˜¯å¦è‡ªåŠ¨ç´¢æ•Œï¼ˆå³é”®æ”»å‡»åä¸º trueï¼Œç§»åŠ¨/åœæ­¢åä¸º falseï¼‰
 
-    int armor_penetration[static_cast<int>(ArmorType::Count)] = { 0 };  // »¤¼×´©Í¸
+    DamageType damage_type = DamageType::Normal;   // ä¼¤å®³ç±»å‹ï¼Œå†³å®šç›®æ ‡ç”¨å“ªä¸€é¡¹å‡å…
 };
 
-// »¤¼××é¼ş
+// é˜²å¾¡ç»„ä»¶ï¼šæŒ‰ä¼¤å®³ç±»å‹åˆ†åˆ«è®¾ç½®å‡å…å€¼
 struct Armor : public Component {
-    ArmorType type = ArmorType::None;
-    int armor_value = 0;   // »ù´¡»¤¼×Öµ£¬¿ÉÓÉ¾ßÌåÊµÌå¸²¸Ç
+    int reduction[static_cast<int>(DamageType::Count)] = { 0 };
 };
 
-// ²É¼¯µ¥Î»×é¼ş
-// Èç¹û»¹Î´Ìá½»ÒÑÓĞ×ÊÔ´¾Í¿ª²ÉÆäËûÖÖÀà×ÊÔ´
-// Ô­À´³ÖÓĞµÄ×ÊÔ´½«»áÏûÊ§
+// é‡‡é›†å•ä½ç»„ä»¶
+// å¦‚æœè¿˜æœªæäº¤å·²æœ‰èµ„æºå°±å¼€é‡‡å…¶ä»–ç§ç±»èµ„æº
+// åŸæ¥æŒæœ‰çš„èµ„æºå°†ä¼šæ¶ˆå¤±
 struct Gatherer : public Component {
     bool can_gather = true;
-    float gather_interval = 1.0f;       // Ã¿´Î²É¼¯¼ä¸ô£¨Ãë£©
-    float gather_pass_time = 0.0f;      // ²É¼¯µÈ´ıÊ±¼ä
-    int gather_amount = 10;             // Ã¿´Î²É¼¯ÉËº¦£¨¼°»ñµÃµÄ»ù´¡ÊıÁ¿£©
+    float gather_interval = 1.0f;       // æ¯æ¬¡é‡‡é›†é—´éš”ï¼ˆç§’ï¼‰
+    float gather_pass_time = 0.0f;      // é‡‡é›†ç­‰å¾…æ—¶é—´
+    int gather_amount = 10;             // æ¯æ¬¡é‡‡é›†ä¼¤å®³ï¼ˆåŠè·å¾—çš„åŸºç¡€æ•°é‡ï¼‰
 
-    // Ğ¯´øÏà¹Ø
-    ResourceType carried_type = ResourceType::None; // µ±Ç°Ğ¯´øµÄ×ÊÔ´ÀàĞÍ£¨¿ÉÉèÒ»¸öNoneÖµ£©
-    int carried_amount = 0;             // µ±Ç°ÒÑĞ¯´øÊıÁ¿
-    int carry_capacity = 30;            // ×î´óĞ¯´øÁ¿
+    // æºå¸¦ç›¸å…³
+    ResourceType carried_type = ResourceType::None; // å½“å‰æºå¸¦çš„èµ„æºç±»å‹ï¼ˆå¯è®¾ä¸€ä¸ªNoneå€¼ï¼‰
+    int carried_amount = 0;             // å½“å‰å·²æºå¸¦æ•°é‡
+    int carry_capacity = 30;            // æœ€å¤§æºå¸¦é‡
 
-    uint64_t target_resource_id = 0;   // ²É¼¯Ä¿±êÊµÌå ID
-    uint64_t dropoff_target_id = 0;    // Ìá½»Ä¿±ê½¨ÖşÊµÌå ID
+    uint64_t target_resource_id = 0;   // é‡‡é›†ç›®æ ‡å®ä½“ ID
+    uint64_t dropoff_target_id = 0;    // æäº¤ç›®æ ‡å»ºç­‘å®ä½“ ID
 
-    // Óµ¶Â×ÔÓú£º³¤Ê±¼äÎŞ·¨Ìù½üÄ¿±êÊ±£¬ÓÉ HarvestSystem ´¥·¢»»Î»¡£
-    // blocked_time ÀÛ¼Æ¡°ÎŞÃ÷ÏÔÍÆ½ø¡±µÄÊ±³¤£»last_target_dist ÊÇÍÆ½øÁ¿¿ìÕÕ
+    // æ‹¥å µè‡ªæ„ˆï¼šé•¿æ—¶é—´æ— æ³•è´´è¿‘ç›®æ ‡æ—¶ï¼Œç”± HarvestSystem è§¦å‘æ¢ä½ã€‚
+    // blocked_time ç´¯è®¡â€œæ— æ˜æ˜¾æ¨è¿›â€çš„æ—¶é•¿ï¼›last_target_dist æ˜¯æ¨è¿›é‡å¿«ç…§
     float blocked_time = 0.0f;
     float last_target_dist = 0.0f;
 
-    // ·ÖÅäµÄÖÜ½çÕ¾Î»µã£º±»¼·ÀëºóÓÅÏÈ×ß»Ø×Ô¼ºµÄµã£¬¶ø²»ÊÇ»»ĞÂµã
+    // åˆ†é…çš„å‘¨ç•Œç«™ä½ç‚¹ï¼šè¢«æŒ¤ç¦»åä¼˜å…ˆèµ°å›è‡ªå·±çš„ç‚¹ï¼Œè€Œä¸æ˜¯æ¢æ–°ç‚¹
     Vector2 stand_target = { -1.0f, -1.0f };
 };
 
-// ±ê¼Ç½¨ÖşÊµÌå
+// æ ‡è®°å»ºç­‘å®ä½“
 struct Structure : public Component {
-    // ±ê¼Ç½¨ÖşÊµÌå£¨ÓÃÓÚÑ°Â·Ê±ÊÓÎªÕÏ°­£©
+    // æ ‡è®°å»ºç­‘å®ä½“ï¼ˆç”¨äºå¯»è·¯æ—¶è§†ä¸ºéšœç¢ï¼‰
 };
 
-// ---------- Éú²ú¶ÓÁĞ×é¼ş£¨¹ÒÔØÔÚ½¨ÖşÉÏ£© ----------
+// ---------- ç”Ÿäº§é˜Ÿåˆ—ç»„ä»¶ï¼ˆæŒ‚è½½åœ¨å»ºç­‘ä¸Šï¼‰ ----------
 struct ProductionQueue : public Component {
     struct QueueEntry {
         ProductionType type = ProductionType::Unit;
@@ -190,30 +189,30 @@ struct ProductionQueue : public Component {
         std::string tech_name;
         float elapsed = 0.0f;
         float total_time = 0.0f;
-        int cost_amounts[static_cast<int>(ResourceType::Count)] = { 0 };   // Éú²ú³É±¾
+        int cost_amounts[static_cast<int>(ResourceType::Count)] = { 0 };   // ç”Ÿäº§æˆæœ¬
     };
     std::vector<QueueEntry> queue;
     std::unordered_set<std::string> completed_research;
     bool frozen_flag = false;
 };
 
-// Ìá½»×ÊÔ´½¨Öş×é¼ş
+// æäº¤èµ„æºå»ºç­‘ç»„ä»¶
 struct ResourceDropoff : public Component {
-    uint8_t accept_mask = 0;   // ³õÊ¼0£¬Í¨¹ı | Ìí¼Ó¿É½ÓÊÜµÄ×ÊÔ´ÖÖÀà
+    uint8_t accept_mask = 0;   // åˆå§‹0ï¼Œé€šè¿‡ | æ·»åŠ å¯æ¥å—çš„èµ„æºç§ç±»
 };
 
-// ×ÊÔ´ÊµÌå
+// èµ„æºå®ä½“
 struct Harvestable : public Component {
-    ResourceEntityType entity_type = ResourceEntityType::Wood;  // ÊµÌåÖÖÀà
-    ResourceType output_type = ResourceType::Wood;              // ²É¼¯ºó²ú³ö
+    ResourceEntityType entity_type = ResourceEntityType::Wood;  // å®ä½“ç§ç±»
+    ResourceType output_type = ResourceType::Wood;              // é‡‡é›†åäº§å‡º
 };
 
-// Å×ÉäÎïÊµÌå
+// æŠ›å°„ç‰©å®ä½“
 struct Projectile : public Component {
-    float speed = 400.0f;            // ·ÉĞĞËÙ¶È£¨ÏñËØ/Ãë£©
-    uint64_t target_id = 0;         // Ä¿±êÊµÌå ID
-    int damage = 0;                 // ÃüÖĞÉËº¦
-    int attacker_team_id = 0;       // ¹¥»÷·½¶ÓÎé ID£¨ÔİÎ´ÓÃ£¬¿ÉÔ¤Áô£©
+    float speed = 400.0f;            // é£è¡Œé€Ÿåº¦ï¼ˆåƒç´ /ç§’ï¼‰
+    uint64_t target_id = 0;         // ç›®æ ‡å®ä½“ ID
+    int damage = 0;                 // å‘½ä¸­ä¼¤å®³
+    int attacker_team_id = 0;       // æ”»å‡»æ–¹é˜Ÿä¼ IDï¼ˆæš‚æœªç”¨ï¼Œå¯é¢„ç•™ï¼‰
 };
 
 #endif // !_COMPONENTS_H_

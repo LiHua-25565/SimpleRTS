@@ -1,4 +1,4 @@
-#ifndef _SCENE_MGR_H_
+ï»¿#ifndef _SCENE_MGR_H_
 #define _SCENE_MGR_H_
 
 #include "scene.h"
@@ -14,7 +14,8 @@ public:
         Menu,
         Game,
         Selector,
-        MapEditor
+        MapEditor,
+        DefEditor
     };
 
 public:
@@ -29,15 +30,16 @@ public:
     void on_render_overlay();
     void on_input(const SDL_Event& event);
 
-    // ³¡¾°×¢²áº¯Êı
+    // åœºæ™¯æ³¨å†Œå‡½æ•°
     void set_menu_scene(Scene* scene) { menu_scene = scene; }
     void set_game_scene(Scene* scene) { game_scene = scene; }
     void set_selector_scene(Scene* scene) { selector_scene = scene; }
     void set_map_editor_scene(Scene* scene) { map_editor_scene = scene; }
+    void set_def_editor_scene(Scene* scene) { def_editor_scene = scene; }
 
     GameScene* get_game_scene() const;
 
-    // ÍË³öÇëÇó£¨²Ëµ¥¡°ÍË³öÓÎÏ·¡±°´Å¥´¥·¢£¬Ö÷Ñ­»·¾İ´ËÍË³ö£©
+    // é€€å‡ºè¯·æ±‚ï¼ˆèœå•â€œé€€å‡ºæ¸¸æˆâ€æŒ‰é’®è§¦å‘ï¼Œä¸»å¾ªç¯æ®æ­¤é€€å‡ºï¼‰
     void request_quit() { quit_requested = true; }
     bool should_quit() const { return quit_requested; }
 
@@ -53,6 +55,7 @@ private:
     Scene* game_scene = nullptr;
     Scene* selector_scene = nullptr;
     Scene* map_editor_scene = nullptr;
+    Scene* def_editor_scene = nullptr;
 };
 
 

@@ -370,6 +370,7 @@ void InputSystem::handle_mouse_button_up(const SDL_Event& event) {
 void InputSystem::handle_mouse_motion(const SDL_Event& event) {
     float mx = event.motion.x;
     float my = event.motion.y;
+    UIMgr::instance()->handle_mouse_move(mx, my);
 
     if (left_btn_down && is_left_minimap_dragging) {
         move_camera_to_minimap(mx, my);

@@ -1,11 +1,13 @@
-#include "production_system.h"
+ï»¿#include "production_system.h"
 #include "world_entity_mgr.h"
 #include "game_map.h"
 #include "components.h"
 #include "production_data.h"
+#include "resources_mgr.h"
+#include "tech_effects.h"
 #include <cmath>
 
-// ========== ½¨Öş»·ÈÆ²ÛÎ»Éú³É ==========
+// ========== å»ºç­‘ç¯ç»•æ§½ä½ç”Ÿæˆ ==========
 static bool try_spawn_unit_circles(GameObject* building, UnitEntityType type, ObjectFactory* factory) {
     if (!building || !factory) return false;
 
@@ -19,79 +21,79 @@ static bool try_spawn_unit_circles(GameObject* building, UnitEntityType type, Ob
     if (!map) return false;
     const int cell_size = map->get_cell_size();
 
-    // µ¥Î»³ß´ç£º2¡Á2 ¸ñ£¬ÓëÄ¾Ò»ÖÂ
+    // å•ä½å°ºå¯¸ï¼š2Ã—2 æ ¼ï¼Œä¸æœ¨ä¸€è‡´
     const float UNIT_WIDTH = (float)(cell_size * UNIT_SIZE_CELLS);
     const float UNIT_HEIGHT = UNIT_WIDTH;
     constexpr float HALF_UNIT_MULT = 0.5f;
     const float HALF_UNIT = UNIT_WIDTH * HALF_UNIT_MULT;
-    constexpr float GAP = 3.0f;        // µ¥Î»Ö®¼äµÄ¶îÍâ¼äÏ¶
+    constexpr float GAP = 3.0f;        // å•ä½ä¹‹é—´çš„é¢å¤–é—´éš™
 
     const float step = UNIT_WIDTH + GAP;
     const int num_circles = 3;
-    // µÚÒ»È¦½ôÌù½¨Öş±ßÔµ£¬ÍâÈ¦Öğ²½Ôö¼ÓÒ»¸öµ¥Î»¿í¶È
-    const float base_offset = HALF_UNIT + 5.0f;   // ½¨Öş±ßÔµµ½²ÛÎ»ÖĞĞÄµÄ¾àÀë
+    // ç¬¬ä¸€åœˆç´§è´´å»ºç­‘è¾¹ç¼˜ï¼Œå¤–åœˆé€æ­¥å¢åŠ ä¸€ä¸ªå•ä½å®½åº¦
+    const float base_offset = HALF_UNIT + 5.0f;   // å»ºç­‘è¾¹ç¼˜åˆ°æ§½ä½ä¸­å¿ƒçš„è·ç¦»
 
     const float map_w = map->get_width() * cell_size;
     const float map_h = map->get_height() * cell_size;
 
-    // ±£´æÍæ¼ÒÑÕÉ«£¬¹¤³§¿ÉÄÜÔÚ´´½¨Ê±Ê¹ÓÃ
+    // ä¿å­˜ç©å®¶é¢œè‰²ï¼Œå·¥å‚å¯èƒ½åœ¨åˆ›å»ºæ—¶ä½¿ç”¨
     auto* ownership = building->get_component<Ownership>();
     const int player_id = ownership ? ownership->player_id : 0;
 
     for (int circle = 0; circle < num_circles; ++circle) {
         const float offset = base_offset + circle * UNIT_WIDTH;
-        // ½¨ÖşÍâÀ©¾ØĞÎ£¬²ÛÎ»ÖĞĞÄĞèÂäÔÚ¸Ã¾ØĞÎµÄËÄÌõ±ßÉÏ
+        // å»ºç­‘å¤–æ‰©çŸ©å½¢ï¼Œæ§½ä½ä¸­å¿ƒéœ€è½åœ¨è¯¥çŸ©å½¢çš„å››æ¡è¾¹ä¸Š
         const float left = build_box.position.x - offset;
         const float right = build_box.position.x + build_box.width + offset;
         const float top = build_box.position.y - offset;
         const float bottom = build_box.position.y + build_box.height + offset;
 
-        // ÊÕ¼¯±¾È¦ËùÓĞºòÑ¡µã£¨Ë³Ê±Õë£ºÉÏ ¡ú ÓÒ ¡ú ÏÂ ¡ú ×ó£©
+        // æ”¶é›†æœ¬åœˆæ‰€æœ‰å€™é€‰ç‚¹ï¼ˆé¡ºæ—¶é’ˆï¼šä¸Š â†’ å³ â†’ ä¸‹ â†’ å·¦ï¼‰
         std::vector<Vector2> candidates;
 
-        // ÉÏ±ß£º´Ó×óµ½ÓÒ
+        // ä¸Šè¾¹ï¼šä»å·¦åˆ°å³
         for (float x = left + HALF_UNIT; x <= right - HALF_UNIT; x += step) {
             candidates.emplace_back(x, top);
         }
-        // ÓÒ±ß£º´ÓÉÏµ½ÏÂ
+        // å³è¾¹ï¼šä»ä¸Šåˆ°ä¸‹
         for (float y = top + HALF_UNIT; y <= bottom - HALF_UNIT; y += step) {
             candidates.emplace_back(right, y);
         }
-        // ÏÂ±ß£º´ÓÓÒµ½×ó
+        // ä¸‹è¾¹ï¼šä»å³åˆ°å·¦
         for (float x = right - HALF_UNIT; x >= left + HALF_UNIT; x -= step) {
             candidates.emplace_back(x, bottom);
         }
-        // ×ó±ß£º´ÓÏÂµ½ÉÏ
+        // å·¦è¾¹ï¼šä»ä¸‹åˆ°ä¸Š
         for (float y = bottom - HALF_UNIT; y >= top + HALF_UNIT; y -= step) {
             candidates.emplace_back(left, y);
         }
 
-        // Ë³Ê±ÕëË³ĞòÖğ¸ö³¢ÊÔ
+        // é¡ºæ—¶é’ˆé¡ºåºé€ä¸ªå°è¯•
         for (const Vector2& spawn_center : candidates) {
             CollisionBox spawn_box{ {spawn_center.x - HALF_UNIT, spawn_center.y - HALF_UNIT},
                                     UNIT_WIDTH, UNIT_HEIGHT };
 
-            // ±ß½ç¼ì²é
+            // è¾¹ç•Œæ£€æŸ¥
             if (spawn_box.position.x < 0.0f || spawn_box.position.y < 0.0f ||
                 spawn_box.position.x + spawn_box.width  > map_w ||
                 spawn_box.position.y + spawn_box.height > map_h)
                 continue;
 
-            // ÖĞĞÄµãµØĞÎ¿ÉÍ¨ĞĞ
+            // ä¸­å¿ƒç‚¹åœ°å½¢å¯é€šè¡Œ
             int cx = static_cast<int>(spawn_center.x / cell_size);
             int cy = static_cast<int>(spawn_center.y / cell_size);
             if (!map->is_cell_passable(cx, cy)) continue;
 
-            // ²»ÓëÏÖÓĞÊµÌåÖØµş
+            // ä¸ä¸ç°æœ‰å®ä½“é‡å 
             if (factory->check_overlap(spawn_box)) continue;
 
-            // ´´½¨µ¥Î»
+            // åˆ›å»ºå•ä½
             factory->set_player_id(player_id);
             GameObject* unit = factory->create_unit_by_type(type, spawn_box, false);
             if (unit) return true;
         }
     }
-    return false;  // ÈıÈ¦È«Âú
+    return false;  // ä¸‰åœˆå…¨æ»¡
 }
 
 void ProductionSystem::on_update(float delta) {
@@ -107,48 +109,53 @@ void ProductionSystem::on_update(float delta) {
         auto& entry = queue->queue.front();
         entry.elapsed += delta;
 
-        // ´¦ÀíÖ®Ç°Òò¿Õ¼ä²»×ã±»¶³½áµÄÇé¿ö
+        // å¤„ç†ä¹‹å‰å› ç©ºé—´ä¸è¶³è¢«å†»ç»“çš„æƒ…å†µ
         if (queue->frozen_flag) {
             queue->frozen_flag = false;
             if (entry.type == ProductionType::Unit) {
                 if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
                     queue->queue.erase(queue->queue.begin());
+                    continue;
                 }
-                else {
-                    queue->frozen_flag = true;
-                }
+                queue->frozen_flag = true;
             }
             else if (entry.type == ProductionType::Research) {
-                // ÑĞ¾¿Íê³É
-                if (entry.research_callback) {
-                    auto* own = obj->get_component<Ownership>();
-                    if (own) entry.research_callback(own->player_id);
+                // ç ”ç©¶å®Œæˆï¼šå›è°ƒ + å†™å…¥ç©å®¶å…¨å±€ç§‘æŠ€è¡¨ï¼ˆè·¨å»ºç­‘å‰ç½®ç§‘æŠ€åˆ¤å®šï¼‰
+                auto* own = obj->get_component<Ownership>();
+                int player_id = own ? own->player_id : 0;
+                if (entry.research_callback) entry.research_callback(player_id);
+                if (player_id > 0) {
+                    ResourcesMgr::instance()->add_tech(player_id, entry.tech_name);
+                    apply_tech_effects_to_player(player_id, entry.tech_name);
                 }
-                // ¼ÇÂ¼ÒÑÍê³É¿Æ¼¼
                 queue->completed_research.insert(entry.tech_name);
                 queue->queue.erase(queue->queue.begin());
+                continue;
             }
         }
 
-        // Õı³£Íê³ÉÉú²ú/ÑĞ¾¿
+        // æ­£å¸¸å®Œæˆç”Ÿäº§/ç ”ç©¶
         if (entry.elapsed >= entry.total_time) {
             if (entry.type == ProductionType::Unit) {
                 if (try_spawn_unit_circles(obj, entry.unit_type, factory)) {
                     queue->queue.erase(queue->queue.begin());
+                    continue;
                 }
-                else {
-                    queue->frozen_flag = true;
-                    entry.elapsed = entry.total_time; // ±£³ÖÍê³É×´Ì¬£¬·ÀÖ¹³¬Ê±¶à´Î³¢ÊÔ
-                }
+                queue->frozen_flag = true;
+                entry.elapsed = entry.total_time; // ä¿æŒå®ŒæˆçŠ¶æ€ï¼Œé˜²æ­¢è¶…æ—¶å¤šæ¬¡å°è¯•
             }
             else if (entry.type == ProductionType::Research) {
-                // ÑĞ¾¿Íê³É
-                if (entry.research_callback) {
-                    auto* own = obj->get_component<Ownership>();
-                    if (own) entry.research_callback(own->player_id);
+                // ç ”ç©¶å®Œæˆ
+                auto* own = obj->get_component<Ownership>();
+                int player_id = own ? own->player_id : 0;
+                if (entry.research_callback) entry.research_callback(player_id);
+                if (player_id > 0) {
+                    ResourcesMgr::instance()->add_tech(player_id, entry.tech_name);
+                    apply_tech_effects_to_player(player_id, entry.tech_name);
                 }
                 queue->completed_research.insert(entry.tech_name);
                 queue->queue.erase(queue->queue.begin());
+                continue;
             }
         }
     }

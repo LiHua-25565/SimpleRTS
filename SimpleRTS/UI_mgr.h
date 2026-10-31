@@ -1,4 +1,4 @@
-#ifndef _UI_MGR_H_
+ï»¿#ifndef _UI_MGR_H_
 #define _UI_MGR_H_
 
 #include <SDL3/SDL.h>
@@ -8,13 +8,13 @@
 #include "resources_mgr.h"
 #include "production_data.h"
 
-// ========== ÎÆÀí¶ÔÆë·½Ê½ ==========
+// ========== çº¹ç†å¯¹é½æ–¹å¼ ==========
 enum class TexAlign {
-    Auto,        // ¾É¹æÔò£ºx_percent=0 Ê±×óËõ½ø 5px¡¢=1 Ê±ÓÒËõ½ø 5px£¬´¹Ö±¾ÓÖĞ
-    BottomRight  // ÎÆÀíÓÒÏÂ½Ç¶ÔÆëÇøÓòÓÒÏÂ½Ç
+    Auto,        // æ—§è§„åˆ™ï¼šx_percent=0 æ—¶å·¦ç¼©è¿› 5pxã€=1 æ—¶å³ç¼©è¿› 5pxï¼Œå‚ç›´å±…ä¸­
+    BottomRight  // çº¹ç†å³ä¸‹è§’å¯¹é½åŒºåŸŸå³ä¸‹è§’
 };
 
-// ========== UI ×îĞ¡µ¥Ôª ==========
+// ========== UI æœ€å°å•å…ƒ ==========
 struct ui_region {
     float x_percent = 0.0f;
     float y_percent = 0.0f;
@@ -31,21 +31,22 @@ struct ui_region {
 
     SDL_FRect abs_rect{ 0.0f, 0.0f, 0.0f, 0.0f };
     std::function<void()> on_click;
+    std::string tooltip;               // é¼ æ ‡åœç•™æ—¶æ˜¾ç¤ºçš„æŒ‰é’®è¯´æ˜ï¼Œç©º = ä¸æ˜¾ç¤º
 
-    // ÎÆÀí¶ÔÆë·½Ê½£¨½ö¶Ô texture_id ÉúĞ§£©
+    // çº¹ç†å¯¹é½æ–¹å¼ï¼ˆä»…å¯¹ texture_id ç”Ÿæ•ˆï¼‰
     TexAlign tex_align = TexAlign::Auto;
-    // >= 0 Ê±£º±¾ÇøÓòÓÒÏÂ½Ç¶ÔÆë"Í¬Ãæ°åÄÚ¸ÃĞòºÅÇøÓò"ÖĞÎÆÀíµÄÓÒÏÂ½Ç£¨½Ç±êÓÃ£©
+    // >= 0 æ—¶ï¼šæœ¬åŒºåŸŸå³ä¸‹è§’å¯¹é½"åŒé¢æ¿å†…è¯¥åºå·åŒºåŸŸ"ä¸­çº¹ç†çš„å³ä¸‹è§’ï¼ˆè§’æ ‡ç”¨ï¼‰
     int      attach_to_region = -1;
-    // ÔÚ×îÖÕÎ»ÖÃ»ù´¡ÉÏÔÙ×öµÄÏñËØÎ¢µ÷£¨ÕıÊı = ÏòÓÒ / ÏòÏÂ£©£¬²»Ëæ·Ö±æÂÊËõ·Å
+    // åœ¨æœ€ç»ˆä½ç½®åŸºç¡€ä¸Šå†åšçš„åƒç´ å¾®è°ƒï¼ˆæ­£æ•° = å‘å³ / å‘ä¸‹ï¼‰ï¼Œä¸éšåˆ†è¾¨ç‡ç¼©æ”¾
     float    nudge_x = 0.0f;
     float    nudge_y = 0.0f;
 
-    // °´Å¥°´ÏÂ×´Ì¬£¨ÓÃÓÚ¸ßÁÁ·´À¡£©
+    // æŒ‰é’®æŒ‰ä¸‹çŠ¶æ€ï¼ˆç”¨äºé«˜äº®åé¦ˆï¼‰
     SDL_Color original_color{ 0, 0, 0, 0 };
     bool      is_pressed = false;
 };
 
-// ========== ÃªµãÃ¶¾Ù ==========
+// ========== é”šç‚¹æšä¸¾ ==========
 enum class PanelAnchor {
     BottomLeft,
     BottomCenter,
@@ -55,7 +56,7 @@ enum class PanelAnchor {
     TopRight
 };
 
-// ========== Ãæ°å ==========
+// ========== é¢æ¿ ==========
 struct ui_panel {
     std::string name;
     PanelAnchor anchor = PanelAnchor::BottomLeft;
@@ -68,7 +69,7 @@ struct ui_panel {
     SDL_FRect abs_rect{ 0, 0, 0, 0 };
 };
 
-// ========== ÊôĞÔĞĞÅäÖÃ ==========
+// ========== å±æ€§è¡Œé…ç½® ==========
 class GameObject;
 struct ui_attribute_row {
     std::string label;
@@ -76,7 +77,7 @@ struct ui_attribute_row {
     std::function<std::string(GameObject*)> text;
 };
 
-// ========== UI ¹ÜÀíÆ÷ ==========
+// ========== UI ç®¡ç†å™¨ ==========
 class UIMgr {
 public:
     static UIMgr* instance();
@@ -86,6 +87,7 @@ public:
     void update_layout(int screen_w, int screen_h);
     void update_content();
     void on_render();
+    void handle_mouse_move(float x, float y);
     bool handle_mouse_down(float x, float y);
     bool handle_mouse_up(float x, float y);
 
@@ -96,7 +98,7 @@ public:
     void remove_panel(const std::string& name);
 
 public:
-    // ½¨Öş·ÅÖÃÄ£Ê½Ïà¹Ø
+    // å»ºç­‘æ”¾ç½®æ¨¡å¼ç›¸å…³
     bool is_placement_mode() const { return placement_active; }
     void enter_placement(BuildingEntityType type);
     void cancel_placement();
@@ -104,13 +106,13 @@ public:
     void update_placement_preview(int grid_x, int grid_y, bool blocked);
     void clear_placement_preview();
     std::function<void(BuildingEntityType, int, int)> on_placement_confirm;
-    // »ñÈ¡µ±Ç°·ÅÖÃµÄ½¨ÖşÀàĞÍ£¨¹©ÆäËûÄ£¿é²éÑ¯£©
+    // è·å–å½“å‰æ”¾ç½®çš„å»ºç­‘ç±»å‹ï¼ˆä¾›å…¶ä»–æ¨¡å—æŸ¥è¯¢ï¼‰
     BuildingEntityType get_placement_building() const { return placement_building; }
 
 private:
-    bool placement_active = false;          // ÊÇ·ñ´¦ÓÚ·ÅÖÃ×´Ì¬
-    BuildingEntityType placement_building;  // ½ö±£´æ½¨ÖşÀàĞÍ
-    // Ô¤ÀÀ¾ØĞÎ×´Ì¬
+    bool placement_active = false;          // æ˜¯å¦å¤„äºæ”¾ç½®çŠ¶æ€
+    BuildingEntityType placement_building;  // ä»…ä¿å­˜å»ºç­‘ç±»å‹
+    // é¢„è§ˆçŸ©å½¢çŠ¶æ€
     bool  preview_active = false;
     int   preview_grid_x = 0;
     int   preview_grid_y = 0;
@@ -131,30 +133,30 @@ private:
     uint64_t last_selected_id = 0;
     std::vector<int> last_resource_value_cache;
 
-    // ========== ×ÊÔ´Ãæ°å£º²É¼¯Å©ÃñÊı½Ç±ê ==========
-    // Ã¿Ìõ×ÊÔ´ÅäÖÃ 4 ¸öÇøÓò£º0=µ× 1=ºº×Ö 2=ÊıÖµ 3=²É¼¯Å©ÃñÊı½Ç±ê
+    // ========== èµ„æºé¢æ¿ï¼šé‡‡é›†å†œæ°‘æ•°è§’æ ‡ ==========
+    // æ¯æ¡èµ„æºé…ç½® 4 ä¸ªåŒºåŸŸï¼š0=åº• 1=æ±‰å­— 2=æ•°å€¼ 3=é‡‡é›†å†œæ°‘æ•°è§’æ ‡
     static constexpr int resource_regions_per_bar = 4;
-    int gather_badge_font_size = 12;              // ½Ç±ê×ÖºÅ£¬Ëæ font_size Ëõ·Å
-    std::vector<int> last_gather_count_cache;     // ¸÷×ÊÔ´ÌõÉÏ´ÎÏÔÊ¾µÄÅ©ÃñÊı
+    int gather_badge_font_size = 12;              // è§’æ ‡å­—å·ï¼Œéš font_size ç¼©æ”¾
+    std::vector<int> last_gather_count_cache;     // å„èµ„æºæ¡ä¸Šæ¬¡æ˜¾ç¤ºçš„å†œæ°‘æ•°
 
     std::vector<ui_attribute_row> attribute_rows;
 
     std::string resource_names[static_cast<int>(ResourceType::Count)] = {
-        "", u8"Ä¾", u8"Èâ", u8"½ğ", u8"Ê¯"
+        "", u8"æœ¨", u8"è‚‰", u8"é‡‘", u8"çŸ³"
     };
 
-    // °´ÏÂ×´Ì¬¼ÇÂ¼£¨Ãæ°åÃû+Ë÷Òı£¬±ÜÃâÖ¸ÕëĞü¿Õ£©
+    // æŒ‰ä¸‹çŠ¶æ€è®°å½•ï¼ˆé¢æ¿å+ç´¢å¼•ï¼Œé¿å…æŒ‡é’ˆæ‚¬ç©ºï¼‰
     std::string pressed_panel_name;
     int         pressed_region_index = -1;
 
-    // ========== ²¼¾Ö²ÎÊı ==========
+    // ========== å¸ƒå±€å‚æ•° ==========
     float panel_w_percent = 0.12f;
     float panel_h_percent = 0.16f;
     float panel_margin_x_percent = 0.01f;
     float panel_margin_y_percent = 0.01f;
     float font_size_percent = 0.025f;
 
-    // ========== ĞÅÏ¢Ãæ°å²¼¾Ö²ÎÊı ==========
+    // ========== ä¿¡æ¯é¢æ¿å¸ƒå±€å‚æ•° ==========
     float info_single_panel_w_percent = 0.30f;
     float info_multi_panel_w_percent = 0.28f;
 
@@ -167,7 +169,7 @@ private:
     int   single_max_rows_per_col = 3;
     float single_attr_row_height = 0.25f;
 
-    // ========== Éú²úÃæ°å²ÎÊı ==========
+    // ========== ç”Ÿäº§é¢æ¿å‚æ•° ==========
     float prod_panel_w_percent = 0.18f;
     float prod_panel_h_percent = 0.16f;
     float prod_queue_panel_h_percent = 0.06f;
@@ -181,17 +183,40 @@ private:
     int   prod_max_buttons = 8;
     int   max_production_queue_size = 6;
 
-    // ========== ¿Éµ÷ÑÕÉ« ==========
-    SDL_Color panel_bg_color = { 20, 20, 20, 255 };  // ËùÓĞÃæ°åÍ³Ò»±³¾°É«
-    SDL_Color slot_bg_color = { 60, 60, 60, 255 };  // ÓĞĞ§²ÛÎ»±³¾°É«
-    SDL_Color empty_slot_bg_color = { 35, 35, 35, 255 };  // ¿Õ²ÛÎ»±³¾°É«£¨ÉÔ°µ£©
-    SDL_Color button_bg_color = { 60, 60, 60, 255 };  // ¿ÉÓÃÉú²ú°´Å¥±³¾°É«
-    SDL_Color disabled_button_bg_color = { 30, 30, 30, 255 };  // ²»¿ÉÓÃ°´Å¥±³¾°É«£¨¿Æ¼¼Íê³É/ÅÅ¶Ó£©
-    SDL_Color empty_button_bg_color = { 35, 35, 35, 255 };  // ¿Õ°´Å¥±³¾°É«£¨Óë¿Õ²ÛÎ»Ò»ÖÂ£©
+    // ========== å¯è°ƒé¢œè‰² ==========
+    SDL_Color panel_bg_color = { 20, 20, 20, 255 };  // æ‰€æœ‰é¢æ¿ç»Ÿä¸€èƒŒæ™¯è‰²
+    SDL_Color slot_bg_color = { 60, 60, 60, 255 };  // æœ‰æ•ˆæ§½ä½èƒŒæ™¯è‰²
+    SDL_Color empty_slot_bg_color = { 35, 35, 35, 255 };  // ç©ºæ§½ä½èƒŒæ™¯è‰²ï¼ˆç¨æš—ï¼‰
+    SDL_Color button_bg_color = { 60, 60, 60, 255 };  // å¯ç”¨ç”Ÿäº§æŒ‰é’®èƒŒæ™¯è‰²
+    SDL_Color disabled_button_bg_color = { 30, 30, 30, 255 };  // ä¸å¯ç”¨æŒ‰é’®èƒŒæ™¯è‰²ï¼ˆç§‘æŠ€å®Œæˆ/æ’é˜Ÿï¼‰
+    SDL_Color empty_button_bg_color = { 35, 35, 35, 255 };  // ç©ºæŒ‰é’®èƒŒæ™¯è‰²ï¼ˆä¸ç©ºæ§½ä½ä¸€è‡´ï¼‰
 
     void build_production_ui();
     void update_production_panel_content();
     void update_production_queue_display();
+
+    // æŒ‰é’®æ‚¬åœè¯´æ˜ / èµ„æºä¸è¶³æç¤º
+    std::string format_cost_values(const int costs[]) const;
+    std::string production_tooltip(const ProductionItem& item, bool can_interact,
+        bool is_unlocked, bool is_completed, bool is_in_queue, bool is_building) const;
+    void show_resource_warning(const int costs[], const std::string& item_name,
+        const std::string& action);
+    void refresh_hover_target();
+    void draw_hover_tooltip();
+    void draw_resource_warning();
+
+    float mouse_x_ = 0.0f;
+    float mouse_y_ = 0.0f;
+    int screen_w_ = 0;
+    int screen_h_ = 0;
+
+    std::string hover_panel_;
+    int hover_region_ = -1;
+    Uint64 hover_start_ms_ = 0;
+
+    std::string warning_title_;
+    std::vector<std::string> warning_lines_;
+    Uint64 warning_until_ms_ = 0;
 
     const std::vector<ProductionItem>* current_production_list = nullptr;
     BuildingEntityType current_building_type = BuildingEntityType::TownCenter;

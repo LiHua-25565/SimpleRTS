@@ -1,4 +1,4 @@
-#ifndef _TEXTURE_CACHE_H_
+ï»¿#ifndef _TEXTURE_CACHE_H_
 #define _TEXTURE_CACHE_H_
 
 #include "unit_type.h"
@@ -18,28 +18,30 @@ public:
     void init(SDL_Renderer* renderer, TTF_Font* base_font);
     void shutdown();
 
-    // ---- ÊµÌåÎÆÀí£¨·µ»ØÎÆÀí ID£© ----
+    // ---- å®ä½“çº¹ç†ï¼ˆè¿”å›çº¹ç† IDï¼‰ ----
     uint32_t get_resource_texture(ResourceEntityType type, int width, int height);
     uint32_t get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height);
     uint32_t get_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type);
     uint32_t get_building_texture(BuildingEntityType type, SDL_Color color, int width, int height);
     uint32_t get_research_texture(const std::string& name, int width, int height);
+    // å®šä¹‰å¯¼å…¥/ç¼–è¾‘åæ¸…ç©ºå®ä½“çº¹ç†ç¼“å­˜ï¼ˆåŒæ—¶é‡Šæ”¾ SDL_Textureï¼‰
+    void clear_entity_caches();
 
-    // ---- ÎÄ×ÖÎÆÀí£¨·µ»ØÎÆÀí ID£© ----
+    // ---- æ–‡å­—çº¹ç†ï¼ˆè¿”å›çº¹ç† IDï¼‰ ----
     uint32_t get_text_texture(const std::string& text, SDL_Color color, int font_size, int width = 0, int height = 0);
     bool get_texture_size(uint32_t id, float& w, float& h) const;
 
-    // ---- ÎÆÀí ID ²Ù×÷ ----
-    SDL_Texture* get_texture_by_id(uint32_t id) const;   // Í¨¹ı ID »ñÈ¡ÂãÖ¸Õë£¨½öäÖÈ¾Ê±Ê¹ÓÃ£©
-    void release_texture(uint32_t id);                    // ÊÍ·ÅÎÆÀí£¬Í¬Ê±´Ó»º´æÖĞÒÆ³ı
+    // ---- çº¹ç† ID æ“ä½œ ----
+    SDL_Texture* get_texture_by_id(uint32_t id) const;   // é€šè¿‡ ID è·å–è£¸æŒ‡é’ˆï¼ˆä»…æ¸²æŸ“æ—¶ä½¿ç”¨ï¼‰
+    void release_texture(uint32_t id);                    // é‡Šæ”¾çº¹ç†ï¼ŒåŒæ—¶ä»ç¼“å­˜ä¸­ç§»é™¤
 
-    // ---- ×ÖÌå¹ÜÀí£¨Ôİ±£ÁôÂãÖ¸Õë£¬ÄÚ²¿Ê¹ÓÃ£© ----
+    // ---- å­—ä½“ç®¡ç†ï¼ˆæš‚ä¿ç•™è£¸æŒ‡é’ˆï¼Œå†…éƒ¨ä½¿ç”¨ï¼‰ ----
     TTF_Font* get_font(int font_size);
 
-    // ×¢²áÍâ²¿´´½¨µÄÎÆÀí£¬·µ»ØÎÆÀí ID£¨²»¸ºÔğ´´½¨£¬½ö½Ó¹ÜÉúÃüÖÜÆÚ£©
+    // æ³¨å†Œå¤–éƒ¨åˆ›å»ºçš„çº¹ç†ï¼Œè¿”å›çº¹ç† IDï¼ˆä¸è´Ÿè´£åˆ›å»ºï¼Œä»…æ¥ç®¡ç”Ÿå‘½å‘¨æœŸï¼‰
     uint32_t register_external_texture(SDL_Texture* tex);
 
-    // ¸¨Öúº¯Êı
+    // è¾…åŠ©å‡½æ•°
     std::string get_resource_name(ResourceEntityType type) const;
     std::string get_unit_name(UnitEntityType type) const;
     std::string get_building_name(BuildingEntityType type) const;
@@ -48,20 +50,20 @@ private:
     TextureCache() = default;
     ~TextureCache() { shutdown(); }
 
-    // ÎÆÀí×¢²áÓë ID ·ÖÅä
+    // çº¹ç†æ³¨å†Œä¸ ID åˆ†é…
     uint32_t register_texture(SDL_Texture* tex);
 
     SDL_Renderer* renderer = nullptr;
     TTF_Font* base_font = nullptr;
 
-    // ÎÆÀí ID Ó³Éä±í
+    // çº¹ç† ID æ˜ å°„è¡¨
     std::unordered_map<uint32_t, SDL_Texture*> texture_map;
     uint32_t next_texture_id = 1;
 
-    // ×ÖÌå»º´æ£¨×ÖºÅ ¡ú ×ÖÌåÖ¸Õë£©
+    // å­—ä½“ç¼“å­˜ï¼ˆå­—å· â†’ å­—ä½“æŒ‡é’ˆï¼‰
     std::unordered_map<int, TTF_Font*> font_cache;
 
-    // ---- ÎÆÀí»º´æ¼ü£¨value ÀàĞÍ¸ÄÎª uint32_t£© ----
+    // ---- çº¹ç†ç¼“å­˜é”®ï¼ˆvalue ç±»å‹æ”¹ä¸º uint32_tï¼‰ ----
     struct ResourceKey {
         ResourceEntityType type;
         int width, height;
@@ -86,8 +88,10 @@ private:
         Uint32 color;
         int width;
         int height;
+        uint32_t revision;
         bool operator==(const UnitKey& o) const {
-            return type == o.type && color == o.color && width == o.width && height == o.height;
+            return type == o.type && color == o.color && width == o.width && height == o.height &&
+                revision == o.revision;
         }
     };
     struct UnitKeyHash {
@@ -98,6 +102,7 @@ private:
             combine(static_cast<size_t>(k.color));
             combine(static_cast<size_t>(k.width));
             combine(static_cast<size_t>(k.height));
+            combine(static_cast<size_t>(k.revision));
             return seed;
         }
     };
@@ -108,10 +113,12 @@ private:
         SDL_Color color;
         int width, height;
         ResourceType res_type;
+        uint32_t revision;
         bool operator==(const CarryKey& o) const {
             return type == o.type && color.r == o.color.r && color.g == o.color.g &&
                 color.b == o.color.b && color.a == o.color.a &&
-                width == o.width && height == o.height && res_type == o.res_type;
+                width == o.width && height == o.height && res_type == o.res_type &&
+                revision == o.revision;
         }
     };
     struct CarryKeyHash {
@@ -121,6 +128,7 @@ private:
             combine(static_cast<size_t>(k.type));
             combine(k.color.r); combine(k.color.g); combine(k.color.b); combine(k.color.a);
             combine(k.width); combine(k.height); combine(static_cast<size_t>(k.res_type));
+            combine(static_cast<size_t>(k.revision));
             return seed;
         }
     };
@@ -130,10 +138,12 @@ private:
         BuildingEntityType type;
         SDL_Color color;
         int width, height;
+        uint32_t revision;
         bool operator==(const BuildingKey& o) const {
             return type == o.type &&
                 color.r == o.color.r && color.g == o.color.g && color.b == o.color.b &&
-                color.a == o.color.a && width == o.width && height == o.height;
+                color.a == o.color.a && width == o.width && height == o.height &&
+                revision == o.revision;
         }
     };
     struct BuildingKeyHash {
@@ -143,6 +153,7 @@ private:
             combine(static_cast<size_t>(k.type));
             combine(k.color.r); combine(k.color.g); combine(k.color.b); combine(k.color.a);
             combine(k.width); combine(k.height);
+            combine(static_cast<size_t>(k.revision));
             return seed;
         }
     };
@@ -152,7 +163,7 @@ private:
         std::string text;
         SDL_Color color;
         int font_size;
-        int width = 0;   // 0 ±íÊ¾µ¥ĞĞ£¨×Ô¶¯ºöÂÔ£©
+        int width = 0;   // 0 è¡¨ç¤ºå•è¡Œï¼ˆè‡ªåŠ¨å¿½ç•¥ï¼‰
         int height = 0;
         bool operator==(const TextKey& o) const {
             return text == o.text && color.r == o.color.r && color.g == o.color.g &&
@@ -174,14 +185,14 @@ private:
     };
     std::unordered_map<TextKey, uint32_t, TextKeyHash> text_cache;
 
-    // ---- ÄÚ²¿´´½¨º¯Êı£¨ÈÔ·µ»Ø SDL_Texture*£¬ÓÉ get º¯Êı×¢²áÎª ID£© ----
+    // ---- å†…éƒ¨åˆ›å»ºå‡½æ•°ï¼ˆä»è¿”å› SDL_Texture*ï¼Œç”± get å‡½æ•°æ³¨å†Œä¸º IDï¼‰ ----
     SDL_Texture* create_resource_texture(ResourceEntityType type, int width, int height);
     SDL_Texture* create_unit_texture(UnitEntityType type, SDL_Color color, int width, int height);
     SDL_Texture* create_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type);
     SDL_Texture* create_building_texture(BuildingEntityType type, SDL_Color color, int width, int height);
     SDL_Texture* create_text_texture(const std::string& text, SDL_Color color, int font_size);
 
-    // ---- ¸¨Öúº¯Êı ----
+    // ---- è¾…åŠ©å‡½æ•° ----
     SDL_Color get_player_color(int playerId) const;
     SDL_Surface* render_text_multiline(const std::string& text, SDL_Color color, int width, int height);
 };

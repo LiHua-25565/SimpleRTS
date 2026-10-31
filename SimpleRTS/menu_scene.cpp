@@ -1,4 +1,4 @@
-#include "menu_scene.h"
+ï»¿#include "menu_scene.h"
 #include "scene_mgr.h"
 #include "scene_ui.h"
 
@@ -30,23 +30,29 @@ void MenuScene::layout_buttons()
     const float btn_h = 60.0f;
     const float gap = 24.0f;
     const float cx = LOGICAL_W * 0.5f;
-    const float start_y = 360.0f;
+    const float start_y = 330.0f;
 
     Button start;
     start.rect = { cx - btn_w * 0.5f, start_y, btn_w, btn_h };
-    start.label = u8"¿ªÊ¼ÓÎÏ·";
+    start.label = u8"å¼€å§‹æ¸¸æˆ";
     start.on_click = [this]() { do_start(); };
     buttons_.push_back(start);
 
+    Button def_editor;
+    def_editor.rect = { cx - btn_w * 0.5f, start_y + btn_h + gap, btn_w, btn_h };
+    def_editor.label = u8"å…µç§å»ºç­‘ç¼–è¾‘";
+    def_editor.on_click = [this]() { do_def_editor(); };
+    buttons_.push_back(def_editor);
+
     Button editor;
-    editor.rect = { cx - btn_w * 0.5f, start_y + btn_h + gap, btn_w, btn_h };
-    editor.label = u8"µØÍ¼±à¼­";
+    editor.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 2, btn_w, btn_h };
+    editor.label = u8"åœ°å›¾ç¼–è¾‘";
     editor.on_click = [this]() { do_editor(); };
     buttons_.push_back(editor);
 
     Button quit;
-    quit.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 2, btn_w, btn_h };
-    quit.label = u8"ÍË³öÓÎÏ·";
+    quit.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 3, btn_w, btn_h };
+    quit.label = u8"é€€å‡ºæ¸¸æˆ";
     quit.on_click = [this]() { do_quit(); };
     buttons_.push_back(quit);
 }
@@ -59,6 +65,11 @@ void MenuScene::do_start()
 void MenuScene::do_editor()
 {
     SceneMgr::instance()->on_switch(SceneMgr::SceneType::MapEditor);
+}
+
+void MenuScene::do_def_editor()
+{
+    SceneMgr::instance()->on_switch(SceneMgr::SceneType::DefEditor);
 }
 
 void MenuScene::do_quit()
@@ -86,6 +97,8 @@ void MenuScene::on_input(const SDL_Event& event)
     else if (event.type == SDL_EVENT_KEY_DOWN) {
         if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER)
             do_start();
+        else if (event.key.key == SDLK_F2)
+            do_def_editor();
         else if (event.key.key == SDLK_ESCAPE)
             do_quit();
     }
@@ -93,18 +106,20 @@ void MenuScene::on_input(const SDL_Event& event)
 
 void MenuScene::on_render()
 {
-    // ±³¾°
+    // èƒŒæ™¯
     SDL_SetRenderDrawColor(renderer, 16, 22, 36, 255);
     SDL_RenderClear(renderer);
 
-    // ¶¥²¿×°ÊÎÌõ
+    // é¡¶éƒ¨è£…é¥°æ¡
     ui_fill_rect(renderer, SDL_FRect{ 0, 0, LOGICAL_W, 8.0f }, { 255, 215, 0, 255 });
 
-    // ±êÌâ
+    // æ ‡é¢˜
     ui_draw_text(renderer, u8"MySTR", 88, { 255, 215, 0, 255 }, LOGICAL_W * 0.5f, 190.0f, true);
-    ui_draw_text(renderer, u8"2D ¼´Ê±Õ½ÂÔ", 36, { 200, 210, 230, 255 }, LOGICAL_W * 0.5f, 290.0f, true);
+    ui_draw_text(renderer, u8"2D å³æ—¶æˆ˜ç•¥", 36, { 200, 210, 230, 255 }, LOGICAL_W * 0.5f, 290.0f, true);
+    ui_draw_text(renderer, u8"v1.1  Â·  2v2 æ›´æ–°", 16, { 120, 132, 155, 255 },
+        LOGICAL_W * 0.5f, LOGICAL_H - 20.0f, true);
 
-    // °´Å¥
+    // æŒ‰é’®
     for (size_t i = 0; i < buttons_.size(); ++i) {
         bool hover = ((int)i == hovered_);
         SDL_Color bg = hover ? SDL_Color{ 52, 70, 120, 255 } : SDL_Color{ 36, 48, 84, 255 };

@@ -1,4 +1,4 @@
-#ifndef _FACTORIES_H_
+ï»¿#ifndef _FACTORIES_H_
 #define _FACTORIES_H_
 
 #include "game_object.h"
@@ -9,42 +9,49 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+struct UnitDef;
+struct BuildingDef;
+
 class ObjectFactory {
 public:
     void init(GameMap* map);
 
     GameObject* create_resource_by_type(ResourceEntityType type, int grid_x, int grid_y, bool allow_overlap = false);
 
-    // Í¨ÓÃµ¥Î»´´½¨£¨¸ù¾İÀàĞÍ·Ö·¢£©
+    // é€šç”¨å•ä½åˆ›å»ºï¼ˆæ ¹æ®ç±»å‹åˆ†å‘ï¼‰
     GameObject* create_unit_by_type(UnitEntityType type, const CollisionBox& box, bool allow_overlap = false);
-    // ½¨Öş´´½¨
+    // å»ºç­‘åˆ›å»º
     GameObject* create_building_by_type(BuildingEntityType type, int grid_x, int grid_y, bool allow_overlap = false);
 
-    GameObject* create_villager(const CollisionBox& box, bool allow_overlap = false);   // ¿ì½İ´´½¨£¨Å©Ãñ£©
+    GameObject* create_villager(const CollisionBox& box, bool allow_overlap = false);   // å¿«æ·åˆ›å»ºï¼ˆå†œæ°‘ï¼‰
     GameObject* create_archer(const CollisionBox& box, bool allow_overlap = false);      
-    GameObject* create_crossbowman(const CollisionBox& box, bool allow_overlap = false);    // åóÊÖ
+    GameObject* create_crossbowman(const CollisionBox& box, bool allow_overlap = false);    // å¼©æ‰‹
 
     GameObject* create_town_center(int grid_x, int grid_y, bool allow_overlap = false);
-    GameObject* create_archery_range(int grid_x, int grid_y, bool allow_overlap = false);   // °Ğ³¡
+    GameObject* create_archery_range(int grid_x, int grid_y, bool allow_overlap = false);   // é¶åœº
 
     uint64_t create_projectile_by_type(ProjectileType type, const Vector2& start, const Vector2& target, int damage, uint64_t target_id);
     uint64_t create_arrow(const Vector2& start, const Vector2& target, int damage, uint64_t target_id);
 
-    // ĞÂÔö£ºÉèÖÃÍæ¼ÒID£¨ÓÃÓÚÕóÓªÎÆÀí£©
+    // æ–°å¢ï¼šè®¾ç½®ç©å®¶IDï¼ˆç”¨äºé˜µè¥çº¹ç†ï¼‰
     void set_player_id(int playerId) { current_player_id = playerId; }
     GameObject* check_overlap(const CollisionBox& box) const;
 
-    // °´Íæ¼Ò¸²¸ÇÑÕÉ«£¨¿ª¾Ö×Ô¶¨Òå¸÷Íæ¼ÒÑÕÉ«£©£»´« Color::None ±íÊ¾Çå³ı¸ÃÍæ¼Ò¸²¸Ç
+    // æŒ‰ç©å®¶è¦†ç›–é¢œè‰²ï¼ˆå¼€å±€è‡ªå®šä¹‰å„ç©å®¶é¢œè‰²ï¼‰ï¼›ä¼  Color::None è¡¨ç¤ºæ¸…é™¤è¯¥ç©å®¶è¦†ç›–
     void set_player_color(int player_id, Color c);
     void clear_color_overrides() { color_overrides_.clear(); }
-    Color player_color(int player_id) const;   // ÓÅÏÈ¸²¸ÇÉ«£¬·ñÔòÄ¬ÈÏÉ«
+    Color player_color(int player_id) const;   // ä¼˜å…ˆè¦†ç›–è‰²ï¼Œå¦åˆ™é»˜è®¤è‰²
 
 public:
     static Color get_player_color(int player_id);
 
 private:
     GameMap* map = nullptr;
-    int current_player_id = 0;   // µ±Ç°´´½¨ÊµÌåËùÊôÍæ¼Ò
+    int current_player_id = 0;   // å½“å‰åˆ›å»ºå®ä½“æ‰€å±ç©å®¶
     std::unordered_map<int, Color> color_overrides_;
+
+    // ç¼–è¾‘å™¨è‡ªå®šä¹‰å®ä½“çš„é€šç”¨åˆ›å»ºï¼ˆæŒ‰å®šä¹‰æŒ‚è½½æ’ä»¶ç»„ä»¶ï¼‰
+    GameObject* create_custom_unit(const UnitDef& def, const CollisionBox& box, bool allow_overlap);
+    GameObject* create_custom_building(const BuildingDef& def, int grid_x, int grid_y, bool allow_overlap);
 };
 #endif // !_FACTORIES_H_

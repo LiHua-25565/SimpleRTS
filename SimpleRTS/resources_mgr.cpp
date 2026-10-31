@@ -1,4 +1,5 @@
-#include "resources_mgr.h"
+ï»¿#include "resources_mgr.h"
+#include "entity_defs.h"   // split_tech_names
 
 ResourcesMgr* ResourcesMgr::instance()
 {
@@ -10,16 +11,17 @@ void ResourcesMgr::init(int player_count)
 {
 	player_resources.clear();
 	player_resources.resize(player_count);
-	player_resource_types.assign(player_count, {});   // ³õÊ¼Îª¿Õ
+	player_resource_types.assign(player_count, {});   // åˆå§‹ä¸ºç©º
+	player_techs.assign(player_count, {});            // æ–°å¯¹å±€æ¸…ç©ºå·²å®Œæˆç§‘æŠ€
 
-	// Ä¬ÈÏÕóÓª£¨ÀıÈçÈËÀà£©µÄ×ÊÔ´ÀàĞÍ
+	// é»˜è®¤é˜µè¥ï¼ˆä¾‹å¦‚äººç±»ï¼‰çš„èµ„æºç±»å‹
 	std::vector<ResourceType> default_types = {
 		ResourceType::Gold, ResourceType::Wood,
 		ResourceType::Food, ResourceType::Stone
 	};
 	for (int i = 0; i < player_count; ++i) {
 		set_player_resource_types(i, default_types);
-		// ³õÊ¼×ÊÔ´ÊıÖµ
+		// åˆå§‹èµ„æºæ•°å€¼
 		auto& bag = player_resources[i];
 		bag[ResourceType::Wood] = 20000;
 		bag[ResourceType::Food] = 20000;
@@ -81,6 +83,36 @@ int ResourcesMgr::get_team_id(int player_id) const {
 	auto it = player_team_map.find(player_id);
 	if (it != player_team_map.end())
 		return it->second;
-	// Ä¬ÈÏÇé¿öÏÂ£¬Ã»ÓĞÉèÖÃÓ³ÉäµÄ¶ÓÎé ID = player_id
+	// é»˜è®¤æƒ…å†µä¸‹ï¼Œæ²¡æœ‰è®¾ç½®æ˜ å°„çš„é˜Ÿä¼ ID = player_id
 	return player_id;
+}
+
+// ==================== ç§‘æŠ€ ====================
+
+void ResourcesMgr::add_tech(int player_id, const std::string& tech_name) {
+	if (player_id < 0 || player_id >= (int)player_techs.size()) return;
+	if (tech_name.empty()) return;
+	player_techs[player_id].insert(tech_name);
+}
+
+bool ResourcesMgr::has_tech(int player_id, const std::string& tech_name) const {
+	if (player_id < 0 || player_id >= (int)player_techs.size()) return false;
+	if (tech_name.empty()) return true;
+	return player_techs[player_id].count(tech_name) > 0;
+}
+
+bool ResourcesMgr::has_all_techs(int player_id, const std::string& csv) const {
+	if (csv.empty()) return true;
+	if (player_id < 0 || player_id >= (int)player_techs.size()) return false;
+	for (const auto& name : split_tech_names(csv)) {
+		if (!name.empty() && player_techs[player_id].count(name) == 0)
+			return false;
+	}
+	return true;
+}
+
+const std::unordered_set<std::string>& ResourcesMgr::get_player_techs(int player_id) const {
+	static const std::unordered_set<std::string> empty;
+	if (player_id < 0 || player_id >= (int)player_techs.size()) return empty;
+	return player_techs[player_id];
 }

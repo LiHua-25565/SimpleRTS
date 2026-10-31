@@ -111,13 +111,14 @@ target_link_libraries(SimpleRTS PRIVATE
 # 4. 编译器 / 链接器细节
 # ---------------------------------------------------------------------------
 if(MSVC)
-    # 字符集：源码里的中文是 GBK(CP936) 编码（只有 game_object.h 带 BOM 是 UTF-8），
-    # 而代码里同时用了两种写法：
+    # 字符集：源码目前是混合编码 —— 大部分旧文件是 GBK(CP936)，新增/改动过的
+    # 文件（以及 game_object.h）保存为 UTF-8 with BOM，由 BOM 自动识别。
+    # 代码里同时用了两种写法：
     #   u8"AI 玩家"        -> 必须被转成 UTF-8，交给 SDL_ttf 渲染
     #   MessageBoxA(..., "错误：...")  -> 必须保持 GBK，交给 ANSI API
     # 所以显式写死源字符集和执行字符集都是 936，结果和 VS 在中文系统上的默认行为
     # 完全一致，同时不受构建机当前代码页影响（否则在 UTF-8 代码页下会出 C4876 乱码）。
-    # 注意：game_object.h 带 UTF-8 BOM，BOM 优先级高于该选项，不受影响。
+    # 注意：带 UTF-8 BOM 的文件，BOM 优先级高于 /source-charset，不受该选项影响。
     target_compile_options(SimpleRTS PRIVATE
         /source-charset:.936
         /execution-charset:.936
@@ -158,7 +159,10 @@ add_custom_command(TARGET SimpleRTS POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${GAME_DIR}/maps"
             "$<TARGET_FILE_DIR:SimpleRTS>/maps"
-    COMMENT "拷贝运行期 DLL / font / maps 到输出目录"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${GAME_DIR}/defs"
+            "$<TARGET_FILE_DIR:SimpleRTS>/defs"
+    COMMENT "拷贝运行期 DLL / font / maps / defs 到输出目录"
     VERBATIM)
 
 set_target_properties(SimpleRTS PROPERTIES

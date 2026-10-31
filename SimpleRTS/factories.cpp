@@ -1,6 +1,12 @@
-#include "factories.h"
+ï»¿#include "factories.h"
 #include "texture_cache.h"
 #include "resources_mgr.h"
+#include "entity_defs.h"
+#include "tech_effects.h"
+#include "components.h"
+
+#include <algorithm>
+#include <cmath>
 
 void ObjectFactory::init(GameMap* map) {
     this->map = map;
@@ -23,7 +29,7 @@ GameObject* ObjectFactory::check_overlap(const CollisionBox& box) const {
     for (auto* obj : candidates) {
         if (!obj->check_valid()) continue;
         if (obj->get_component<Projectile>()) continue;
-        if (obj->get_collision_box().overlaps_strict(box)) {  // ¸ÄÎªÑÏ¸ñÏà½»
+        if (obj->get_collision_box().overlaps_strict(box)) {
             return obj;
         }
     }
@@ -66,13 +72,8 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
 
     auto* render = obj->add_component<Renderable>();
     uint32_t tex_id = TextureCache::instance()->get_resource_texture(type, (int)w, (int)h);
-    if (tex_id) {
-        render->texture_id = tex_id;
-        render->color = color;          // ±¸·ÝÉ«ÔÚÎÆÀíÊ§Ð§Ê±Ê¹ÓÃ
-    }
-    else {
-        render->color = color;
-    }
+    render->texture_id = tex_id;
+    render->color = color;          // çº¹ç†å¤±æ•ˆæ—¶çš„å¤‡ä»½è‰²
 
     obj->add_component<FlashComponent>();
 
@@ -93,152 +94,43 @@ GameObject* ObjectFactory::create_resource_by_type(ResourceEntityType type, int 
 
 GameObject* ObjectFactory::create_unit_by_type(UnitEntityType type, const CollisionBox& box, bool allow_overlap)
 {
-    switch (type) {
-    case UnitEntityType::Villager:
-        return create_villager(box, allow_overlap);
-    case UnitEntityType::Archer:
-        return create_archer(box, allow_overlap);
-    case UnitEntityType::Crossbowman:
-        return create_crossbowman(box, allow_overlap);
-    default:
-        return nullptr;
-    }
+    const UnitDef* def = EntityCatalog::instance()->find_unit(type);
+    if (!def) return nullptr;
+    return create_custom_unit(*def, box, allow_overlap);
 }
 
 GameObject* ObjectFactory::create_building_by_type(BuildingEntityType type, int grid_x, int grid_y, bool allow_overlap) {
-    switch (type) {
-    case BuildingEntityType::TownCenter:
-        return create_town_center(grid_x, grid_y, allow_overlap);
-    case BuildingEntityType::ArcheryRange:
-        return create_archery_range(grid_x, grid_y, allow_overlap);
-    default:
-        return nullptr;
-    }
+    const BuildingDef* def = EntityCatalog::instance()->find_building(type);
+    if (!def) return nullptr;
+    return create_custom_building(*def, grid_x, grid_y, allow_overlap);
 }
 
-GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_overlap)
-{
-    if (!map) return nullptr;
-
-    if (!map->is_box_passable(box)) return nullptr;
-
-    if (!allow_overlap && check_overlap(box)) return nullptr;
-
-    auto* obj = new GameObject(box);
-
-    auto* render = obj->add_component<Renderable>();
-    Color unit_color = player_color(current_player_id);
-    render->color = unit_color;
-
-    SDL_Color sdl_color = to_sdl_color(unit_color);
-    uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-        UnitEntityType::Villager, sdl_color, (int)box.width, (int)box.height);
-    if (tex_id) {
-        render->texture_id = tex_id;
-    }
-
-    obj->add_component<Selectable>();
-    obj->add_component<ImpactAnimation>();
-    obj->add_component<FlashComponent>();
-
-    auto* movable = obj->add_component<Movable>();
-    movable->speed = 60.0f;
-
-    auto* unitType = obj->add_component<UnitType>();
-    unitType->type = UnitEntityType::Villager;
-
-    auto* gatherer = obj->add_component<Gatherer>();
-    gatherer->gather_amount = 10;
-    gatherer->gather_interval = 1.0f;
-
-    auto* health = obj->add_component<Health>();
-    health->max_health = 50;
-    health->current_health = 50;
-
-    auto* attack = obj->add_component<Attack>();
-    attack->damage = 10;
-    // ÉèÖÃÅ©Ãñ¶Ô¸÷»¤¼×µÄ´©Í¸Öµ
-    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 1;
-    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 1;
-    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 0;
-    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 0;
-
-    // Ìí¼Ó»¤¼××é¼þ£¨Å©ÃñÎªÇá¼×£©
-    auto* armor = obj->add_component<Armor>();
-    armor->type = ArmorType::Light;
-    armor->armor_value = 1;
-
-    auto* ownership = obj->add_component<Ownership>();
-    ownership->player_id = current_player_id;
-    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
-
-    WorldEntityMgr::instance()->insert_object(obj);
-    return obj;
+GameObject* ObjectFactory::create_villager(const CollisionBox& box, bool allow_overlap) {
+    return create_unit_by_type(UnitEntityType::Villager, box, allow_overlap);
 }
 
-GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_overlap)
-{
-    if (!map) return nullptr;
-
-    if (!map->is_box_passable(box)) return nullptr;
-
-    if (!allow_overlap && check_overlap(box)) return nullptr;
-
-    auto* obj = new GameObject(box);
-
-    auto* render = obj->add_component<Renderable>();
-    Color unit_color = player_color(current_player_id);
-    render->color = unit_color;
-
-    SDL_Color sdl_color = to_sdl_color(unit_color);
-    uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-        UnitEntityType::Archer, sdl_color, (int)box.width, (int)box.height);
-    if (tex_id) {
-        render->texture_id = tex_id;
-    }
-
-    obj->add_component<Selectable>();
-    obj->add_component<ImpactAnimation>();
-
-    auto* movable = obj->add_component<Movable>();
-    movable->speed = 60.0f;
-
-    auto* unitType = obj->add_component<UnitType>();
-    unitType->type = UnitEntityType::Archer;
-
-    auto* attack = obj->add_component<Attack>();
-    attack->damage = 8;
-    attack->attack_interval = 1.5f;
-    attack->range = 200.0f;
-    attack->is_ranged = true;
-    // ÉèÖÃ¹­±ø¶Ô¸÷»¤¼×µÄ´©Í¸Öµ£¨Ô¶³ÌÓÐ½Ï¸ßµÄ´©Í¸£©
-    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 2;
-    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 3;
-    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 1;
-    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 0;
-
-    // Ìí¼Ó»¤¼××é¼þ£¨¹­±øÎªÎÞ¼×£©
-    auto* armor = obj->add_component<Armor>();
-    armor->type = ArmorType::None;
-    armor->armor_value = 0;
-
-    auto* health = obj->add_component<Health>();
-    health->max_health = 40;
-    health->current_health = 40;
-
-    auto* ownership = obj->add_component<Ownership>();
-    ownership->player_id = current_player_id;
-    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
-
-    WorldEntityMgr::instance()->insert_object(obj);
-    return obj;
+GameObject* ObjectFactory::create_archer(const CollisionBox& box, bool allow_overlap) {
+    return create_unit_by_type(UnitEntityType::Archer, box, allow_overlap);
 }
 
 GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allow_overlap) {
-    if (!map) return nullptr;
-    if (!allow_overlap && check_overlap(box)) return nullptr;
+    return create_unit_by_type(UnitEntityType::Crossbowman, box, allow_overlap);
+}
 
+GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow_overlap) {
+    return create_building_by_type(BuildingEntityType::TownCenter, grid_x, grid_y, allow_overlap);
+}
+
+GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool allow_overlap) {
+    return create_building_by_type(BuildingEntityType::ArcheryRange, grid_x, grid_y, allow_overlap);
+}
+
+// ==================== æ•°æ®é©±åŠ¨å…µç§ ====================
+GameObject* ObjectFactory::create_custom_unit(const UnitDef& def, const CollisionBox& box, bool allow_overlap)
+{
+    if (!map) return nullptr;
     if (!map->is_box_passable(box)) return nullptr;
+    if (!allow_overlap && check_overlap(box)) return nullptr;
 
     auto* obj = new GameObject(box);
 
@@ -248,7 +140,7 @@ GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allo
 
     SDL_Color sdl_color = to_sdl_color(unit_color);
     uint32_t tex_id = TextureCache::instance()->get_unit_texture(
-        UnitEntityType::Crossbowman, sdl_color, (int)box.width, (int)box.height);
+        static_cast<UnitEntityType>(def.type_id), sdl_color, (int)box.width, (int)box.height);
     if (tex_id) render->texture_id = tex_id;
 
     obj->add_component<Selectable>();
@@ -256,42 +148,50 @@ GameObject* ObjectFactory::create_crossbowman(const CollisionBox& box, bool allo
     obj->add_component<FlashComponent>();
 
     auto* movable = obj->add_component<Movable>();
-    movable->speed = 60.0f;
+    movable->speed = std::max(1.0f, def.speed);
 
     auto* unitType = obj->add_component<UnitType>();
-    unitType->type = UnitEntityType::Crossbowman;
-
-    auto* attack = obj->add_component<Attack>();
-    attack->damage = 12;
-    attack->attack_interval = 1.8f;
-    attack->range = 250.0f;
-    attack->is_ranged = true;
-    attack->armor_penetration[static_cast<int>(ArmorType::None)] = 3;
-    attack->armor_penetration[static_cast<int>(ArmorType::Light)] = 4;
-    attack->armor_penetration[static_cast<int>(ArmorType::Heavy)] = 2;
-    attack->armor_penetration[static_cast<int>(ArmorType::Building)] = 1;
-
-    auto* armor = obj->add_component<Armor>();
-    armor->type = ArmorType::Light;
-    armor->armor_value = 2;
+    unitType->type = static_cast<UnitEntityType>(def.type_id);
 
     auto* health = obj->add_component<Health>();
-    health->max_health = 45;
-    health->current_health = 45;
+    health->max_health = std::max(1, def.hp);
+    health->current_health = health->max_health;
+
+    auto* armor = obj->add_component<Armor>();
+    for (int i = 0; i < static_cast<int>(DamageType::Count); ++i)
+        armor->reduction[i] = std::max(0, def.defense[i]);
+
+    if (def.has_attack()) {
+        auto* attack = obj->add_component<Attack>();
+        attack->damage = std::max(0, def.attack_damage);
+        attack->damage_type = def.damage_type;
+        attack->attack_interval = std::max(0.05f, def.attack_interval);
+        attack->range = std::max(0.0f, def.attack_range);
+        attack->is_ranged = def.attack_ranged;
+    }
+
+    if (def.has_gather()) {
+        auto* gatherer = obj->add_component<Gatherer>();
+        gatherer->gather_amount = std::max(0, def.gather_amount);
+        gatherer->gather_interval = std::max(0.05f, def.gather_interval);
+        gatherer->carry_capacity = std::max(1, def.carry_capacity);
+    }
 
     auto* ownership = obj->add_component<Ownership>();
     ownership->player_id = current_player_id;
     ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
 
     WorldEntityMgr::instance()->insert_object(obj);
+    apply_completed_techs_to_unit(obj, current_player_id);
     return obj;
 }
 
-GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow_overlap)
+// ==================== æ•°æ®é©±åŠ¨å»ºç­‘ ====================
+GameObject* ObjectFactory::create_custom_building(const BuildingDef& def, int grid_x, int grid_y, bool allow_overlap)
 {
     if (!map) return nullptr;
 
-    const int size_cells = 20;
+    const int size_cells = std::clamp(def.size_cells, 1, 80);
     int cell_size = map->get_cell_size();
     float w = (float)(size_cells * cell_size);
     float h = (float)(size_cells * cell_size);
@@ -307,29 +207,28 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     auto* obj = new GameObject(box);
 
     auto* render = obj->add_component<Renderable>();
-    Color tc_color = player_color(current_player_id);
-    render->color = tc_color;
+    Color build_color = player_color(current_player_id);
+    render->color = build_color;
 
-    SDL_Color sdl_color = to_sdl_color(tc_color);
+    SDL_Color sdl_color = to_sdl_color(build_color);
     uint32_t tex_id = TextureCache::instance()->get_building_texture(
-        BuildingEntityType::TownCenter, sdl_color, (int)w, (int)h);
-    if (tex_id) {
-        render->texture_id = tex_id;
-    }
+        static_cast<BuildingEntityType>(def.type_id), sdl_color, (int)w, (int)h);
+    if (tex_id) render->texture_id = tex_id;
 
     obj->add_component<Structure>();
     obj->add_component<FlashComponent>();
-    obj->add_component<BuildingType>()->type = BuildingEntityType::TownCenter;
+    obj->add_component<BuildingType>()->type = static_cast<BuildingEntityType>(def.type_id);
 
-    auto* dropoff = obj->add_component<ResourceDropoff>();
-    dropoff->accept_mask = ALL_MASK;
+    if (def.dropoff) {
+        auto* dropoff = obj->add_component<ResourceDropoff>();
+        dropoff->accept_mask = ALL_MASK;
+    }
 
     obj->add_component<Selectable>();
     obj->add_component<ProductionQueue>();
 
-    // ½¨Ôì½ø¶È×é¼þ£¨5Ãë½¨ÔìÊ±¼ä£©
     auto* build_prog = obj->add_component<BuildProgressComponent>();
-    build_prog->total_time = 5.0f;
+    build_prog->total_time = std::max(0.1f, def.build_time);
     build_prog->active = true;
 
     auto* ownership = obj->add_component<Ownership>();
@@ -337,64 +236,12 @@ GameObject* ObjectFactory::create_town_center(int grid_x, int grid_y, bool allow
     ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
 
     auto* health = obj->add_component<Health>();
-    health->max_health = 1000;
-    health->current_health = 1000;
+    health->max_health = std::max(1, def.hp);
+    health->current_health = health->max_health;
 
-    WorldEntityMgr::instance()->insert_object(obj);
-    map->add_object_to_dynamic_obstacle_field(obj);
-    return obj;
-}
-
-GameObject* ObjectFactory::create_archery_range(int grid_x, int grid_y, bool allow_overlap) {
-    if (!map) return nullptr;
-
-    const int size_cells = 20;
-    int cell_size = map->get_cell_size();
-    float w = (float)(size_cells * cell_size);
-    float h = (float)(size_cells * cell_size);
-    float x = (float)(grid_x * cell_size);
-    float y = (float)(grid_y * cell_size);
-    CollisionBox box{ {x, y}, w, h };
-
-    if (!allow_overlap) {
-        if (!map->is_box_passable(box)) return nullptr;
-        if (check_overlap(box)) return nullptr;
-    }
-
-    auto* obj = new GameObject(box);
-
-    auto* render = obj->add_component<Renderable>();
-    Color tc_color = player_color(current_player_id);
-    render->color = tc_color;
-
-    SDL_Color sdl_color = to_sdl_color(tc_color);
-    uint32_t tex_id = TextureCache::instance()->get_building_texture(
-        BuildingEntityType::ArcheryRange, sdl_color, (int)w, (int)h);
-    if (tex_id) {
-        render->texture_id = tex_id;
-    }
-
-    obj->add_component<Structure>();
-    obj->add_component<FlashComponent>();
-    obj->add_component<BuildingType>()->type = BuildingEntityType::ArcheryRange;
-
-    // °Ð³¡²»ÊÇ×ÊÔ´Ìá½»µã£¨Ö»ÓÐ³ÇÕòÖÐÐÄÊÕ×ÊÔ´£©£¬²»¹Ò ResourceDropoff
-
-    obj->add_component<Selectable>();
-    obj->add_component<ProductionQueue>();
-
-    // ½¨Ôì½ø¶È×é¼þ
-    auto* build_prog = obj->add_component<BuildProgressComponent>();
-    build_prog->total_time = 5.0f;
-    build_prog->active = true;
-
-    auto* ownership = obj->add_component<Ownership>();
-    ownership->player_id = current_player_id;
-    ownership->team_id = ResourcesMgr::instance()->get_team_id(current_player_id);
-
-    auto* health = obj->add_component<Health>();
-    health->max_health = 1200;
-    health->current_health = 1200;
+    auto* armor = obj->add_component<Armor>();
+    for (int i = 0; i < static_cast<int>(DamageType::Count); ++i)
+        armor->reduction[i] = std::max(0, def.defense[i]);
 
     WorldEntityMgr::instance()->insert_object(obj);
     map->add_object_to_dynamic_obstacle_field(obj);
@@ -419,7 +266,7 @@ uint64_t ObjectFactory::create_arrow(const Vector2& start, const Vector2& target
 
     auto* render = obj->add_component<Renderable>();
     Color arrow_color = player_color(current_player_id);
-    render->color = arrow_color;   // ¼ýÊ¸ÎÞÎÆÀí£¬´¿É«
+    render->color = arrow_color;
 
     auto* proj = obj->add_component<Projectile>();
     proj->speed = 600.0f;

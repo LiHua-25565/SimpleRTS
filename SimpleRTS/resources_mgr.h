@@ -1,10 +1,13 @@
-#ifndef _RESOURCES_MGR_H_
+ï»¿#ifndef _RESOURCES_MGR_H_
 #define _RESOURCES_MGR_H_
 #include "resources_type.h"
 #include <vector>
 #include <functional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
-// Ã¿¸öÍæ¼ÒµÄ×ÊÔ´´ü
+// æ¯ä¸ªç©å®¶çš„èµ„æºè¢‹
 struct ResourceBag {
     int amounts[static_cast<int>(ResourceType::Count)] = { 0 };
 
@@ -20,42 +23,49 @@ class ResourcesMgr {
 public:
     static ResourcesMgr* instance();
 
-    // ³õÊ¼»¯Íæ¼ÒÊıÁ¿£¨¿ÉÔÚ½øÈëÓÎÏ·Ê±µ÷ÓÃ£©
+    // åˆå§‹åŒ–ç©å®¶æ•°é‡ï¼ˆå¯åœ¨è¿›å…¥æ¸¸æˆæ—¶è°ƒç”¨ï¼‰
     void init(int player_count = 1);
 
-    // ×ÊÔ´¶ÁĞ´
+    // èµ„æºè¯»å†™
     int get_resource(int player_id, ResourceType type) const;
     void set_resource(int player_id, ResourceType type, int amount);
 
-    // °²È«¿Û³ı£¬·µ»ØÊÇ·ñ³É¹¦
+    // å®‰å…¨æ‰£é™¤ï¼Œè¿”å›æ˜¯å¦æˆåŠŸ
     bool spend_resource(int player_id, ResourceType type, int amount);
-    // Ôö¼Ó×ÊÔ´
+    // å¢åŠ èµ„æº
     void add_resource(int player_id, ResourceType type, int amount);
 
-    // ×ÊÔ´±ä¶¯ÊÂ¼ş£¨¹© UI ¶©ÔÄ£©
+    // èµ„æºå˜åŠ¨äº‹ä»¶ï¼ˆä¾› UI è®¢é˜…ï¼‰
     void set_on_resource_changed(std::function<void(int player_id, ResourceType type, int new_value)> callback) { on_resource_changed = callback; }
 
-    // »ñÈ¡µ±Ç°Íæ¼Ò ID£¨¿ÉÀ©Õ¹Îª¸ù¾İÊÓ½Ç»ò¿ØÖÆ·½·µ»Ø£©
+    // è·å–å½“å‰ç©å®¶ IDï¼ˆå¯æ‰©å±•ä¸ºæ ¹æ®è§†è§’æˆ–æ§åˆ¶æ–¹è¿”å›ï¼‰
     int get_local_player_id() const { return local_player_id; }
     void set_local_player_id(int id) { local_player_id = id; }
 
-    // ÉèÖÃÄ³¸öÍæ¼Ò¹Ø×¢µÄ×ÊÔ´ÀàĞÍ£¨Í¨³£ÔÚ´´½¨Íæ¼Ò»òÕóÓªÊ±µ÷ÓÃÒ»´Î£©
+    // è®¾ç½®æŸä¸ªç©å®¶å…³æ³¨çš„èµ„æºç±»å‹ï¼ˆé€šå¸¸åœ¨åˆ›å»ºç©å®¶æˆ–é˜µè¥æ—¶è°ƒç”¨ä¸€æ¬¡ï¼‰
     void set_player_resource_types(int player_id, const std::vector<ResourceType>& types);
-    // »ñÈ¡Ä³¸öÍæ¼Ò¹Ø×¢µÄ×ÊÔ´ÀàĞÍÁĞ±í
+    // è·å–æŸä¸ªç©å®¶å…³æ³¨çš„èµ„æºç±»å‹åˆ—è¡¨
     const std::vector<ResourceType>& get_player_resource_types(int player_id) const;
 
-    // ÉèÖÃÍæ¼Ò¶ÔÓ¦µÄ¶ÓÎé ID
+    // è®¾ç½®ç©å®¶å¯¹åº”çš„é˜Ÿä¼ ID
     void set_player_team(int player_id, int team_id);
-    // »ñÈ¡Íæ¼ÒµÄ¶ÓÎé ID£¨Ä¬ÈÏÓë player_id ÏàÍ¬£©
+    // è·å–ç©å®¶çš„é˜Ÿä¼ IDï¼ˆé»˜è®¤ä¸ player_id ç›¸åŒï¼‰
     int get_team_id(int player_id) const;
 
+    // ---- å·²å®Œæˆç§‘æŠ€ï¼ˆå‰ç½®ç§‘æŠ€åˆ¤å®šç”¨ï¼‰ ----
+    void add_tech(int player_id, const std::string& tech_name);
+    bool has_tech(int player_id, const std::string& tech_name) const;
+    // csv ä¸ºé€—å·åˆ†éš”çš„ç§‘æŠ€åï¼›å…¨éƒ¨å®Œæˆæ‰è¿”å› trueã€‚ç©ºå­—ç¬¦ä¸²è¿”å› trueã€‚
+    bool has_all_techs(int player_id, const std::string& csv) const;
+    const std::unordered_set<std::string>& get_player_techs(int player_id) const;
 
 private:
     ResourcesMgr() = default;
     ~ResourcesMgr() = default;
-    std::vector<ResourceBag> player_resources;   // °´Íæ¼Ò ID Ë÷Òı
+    std::vector<ResourceBag> player_resources;   // æŒ‰ç©å®¶ ID ç´¢å¼•
     std::vector<std::vector<ResourceType>> player_resource_types;
-    int local_player_id = -1;                     // µ±Ç°Íæ¼Ò
+    std::vector<std::unordered_set<std::string>> player_techs;   // æŒ‰ç©å®¶ ID ç´¢å¼•
+    int local_player_id = -1;                     // å½“å‰ç©å®¶
     std::unordered_map<int, int> player_team_map;
     std::function<void(int player_id, ResourceType type, int new_value)> on_resource_changed;
 };

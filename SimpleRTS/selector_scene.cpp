@@ -1,4 +1,4 @@
-#include "selector_scene.h"
+ï»¿#include "selector_scene.h"
 #include "game_scene.h"
 #include "scene_ui.h"
 #include "texture_cache.h"
@@ -8,7 +8,7 @@
 #include <filesystem>
 
 namespace {
-// ºáÏòµÈ¾à¾ØĞÎ£¨É«¿é£©
+// æ¨ªå‘ç­‰è·çŸ©å½¢ï¼ˆè‰²å—ï¼‰
 std::vector<SDL_FRect> swatch_row(float x, float y, int count, float size, float gap) {
     std::vector<SDL_FRect> v;
     v.reserve(count);
@@ -17,7 +17,7 @@ std::vector<SDL_FRect> swatch_row(float x, float y, int count, float size, float
     return v;
 }
 
-// ºáÏòµÈ¾à¾ØĞÎ£¨°´Å¥£©
+// æ¨ªå‘ç­‰è·çŸ©å½¢ï¼ˆæŒ‰é’®ï¼‰
 std::vector<SDL_FRect> btn_row(float x, float y, int count, float w, float h, float gap) {
     std::vector<SDL_FRect> v;
     v.reserve(count);
@@ -26,7 +26,7 @@ std::vector<SDL_FRect> btn_row(float x, float y, int count, float w, float h, fl
     return v;
 }
 
-// Ô¤ÀÀÀï×ÊÔ´µÄÑÕÉ«
+// é¢„è§ˆé‡Œèµ„æºçš„é¢œè‰²
 SDL_Color resource_preview_color(int type) {
     switch ((ResourceEntityType)type) {
     case ResourceEntityType::Wood:    return { 90, 160, 70, 255 };
@@ -48,7 +48,7 @@ void SelectorScene::on_enter()
     map_scroll_ = 0.0f;
     refresh_map_files();
     if (map_files_.empty()) {
-        // ÎŞµØÍ¼Ê±ÈÔ¸ø³öÒ»¸ö¿ÕÔ¤ÀÀÓëÄ¬ÈÏ²ÛÎ»
+        // æ— åœ°å›¾æ—¶ä»ç»™å‡ºä¸€ä¸ªç©ºé¢„è§ˆä¸é»˜è®¤æ§½ä½
         load_map_preview("");
     }
     layout();
@@ -110,6 +110,34 @@ void SelectorScene::reset_slots_default()
         config_.slots[0].team = 0;
         config_.slots[0].position = 0;
     }
+
+    // map2v2 é»˜è®¤ç›´æ¥ç»™å‡º 2v2ï¼šäººç±» + AI é˜Ÿå‹ vs ä¸¤ä¸ª AIã€‚
+    // å…¶ä½™åœ°å›¾ä¿æŒâ€œäººç±» + ç©ºæ§½ä½â€ï¼Œç”±ç©å®¶è‡ªè¡Œæ·»åŠ  AIã€‚
+    if (n >= 4 && config_.map_name == "map2v2") {
+        config_.slots[1].kind = SlotKind::AI;
+        config_.slots[1].color_id = 1;
+        config_.slots[1].team = 0;
+        config_.slots[1].position = 1;
+
+        config_.slots[2].kind = SlotKind::AI;
+        config_.slots[2].color_id = 2;
+        config_.slots[2].team = 1;
+        config_.slots[2].position = 2;
+
+        config_.slots[3].kind = SlotKind::AI;
+        config_.slots[3].color_id = 3;
+        config_.slots[3].team = 1;
+        config_.slots[3].position = 3;
+
+        for (int i = 4; i < n; ++i) {
+            config_.slots[i].kind = SlotKind::Neutral;
+            config_.slots[i].color_id = i % PLAYER_COLOR_COUNT;
+            config_.slots[i].team = 0;
+            config_.slots[i].position = i;
+        }
+        return;
+    }
+
     for (int i = 1; i < n; ++i) {
         config_.slots[i].kind = SlotKind::Neutral;
         config_.slots[i].color_id = i % PLAYER_COLOR_COUNT;
@@ -212,7 +240,7 @@ void SelectorScene::add_ai()
         if (config_.slots[i].kind == SlotKind::Neutral) {
             config_.slots[i].kind = SlotKind::AI;
             config_.slots[i].color_id = next_free_color();
-            config_.slots[i].team = i;   // Ã¿¸öÍæ¼ÒÄ¬ÈÏ¶ÀÁ¢ÕóÓª£¨²ÛÎ»ÏÂ±ê¼´ÕóÓª±àºÅ£¬0..N-1£©
+            config_.slots[i].team = i;   // æ¯ä¸ªç©å®¶é»˜è®¤ç‹¬ç«‹é˜µè¥ï¼ˆæ§½ä½ä¸‹æ ‡å³é˜µè¥ç¼–å·ï¼Œ0..N-1ï¼‰
             config_.slots[i].position = next_free_position();
             layout();
             return;
@@ -257,12 +285,12 @@ void SelectorScene::layout()
     next_btn_ = { left_x + 220.0f, 310.0f, 200.0f, 36.0f };
     preview_rect_ = { left_x, 384.0f, left_w, 280.0f };
 
-    // ÈËÀàÉèÖÃ
+    // äººç±»è®¾ç½®
     human_color_ = swatch_row(right_x + 80.0f, 76.0f, PLAYER_COLOR_COUNT, 34.0f, 8.0f);
     human_team_  = btn_row(right_x + 80.0f, 128.0f, config_.map_player_count, 44.0f, 30.0f, 6.0f);
     human_pos_   = btn_row(right_x + 80.0f, 180.0f, config_.map_player_count, 40.0f, 30.0f, 6.0f);
 
-    // AI Çø
+    // AI åŒº
     add_ai_btn_ = { right_x + right_w - 140.0f, 226.0f, 140.0f, 30.0f };
 
     float ay = 272.0f;
@@ -298,7 +326,7 @@ void SelectorScene::draw_button(const SDL_FRect& r, const std::string& label, bo
 void SelectorScene::draw_swatch(const SDL_FRect& r, int color_id, bool selected, bool hover, bool disabled)
 {
     SDL_Color c = player_color_sdl(color_id);
-    if (disabled) {   // ÒÑ±»ÆäËûÍæ¼ÒÕ¼ÓÃ£ºÑ¹°µ£¬±íÊ¾²»¿ÉÑ¡
+    if (disabled) {   // å·²è¢«å…¶ä»–ç©å®¶å ç”¨ï¼šå‹æš—ï¼Œè¡¨ç¤ºä¸å¯é€‰
         c.r = c.r / 4; c.g = c.g / 4; c.b = c.b / 4;
     }
     SDL_Color bd = selected ? SDL_Color{ 255, 215, 0, 255 } : SDL_Color{ 120, 130, 150, 255 };
@@ -310,7 +338,7 @@ void SelectorScene::draw_pos_button(const SDL_FRect& r, int idx, bool active, bo
     SDL_Color pc = player_color_sdl(idx % PLAYER_COLOR_COUNT);
     SDL_Color bg = active ? pc : SDL_Color{
         (Uint8)(pc.r / 4 + 18), (Uint8)(pc.g / 4 + 18), (Uint8)(pc.b / 4 + 18), 255 };
-    if (disabled && !active) {   // ÒÑ±»ÆäËûÍæ¼ÒÕ¼ÓÃ£ºÑ¹°µ£¬±íÊ¾²»¿ÉÑ¡
+    if (disabled && !active) {   // å·²è¢«å…¶ä»–ç©å®¶å ç”¨ï¼šå‹æš—ï¼Œè¡¨ç¤ºä¸å¯é€‰
         bg = SDL_Color{ (Uint8)(bg.r / 3), (Uint8)(bg.g / 3), (Uint8)(bg.b / 3), 255 };
     }
     SDL_Color bd = (active || hover) ? SDL_Color{ 255, 215, 0, 255 } : SDL_Color{ 90, 110, 160, 255 };
@@ -328,11 +356,11 @@ void SelectorScene::on_input(const SDL_Event& event)
     else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
         float x = event.button.x, y = event.button.y;
 
-        // µ×²¿°´Å¥
+        // åº•éƒ¨æŒ‰é’®
         if (point_in(start_btn_, x, y)) { do_start(); return; }
         if (point_in(back_btn_, x, y)) { do_back(); return; }
 
-        // µØÍ¼£ºÉÏÒ»ÕÅ / ÏÂÒ»ÕÅ
+        // åœ°å›¾ï¼šä¸Šä¸€å¼  / ä¸‹ä¸€å¼ 
         if (point_in(prev_btn_, x, y)) {
             if (!map_files_.empty()) apply_map_selection((map_sel_ - 1 + (int)map_files_.size()) % (int)map_files_.size());
             return;
@@ -342,7 +370,7 @@ void SelectorScene::on_input(const SDL_Event& event)
             return;
         }
 
-        // µØÍ¼ÁĞ±í
+        // åœ°å›¾åˆ—è¡¨
         if (y >= map_list_top_ && y <= map_list_bottom_) {
             float content_y = y + map_scroll_;
             for (size_t i = 0; i < map_entry_rects_.size(); ++i) {
@@ -353,26 +381,26 @@ void SelectorScene::on_input(const SDL_Event& event)
             }
         }
 
-        // ÈËÀà£ºÑÕÉ«£¨ÒÑ±»ÆäËûÍæ¼ÒÕ¼ÓÃµÄÑÕÉ«²»¿ÉÑ¡£©
+        // äººç±»ï¼šé¢œè‰²ï¼ˆå·²è¢«å…¶ä»–ç©å®¶å ç”¨çš„é¢œè‰²ä¸å¯é€‰ï¼‰
         int ci = hit_index(human_color_, x, y);
         if (ci >= 0) {
             if (!color_taken(ci, 0)) config_.slots[0].color_id = ci;
             return;
         }
-        // ÈËÀà£ºÕóÓª
+        // äººç±»ï¼šé˜µè¥
         int ti = hit_index(human_team_, x, y);
         if (ti >= 0) { config_.slots[0].team = ti; return; }
-        // ÈËÀà£ºÎ»ÖÃ£¨ÒÑ±»ÆäËûÍæ¼ÒÕ¼ÓÃµÄÎ»ÖÃ²»¿ÉÑ¡£©
+        // äººç±»ï¼šä½ç½®ï¼ˆå·²è¢«å…¶ä»–ç©å®¶å ç”¨çš„ä½ç½®ä¸å¯é€‰ï¼‰
         int pi = hit_index(human_pos_, x, y);
         if (pi >= 0) {
             if (!position_taken(pi, 0)) config_.slots[0].position = pi;
             return;
         }
 
-        // Ìí¼Ó AI
+        // æ·»åŠ  AI
         if (point_in(add_ai_btn_, x, y)) { add_ai(); return; }
 
-        // AI ĞĞ
+        // AI è¡Œ
         for (auto& row : ai_rows_) {
             int slot = row.slot;
             int aci = hit_index(row.color, x, y);
@@ -412,16 +440,16 @@ void SelectorScene::on_render()
     SDL_RenderClear(renderer);
 
     ui_fill_rect(renderer, SDL_FRect{ 0, 0, LOGICAL_W, 8.0f }, { 255, 215, 0, 255 });
-    ui_draw_text(renderer, u8"¶Ô¾ÖÉèÖÃ", 44, { 255, 215, 0, 255 }, LOGICAL_W * 0.5f, 44.0f, true);
+    ui_draw_text(renderer, u8"å¯¹å±€è®¾ç½®", 44, { 255, 215, 0, 255 }, LOGICAL_W * 0.5f, 44.0f, true);
 
-    // ============ ×ó£ºµØÍ¼Ñ¡Ôñ + Ô¤ÀÀ ============
-    ui_draw_text(renderer, u8"µØÍ¼Ñ¡Ôñ", 22, { 200, 210, 230, 255 }, 20.0f, 68.0f, false);
+    // ============ å·¦ï¼šåœ°å›¾é€‰æ‹© + é¢„è§ˆ ============
+    ui_draw_text(renderer, u8"åœ°å›¾é€‰æ‹©", 22, { 200, 210, 230, 255 }, 20.0f, 68.0f, false);
 
     {
         SDL_Rect clip{ 20, (int)map_list_top_, 420, (int)(map_list_bottom_ - map_list_top_) };
         SDL_SetRenderClipRect(renderer, &clip);
         if (map_files_.empty())
-            ui_draw_text(renderer, u8"£¨ÔİÎŞµØÍ¼£¬ÇëÏÈµ½µØÍ¼±à¼­´´½¨£©", 15, { 150, 160, 180, 255 }, 24.0f, map_list_top_ + 6.0f, false);
+            ui_draw_text(renderer, u8"ï¼ˆæš‚æ— åœ°å›¾ï¼Œè¯·å…ˆåˆ°åœ°å›¾ç¼–è¾‘åˆ›å»ºï¼‰", 15, { 150, 160, 180, 255 }, 24.0f, map_list_top_ + 6.0f, false);
         for (size_t i = 0; i < map_entry_rects_.size(); ++i) {
             SDL_FRect r = map_entry_rects_[i];
             r.y -= map_scroll_;
@@ -431,13 +459,13 @@ void SelectorScene::on_render()
         SDL_SetRenderClipRect(renderer, nullptr);
     }
 
-    draw_button(prev_btn_, u8"< ÉÏÒ»ÕÅ", false, point_in(prev_btn_, mouse_x_, mouse_y_));
-    draw_button(next_btn_, u8"ÏÂÒ»ÕÅ >", false, point_in(next_btn_, mouse_x_, mouse_y_));
+    draw_button(prev_btn_, u8"< ä¸Šä¸€å¼ ", false, point_in(prev_btn_, mouse_x_, mouse_y_));
+    draw_button(next_btn_, u8"ä¸‹ä¸€å¼  >", false, point_in(next_btn_, mouse_x_, mouse_y_));
 
-    ui_draw_text(renderer, u8"µØÍ¼Ô¤ÀÀ", 22, { 200, 210, 230, 255 }, 20.0f, 358.0f, false);
+    ui_draw_text(renderer, u8"åœ°å›¾é¢„è§ˆ", 22, { 200, 210, 230, 255 }, 20.0f, 358.0f, false);
     ui_fill_rect(renderer, preview_rect_, { 24, 30, 48, 255 }, { 90, 110, 160, 255 }, 2);
 
-    // Ô¤ÀÀÄÚÈİ
+    // é¢„è§ˆå†…å®¹
     if (preview_dirty_) bake_preview();
     {
         int cs = preview_map_.get_cell_size();
@@ -454,7 +482,7 @@ void SelectorScene::on_render()
                 SDL_RenderTexture(renderer, tex, nullptr, &dst);
             }
 
-            // ×ÊÔ´/½¨Öş/µ¥Î»Ğ¡·½¿é
+            // èµ„æº/å»ºç­‘/å•ä½å°æ–¹å—
             for (auto& e : preview_entities_) {
                 float px = 0, py = 0, pw = 0, ph = 0;
                 SDL_Color c = { 200, 200, 200, 255 };
@@ -464,7 +492,7 @@ void SelectorScene::on_render()
                     c = resource_preview_color(e.type);
                 }
                 else if (e.kind == EntityRecord::Kind::Building) {
-                    if (e.type == (int)BuildingEntityType::TownCenter) continue;   // ÆğÊ¼±ê¼Ç
+                    if (e.type == (int)BuildingEntityType::TownCenter) continue;   // èµ·å§‹æ ‡è®°
                     px = e.gx * cs; py = e.gy * cs;
                     pw = ph = 20.0f * cs;
                     c = { 120, 120, 130, 255 };
@@ -481,58 +509,58 @@ void SelectorScene::on_render()
                 SDL_RenderFillRect(renderer, &dr);
             }
 
-            // ÆğÊ¼Î»ÖÃ±ê¼Ç£º²ÊÉ«·½¿é + °×É«Êı×Ö±àºÅ£¨1..N£©
+            // èµ·å§‹ä½ç½®æ ‡è®°ï¼šå½©è‰²æ–¹å— + ç™½è‰²æ•°å­—ç¼–å·ï¼ˆ1..Nï¼‰
             for (size_t i = 0; i < config_.spawn_points.size(); ++i) {
                 const SpawnPoint& sp = config_.spawn_points[i];
                 SDL_Color mc = player_color_sdl((int)i % PLAYER_COLOR_COUNT);
                 float sx = ox + (sp.gx + 10) * cs * scale;
                 float sy = oy + (sp.gy + 10) * cs * scale;
                 float sr = std::max(5.0f, 10.0f * cs * scale * 0.5f);
-                // ÉîÉ«µ×¿ò£¬±£Ö¤Êı×ÖÔÚ¸÷ÖÖµØĞÎÉÏ¶¼ÇåÎú
+                // æ·±è‰²åº•æ¡†ï¼Œä¿è¯æ•°å­—åœ¨å„ç§åœ°å½¢ä¸Šéƒ½æ¸…æ™°
                 SDL_FRect shadow{ sx - sr - 1.0f, sy - sr - 1.0f, sr * 2 + 2.0f, sr * 2 + 2.0f };
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 220);
                 SDL_RenderFillRect(renderer, &shadow);
-                // ²ÊÉ«·½¿é£¨Î»ÖÃÑÕÉ«£©
+                // å½©è‰²æ–¹å—ï¼ˆä½ç½®é¢œè‰²ï¼‰
                 SDL_FRect mr{ sx - sr, sy - sr, sr * 2, sr * 2 };
                 SDL_SetRenderDrawColor(renderer, mc.r, mc.g, mc.b, 255);
                 SDL_RenderFillRect(renderer, &mr);
-                // °×É«Êı×Ö±àºÅ
+                // ç™½è‰²æ•°å­—ç¼–å·
                 ui_draw_text(renderer, std::to_string(i + 1), 11, { 255, 255, 255, 255 }, sx, sy, true);
             }
         }
     }
 
-    // ============ ÓÒ£ºÍæ¼ÒÉèÖÃ ============
+    // ============ å³ï¼šç©å®¶è®¾ç½® ============
     const float right_x = 470.0f;
 
-    // ÄãµÄÉèÖÃ
-    ui_draw_text(renderer, u8"ÄãµÄÉèÖÃ", 24, { 255, 215, 0, 255 }, right_x, 78.0f, false);
-    ui_draw_text(renderer, u8"ÑÕÉ«", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 90.0f, false);
+    // ä½ çš„è®¾ç½®
+    ui_draw_text(renderer, u8"ä½ çš„è®¾ç½®", 24, { 255, 215, 0, 255 }, right_x, 78.0f, false);
+    ui_draw_text(renderer, u8"é¢œè‰²", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 90.0f, false);
     for (int i = 0; i < (int)human_color_.size(); ++i)
         draw_swatch(human_color_[i], i, (config_.slots[0].color_id == i),
                     point_in(human_color_[i], mouse_x_, mouse_y_),
                     color_taken(i, 0));
 
-    ui_draw_text(renderer, u8"ÕóÓª", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 142.0f, false);
+    ui_draw_text(renderer, u8"é˜µè¥", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 142.0f, false);
     for (int i = 0; i < (int)human_team_.size(); ++i)
         draw_button(human_team_[i], std::to_string(i + 1), (config_.slots[0].team == i),
                     point_in(human_team_[i], mouse_x_, mouse_y_));
 
-    ui_draw_text(renderer, u8"Î»ÖÃ", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 194.0f, false);
+    ui_draw_text(renderer, u8"ä½ç½®", 18, { 200, 210, 230, 255 }, right_x + 20.0f, 194.0f, false);
     for (int i = 0; i < (int)human_pos_.size(); ++i)
         draw_pos_button(human_pos_[i], i, (config_.slots[0].position == i),
                         point_in(human_pos_[i], mouse_x_, mouse_y_),
                         position_taken(i, 0));
 
-    // AI Íæ¼ÒÇø
-    ui_draw_text(renderer, u8"AI Íæ¼Ò", 24, { 255, 215, 0, 255 }, right_x, 240.0f, false);
+    // AI ç©å®¶åŒº
+    ui_draw_text(renderer, u8"AI ç©å®¶", 24, { 255, 215, 0, 255 }, right_x, 240.0f, false);
     bool ai_full = (config_.ai_count() >= config_.map_player_count - 1);
-    draw_button(add_ai_btn_, ai_full ? u8"ÒÑÂú" : u8"+ Ìí¼Ó AI", ai_full,
+    draw_button(add_ai_btn_, ai_full ? u8"å·²æ»¡" : u8"+ æ·»åŠ  AI", ai_full,
                 point_in(add_ai_btn_, mouse_x_, mouse_y_));
-    ui_draw_text(renderer, u8"¿Õ²ÛÎ»¿ª¾Ö×ªÎªÖĞÁ¢ÕóÓª", 14, { 150, 160, 180, 255 }, right_x + 180.0f, 252.0f, false);
+    ui_draw_text(renderer, u8"ç©ºæ§½ä½å¼€å±€è½¬ä¸ºä¸­ç«‹é˜µè¥", 14, { 150, 160, 180, 255 }, right_x + 180.0f, 252.0f, false);
 
     if (ai_rows_.empty())
-        ui_draw_text(renderer, u8"£¨µã»÷ + Ìí¼Ó AI ¼ÓÈëµçÄÔÍæ¼Ò£©", 15, { 150, 160, 180, 255 }, right_x, 278.0f, false);
+        ui_draw_text(renderer, u8"ï¼ˆç‚¹å‡» + æ·»åŠ  AI åŠ å…¥ç”µè„‘ç©å®¶ï¼‰", 15, { 150, 160, 180, 255 }, right_x, 278.0f, false);
 
     for (auto& row : ai_rows_) {
         int slot = row.slot;
@@ -548,10 +576,10 @@ void SelectorScene::on_render()
             draw_pos_button(row.pos[i], i, (config_.slots[slot].position == i),
                             point_in(row.pos[i], mouse_x_, mouse_y_),
                             position_taken(i, slot));
-        draw_button(row.remove, u8"ÒÆ³ı", false, point_in(row.remove, mouse_x_, mouse_y_));
+        draw_button(row.remove, u8"ç§»é™¤", false, point_in(row.remove, mouse_x_, mouse_y_));
     }
 
-    // µ×²¿°´Å¥
-    draw_button(start_btn_, u8"¿ªÊ¼¶Ô¾Ö", false, point_in(start_btn_, mouse_x_, mouse_y_));
-    draw_button(back_btn_, u8"·µ»Ø", false, point_in(back_btn_, mouse_x_, mouse_y_));
+    // åº•éƒ¨æŒ‰é’®
+    draw_button(start_btn_, u8"å¼€å§‹å¯¹å±€", false, point_in(start_btn_, mouse_x_, mouse_y_));
+    draw_button(back_btn_, u8"è¿”å›", false, point_in(back_btn_, mouse_x_, mouse_y_));
 }

@@ -1,107 +1,123 @@
-#include "production_data.h"
-#include "world_entity_mgr.h"
-#include "components.h"
+ï»¿#include "production_data.h"
+#include "entity_defs.h"
 
-// ---------- ¹¹Ôìº¯ÊıÊµÏÖ ----------
+#include <algorithm>
+#include <memory>
+
+namespace {
+
+void copy_costs(int (&dst)[static_cast<int>(ResourceType::Count)], std::initializer_list<int> costs) {
+    int idx = 0;
+    for (int c : costs) {
+        if (idx < static_cast<int>(ResourceType::Count)) dst[idx] = c;
+        ++idx;
+    }
+}
+
+std::vector<ProductionItem> build_building_production(const BuildingDef& bd) {
+    std::vector<ProductionItem> out;
+    auto* catalog = EntityCatalog::instance();
+
+    std::vector<std::string> tech_names = bd.research;
+    auto add_tech_name = [&](const std::string& csv) {
+        for (const auto& name : split_tech_names(csv)) {
+            if (name.empty()) continue;
+            if (std::find(tech_names.begin(), tech_names.end(), name) == tech_names.end())
+                tech_names.push_back(name);
+        }
+    };
+    add_tech_name(bd.requires);
+
+    for (int unit_id : bd.produces) {
+        const UnitDef* ud = catalog->find_unit(unit_id);
+        if (!ud) continue;
+        out.push_back(ProductionItem(static_cast<UnitEntityType>(unit_id), ud->produce_time,
+            { ud->cost[static_cast<int>(ResourceType::None)],
+              ud->cost[static_cast<int>(ResourceType::Wood)],
+              ud->cost[static_cast<int>(ResourceType::Food)],
+              ud->cost[static_cast<int>(ResourceType::Gold)],
+              ud->cost[static_cast<int>(ResourceType::Stone)] },
+            ud->requires));
+        add_tech_name(ud->requires);
+    }
+
+    // å‰ç½®ç§‘æŠ€ä¸€å®šèƒ½åœ¨æœ¬å»ºç­‘ç ”ç©¶ï¼Œå¦åˆ™â€œéœ€è¦ç§‘æŠ€â€ä¼šå˜æˆæ°¸è¿œæ— æ³•è§£é”çš„æ­»é”ã€‚
+    for (const auto& name : tech_names) {
+        auto research = std::make_shared<ResearchItem>();
+        research->name = name;
+        const TechDef* tech = catalog->find_tech(name);
+        if (tech) {
+            research->research_time = std::max(0.1f, tech->research_time);
+            for (int r = 0; r < static_cast<int>(ResourceType::Count); ++r)
+                research->cost_amounts[r] = std::max(0, tech->cost[r]);
+        }
+        else {
+            research->research_time = std::max(0.1f, bd.research_time);
+            research->cost_amounts[static_cast<int>(ResourceType::Gold)] = std::max(0, bd.research_gold);
+        }
+        out.push_back(ProductionItem(research, research->research_time,
+            { research->cost_amounts[static_cast<int>(ResourceType::None)],
+              research->cost_amounts[static_cast<int>(ResourceType::Wood)],
+              research->cost_amounts[static_cast<int>(ResourceType::Food)],
+              research->cost_amounts[static_cast<int>(ResourceType::Gold)],
+              research->cost_amounts[static_cast<int>(ResourceType::Stone)] }));
+    }
+
+    return out;
+}
+
+} // namespace
+
+// ---------- æ„é€ å‡½æ•°å®ç° ----------
 ProductionItem::ProductionItem(UnitEntityType unit, float time,
     std::initializer_list<int> costs, const std::string& techs)
     : type(ProductionType::Unit), unit_type(unit), research(nullptr),
     produce_time(time), unlock_techs(techs) {
-    int idx = 0;
-    for (int c : costs) {
-        if (idx < static_cast<int>(ResourceType::Count)) cost_amounts[idx] = c;
-        ++idx;
-    }
+    copy_costs(cost_amounts, costs);
 }
 
-ProductionItem::ProductionItem(ResearchItem* res, float time,
+ProductionItem::ProductionItem(std::shared_ptr<ResearchItem> res, float time,
     std::initializer_list<int> costs)
     : type(ProductionType::Research), unit_type(UnitEntityType::Villager),
-    research(res), produce_time(time) {
-    int idx = 0;
-    for (int c : costs) {
-        if (idx < static_cast<int>(ResourceType::Count)) cost_amounts[idx] = c;
-        ++idx;
-    }
+    research(std::move(res)), produce_time(time) {
+    copy_costs(cost_amounts, costs);
 }
 
 ProductionItem::ProductionItem(BuildingEntityType building, int cells, float time,
-    std::initializer_list<int> costs)
+    std::initializer_list<int> costs, const std::string& techs)
     : type(ProductionType::Building), unit_type(UnitEntityType::Villager),
-    building_type(building), size_cells(cells), produce_time(time) {
-    int idx = 0;
-    for (int c : costs) {
-        if (idx < static_cast<int>(ResourceType::Count)) cost_amounts[idx] = c;
-        ++idx;
-    }
+    building_type(building), size_cells(cells), produce_time(time), unlock_techs(techs) {
+    copy_costs(cost_amounts, costs);
 }
 
-// ---------- ¿Æ¼¼Ğ§¹û ----------
-void research_strongbow_effect(int player_id) {
-    const auto& pool = WorldEntityMgr::instance()->get_object_pool();
-    for (auto& [id, obj] : pool) {
-        if (!obj->check_valid()) continue;
-        auto* unit = obj->get_component<UnitType>();
-        if (!unit || unit->type != UnitEntityType::Archer) continue;
-        auto* own = obj->get_component<Ownership>();
-        if (!own || own->player_id != player_id) continue;
-        auto* attack = obj->get_component<Attack>();
-        if (attack) {
-            attack->range += 50.0f;
-        }
-    }
+// ---------- ç”Ÿäº§åˆ—è¡¨ ----------
+std::vector<ProductionItem> get_production_list(BuildingEntityType type) {
+    const BuildingDef* bd = EntityCatalog::instance()->find_building(type);
+    if (!bd) return {};
+    return build_building_production(*bd);
 }
 
-// ---------- Éú²úÁĞ±í ----------
-const std::vector<ProductionItem>& get_town_center_production() {
-    static const std::vector<ProductionItem> list = {
-        ProductionItem(UnitEntityType::Villager, 5.0f, {0, 0, 10, 0, 0}),
-        ProductionItem(UnitEntityType::Archer,   8.0f, {0, 0, 0, 15, 0}),
-    };
-    return list;
-}
-
-const std::vector<ProductionItem>& get_archery_range_production() {
-    static ResearchItem strongbow{
-        u8"Ç¿¹­",
-        15.0f,
-        {0, 0, 0, 50, 30},
-        [](int player_id) { research_strongbow_effect(player_id); }
-    };
-    static ResearchItem crossbow{
-        u8"åó¼ı",
-        20.0f,
-        {0, 0, 0, 80, 40},
-        nullptr
-    };
-
-    static const std::vector<ProductionItem> list = {
-        ProductionItem(UnitEntityType::Archer, 8.0f, {0, 0, 0, 15, 0}),
-        ProductionItem(UnitEntityType::Crossbowman, 10.0f, {0, 0, 0, 25, 0}, u8"åó¼ı"),
-        ProductionItem(&strongbow, strongbow.research_time,
-                       {0, 0, 0, strongbow.cost_amounts[static_cast<int>(ResourceType::Gold)],
-                        strongbow.cost_amounts[static_cast<int>(ResourceType::Stone)]}),
-        ProductionItem(&crossbow, crossbow.research_time,
-                       {0, 0, 0, crossbow.cost_amounts[static_cast<int>(ResourceType::Gold)],
-                        crossbow.cost_amounts[static_cast<int>(ResourceType::Stone)]}),
-    };
-    return list;
-}
-
-const std::vector<ProductionItem>* get_production_list(BuildingEntityType type) {
-    switch (type) {
-    case BuildingEntityType::TownCenter:   return &get_town_center_production();
-    case BuildingEntityType::ArcheryRange: return &get_archery_range_production();
-    default: return nullptr;
-    }
-}
-
-// ---------- È«¾Ö½¨ÖşÁĞ±í ----------
+// ---------- å…¨å±€å»ºç­‘åˆ—è¡¨ ----------
 const std::vector<ProductionItem>& get_global_build_list() {
-    static const std::vector<ProductionItem> list = {
-        ProductionItem(BuildingEntityType::TownCenter,   20, 0.0f, {0, 200, 0, 100, 0}),
-        ProductionItem(BuildingEntityType::ArcheryRange, 20, 0.0f, {0, 150, 0, 50,  0}),
-    };
+    static std::vector<ProductionItem> list;
+    static int cached_version = -1;
+
+    auto* catalog = EntityCatalog::instance();
+    if (cached_version == catalog->version() && !list.empty())
+        return list;
+
+    cached_version = catalog->version();
+    list.clear();
+    for (const auto& bd : catalog->buildings()) {
+        list.push_back(ProductionItem(static_cast<BuildingEntityType>(bd.type_id),
+            std::max(1, bd.size_cells), std::max(0.1f, bd.build_time),
+            { bd.cost[static_cast<int>(ResourceType::None)],
+              bd.cost[static_cast<int>(ResourceType::Wood)],
+              bd.cost[static_cast<int>(ResourceType::Food)],
+              bd.cost[static_cast<int>(ResourceType::Gold)],
+              bd.cost[static_cast<int>(ResourceType::Stone)] },
+            bd.requires));
+    }
     return list;
 }
 

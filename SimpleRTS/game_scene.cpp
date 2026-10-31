@@ -273,7 +273,9 @@ void GameScene::setup_match()
 
         factory.set_player_id(pid);
         factory.set_player_color(pid, player_color_enum(slot.color_id));
-        give(pid, 150, 100);
+        int start_wood = (match_config.map_name == "map2v2") ? 300 : 150;
+        int start_food = (match_config.map_name == "map2v2") ? 200 : 100;
+        give(pid, start_wood, start_food);
 
         // 放置城镇中心；若因重叠/落水失败，螺旋向外偏移重试，保证每个玩家一定有基地
         {
@@ -301,6 +303,10 @@ void GameScene::setup_match()
         bool human = (slot.kind == SlotKind::Human);
         if (human) {
             // 靶场放在基地右侧
+            factory.create_archery_range(tc_gx + 20, tc_gy);
+        }
+        else if (match_config.map_name == "map2v2") {
+            // 2v2 地图给每个 AI 一个起始靶场，保证四个玩家都能尽快出兵。
             factory.create_archery_range(tc_gx + 20, tc_gy);
         }
 

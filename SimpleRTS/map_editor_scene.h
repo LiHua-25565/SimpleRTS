@@ -1,4 +1,4 @@
-#ifndef _MAP_EDITOR_SCENE_H_
+ï»¿#ifndef _MAP_EDITOR_SCENE_H_
 #define _MAP_EDITOR_SCENE_H_
 
 #include "scene.h"
@@ -25,116 +25,119 @@ public:
 private:
     enum class Tool : int {
         Select = 0,
-        // µØĞÎ
+        // åœ°å½¢
         Land, Water,
-        // ×ÊÔ´
+        // èµ„æº
         Wood, SGold, LGold, Stone, Berries,
-        // ±øÖÖ
+        // å…µç§
         Villager, Archer, Crossbowman,
-        // ½¨Öş
+        // å»ºç­‘
         TownCenter, ArcheryRange,
-        // ²Ù×÷
-        Eraser
+        // æ“ä½œ
+        Eraser,
+        // ç¼–è¾‘å™¨å®šä¹‰çš„è‡ªå®šä¹‰ç±»å‹ï¼ˆtype_id å­˜å…·ä½“å®šä¹‰ IDï¼‰
+        CustomUnit, CustomBuilding
     };
 
     enum class MapSize : int { Small, Medium, Large };
 
     enum class PlaceMode : int { Single, Batch };
 
-    struct ToolEntry { Tool tool; std::string label; SDL_FRect rect{}; };
+    struct ToolEntry { Tool tool; std::string label; SDL_FRect rect{}; int type_id = 0; };
     struct ToolSection { std::string title; float title_y = 0.0f; std::vector<ToolEntry> entries; };
     struct Btn { SDL_FRect rect{}; std::string label; };
 
-    // ---- ×´Ì¬ ----
-    GameMap editor_map_;               // ±à¼­Æ÷µØÍ¼£¨µØĞÎÈ¨ÍşÊı¾İ£©
+    // ---- çŠ¶æ€ ----
+    GameMap editor_map_;               // ç¼–è¾‘å™¨åœ°å›¾ï¼ˆåœ°å½¢æƒå¨æ•°æ®ï¼‰
     ObjectFactory factory_;
     Camera camera_;
     RenderTexture terrain_bake_;
-    bool terrain_dirty_ = true;        // µØĞÎÎÆÀíĞèÒªÖØºæ±º
-    bool static_dirty_ = false;        // ¾²Ì¬ÕÏ°­³¡ĞèÒªÖØ½¨
+    bool terrain_dirty_ = true;        // åœ°å½¢çº¹ç†éœ€è¦é‡çƒ˜ç„™
+    bool static_dirty_ = false;        // é™æ€éšœç¢åœºéœ€è¦é‡å»º
     bool initialized_ = false;
 
     std::vector<ToolSection> sections_;
     Tool cur_tool_ = Tool::Select;
-    int place_player_ = 1;             // µ±Ç°¹éÊôÍæ¼Ò id£º0=ÖĞÁ¢, 1..N=Íæ¼Ò
-    int player_count_ = 2;             // Íæ¼ÒÊıÁ¿£¨2/4/8£©
+    int custom_type_id_ = 0;           // å½“å‰é€‰ä¸­çš„è‡ªå®šä¹‰å…µç§/å»ºç­‘ç±»å‹ ID
+    int place_player_ = 1;             // å½“å‰å½’å±ç©å®¶ idï¼š0=ä¸­ç«‹, 1..N=ç©å®¶
+    int player_count_ = 2;             // ç©å®¶æ•°é‡ï¼ˆ2/4/8ï¼‰
 
-    MapSize cur_size_ = MapSize::Medium;   // µØÍ¼³ß´ç
-    PlaceMode place_mode_ = PlaceMode::Single;  // ·ÅÖÃÄ£Ê½£ºµ¥¸ö/ÅúÁ¿£¨Ä¬ÈÏµ¥¸ö£©
+    MapSize cur_size_ = MapSize::Medium;   // åœ°å›¾å°ºå¯¸
+    PlaceMode place_mode_ = PlaceMode::Single;  // æ”¾ç½®æ¨¡å¼ï¼šå•ä¸ª/æ‰¹é‡ï¼ˆé»˜è®¤å•ä¸ªï¼‰
 
-    std::vector<std::string> map_files_;   // maps/ Ä¿Â¼ÏÂÒÑÓĞµÄ .srmap ÎÄ¼şÃû£¨²»º¬À©Õ¹Ãû£©
-    int map_sel_ = -1;                     // ÁĞ±íµ±Ç°Ñ¡ÖĞÏî
-    float map_scroll_ = 0.0f;              // µØÍ¼ÁĞ±í¹ö¶¯Æ«ÒÆ
+    std::vector<std::string> map_files_;   // maps/ ç›®å½•ä¸‹å·²æœ‰çš„ .srmap æ–‡ä»¶åï¼ˆä¸å«æ‰©å±•åï¼‰
+    int map_sel_ = -1;                     // åˆ—è¡¨å½“å‰é€‰ä¸­é¡¹
+    float map_scroll_ = 0.0f;              // åœ°å›¾åˆ—è¡¨æ»šåŠ¨åç§»
 
-    std::vector<EntityRecord> entities_;   // ±à¼­Æ÷ÄÚÈİ£¨ÊµÌåÈ¨ÍşÊı¾İ£©
+    std::vector<EntityRecord> entities_;   // ç¼–è¾‘å™¨å†…å®¹ï¼ˆå®ä½“æƒå¨æ•°æ®ï¼‰
     uint64_t selected_id_ = 0;
 
     std::string filename_ = "map01";
     bool filename_focused_ = false;
-    bool hp_focused_ = false;          // ÑªÁ¿ÊäÈë¿ò¾Û½¹£¨¼üÅÌÊäÈë£©
-    std::string hp_input_;             // ÑªÁ¿ÊäÈë»º³å
+    bool hp_focused_ = false;          // è¡€é‡è¾“å…¥æ¡†èšç„¦ï¼ˆé”®ç›˜è¾“å…¥ï¼‰
+    std::string hp_input_;             // è¡€é‡è¾“å…¥ç¼“å†²
     std::string status_msg_;
     float status_timer_ = 0.0f;
 
-    // ---- ½»»¥×´Ì¬ ----
+    // ---- äº¤äº’çŠ¶æ€ ----
     bool panning_ = false;
     float last_pan_x_ = 0.0f, last_pan_y_ = 0.0f;
-    bool painting_ = false;                    // µØĞÎÍ¿Ë¢°´×¡ÖĞ
-    bool placing_ = false;                     // ×ÊÔ´ÅúÁ¿·ÅÖÃ°´×¡ÖĞ£¨³¤°´Á¬Ğø·ÅÖÃ£©
-    bool erasing_ = false;                     // ÏğÆ¤²Á°´×¡ÖĞ£¨ÍÏ¶¯Á¬Ğø²Á³ı£©
-    int last_place_gx_ = -1, last_place_gy_ = -1;   // ÉÏ´ÎÁ¬Ğø·ÅÖÃµÄ¸ñ×ÓÔ­µã£¨±ÜÃâÍ¬¸ñÖØ¸´·ÅÖÃ£©
-    float mouse_x_ = 0.0f, mouse_y_ = 0.0f;   // ×î½üÒ»´ÎÊó±êÎ»ÖÃ£¨Âß¼­×ø±ê£©
+    bool painting_ = false;                    // åœ°å½¢æ¶‚åˆ·æŒ‰ä½ä¸­
+    bool placing_ = false;                     // èµ„æºæ‰¹é‡æ”¾ç½®æŒ‰ä½ä¸­ï¼ˆé•¿æŒ‰è¿ç»­æ”¾ç½®ï¼‰
+    bool erasing_ = false;                     // æ©¡çš®æ“¦æŒ‰ä½ä¸­ï¼ˆæ‹–åŠ¨è¿ç»­æ“¦é™¤ï¼‰
+    int last_place_gx_ = -1, last_place_gy_ = -1;   // ä¸Šæ¬¡è¿ç»­æ”¾ç½®çš„æ ¼å­åŸç‚¹ï¼ˆé¿å…åŒæ ¼é‡å¤æ”¾ç½®ï¼‰
+    float mouse_x_ = 0.0f, mouse_y_ = 0.0f;   // æœ€è¿‘ä¸€æ¬¡é¼ æ ‡ä½ç½®ï¼ˆé€»è¾‘åæ ‡ï¼‰
 
-    // ---- UI ²¼¾Ö³£Á¿ ----
+    // ---- UI å¸ƒå±€å¸¸é‡ ----
     float panel_w_ = 200.0f;
     float topbar_h_ = 56.0f;
     float viewport_x_ = 200.0f;
     float viewport_y_ = 56.0f;
 
-    // ---- UI ÔªËØ ----
+    // ---- UI å…ƒç´  ----
     Btn btn_save_, btn_load_, btn_clear_, btn_back_;
     Btn btn_delete_map_;
-    bool confirm_delete_ = false;      // É¾³ıµØÍ¼¶ş´ÎÈ·ÈÏ
-    std::string confirm_delete_name_;  // ´ıÈ·ÈÏÉ¾³ıµÄµØÍ¼Ãû
+    bool confirm_delete_ = false;      // åˆ é™¤åœ°å›¾äºŒæ¬¡ç¡®è®¤
+    std::string confirm_delete_name_;  // å¾…ç¡®è®¤åˆ é™¤çš„åœ°å›¾å
     SDL_FRect filename_rect_{};
     SDL_FRect hp_input_rect_{}, del_btn_{};
     SDL_FRect sel_info_rect_{};
-    float tool_scroll_ = 0.0f;         // ¹¤¾ßÁĞ±í¹ö¶¯Æ«ÒÆ
+    float tool_scroll_ = 0.0f;         // å·¥å…·åˆ—è¡¨æ»šåŠ¨åç§»
 
     SDL_FRect size_small_{}, size_med_{}, size_large_{};
     SDL_FRect mode_single_{}, mode_batch_{};
     SDL_FRect brush_1_{}, brush_5_{}, brush_10_{};
-    int brush_size_ = 1;               // µØĞÎ±ÊË¢Ö±¾¶£¨¸ñ£©£º1/5/10
+    int brush_size_ = 1;               // åœ°å½¢ç¬”åˆ·ç›´å¾„ï¼ˆæ ¼ï¼‰ï¼š1/5/10
     float size_label_y_ = 0.0f, mode_label_y_ = 0.0f;
     float brush_label_y_ = 0.0f;
-    SDL_FRect pc_2_{}, pc_4_{}, pc_8_{};          // Íæ¼ÒÊıÁ¿°´Å¥
+    SDL_FRect pc_2_{}, pc_4_{}, pc_8_{};          // ç©å®¶æ•°é‡æŒ‰é’®
     float pc_label_y_ = 0.0f;
-    std::vector<SDL_FRect> owner_btns_;           // ¹éÊô°´Å¥£ºindex 0=ÖĞÁ¢, 1..N=Íæ¼ÒN
+    std::vector<SDL_FRect> owner_btns_;           // å½’å±æŒ‰é’®ï¼šindex 0=ä¸­ç«‹, 1..N=ç©å®¶N
     float owner_label_y_ = 0.0f, owner_grid_top_ = 0.0f;
     float map_label_y_ = 0.0f;
-    float tools_top_ = 0.0f, tools_bottom_ = 0.0f;   // ¹¤¾ßÁĞ±í¿ÉÊÓÇøÓò
-    float tools_content_h_ = 0.0f;                   // ¹¤¾ßÄÚÈİ×Ü¸ß
-    float map_list_top_ = 0.0f, map_list_bottom_ = 0.0f; // µØÍ¼ÎÄ¼şÁĞ±í¿ÉÊÓÇøÓò
-    SDL_FRect minimap_rect_{};                       // Ğ¡µØÍ¼£¨ÓÒÏÂ½Ç£©
+    float tools_top_ = 0.0f, tools_bottom_ = 0.0f;   // å·¥å…·åˆ—è¡¨å¯è§†åŒºåŸŸ
+    float tools_content_h_ = 0.0f;                   // å·¥å…·å†…å®¹æ€»é«˜
+    float map_list_top_ = 0.0f, map_list_bottom_ = 0.0f; // åœ°å›¾æ–‡ä»¶åˆ—è¡¨å¯è§†åŒºåŸŸ
+    SDL_FRect minimap_rect_{};                       // å°åœ°å›¾ï¼ˆå³ä¸‹è§’ï¼‰
 
-    // ---- ·½·¨ ----
+    // ---- æ–¹æ³• ----
     void layout();
 
     void reset_to_empty();
-    void snapshot_entities();          // ´ÓÊÀ½çÍ¬²½µ½ entities_
-    void spawn_from_records();         // ÒÀ¾İ entities_ ÖØ½¨ÊÀ½çÊµÌå
+    void snapshot_entities();          // ä»ä¸–ç•ŒåŒæ­¥åˆ° entities_
+    void spawn_from_records();         // ä¾æ® entities_ é‡å»ºä¸–ç•Œå®ä½“
     GameObject* spawn_record(const EntityRecord& r);
     EntityRecord make_record(GameObject* obj) const;
     void remove_record(uint64_t obj_id);
-    void cleanup_invalid();            // É¾³ıÂäË®µÈ·Ç·¨ÊµÌå
+    void cleanup_invalid();            // åˆ é™¤è½æ°´ç­‰éæ³•å®ä½“
     bool record_on_water(const EntityRecord& r) const;
 
     void place_at(float mx, float my);
     void paint_terrain_at(float mx, float my);
-    void erase_at(float mx, float my);          // ÏğÆ¤²Á£ºÉ¾³ıÊó±êÏÂµÄÊµÌå
-    bool cell_occupied(int cx, int cy) const;         // ¸Ã¸ñÊÇ·ñ±»ÊµÌå£¨×ÊÔ´/½¨Öş/µ¥Î»£©Õ¼¾İ
-    bool placement_valid(float mx, float my) const;   // µ±Ç°¹¤¾ßÔÚÊó±ê´¦ÄÜ·ñ·ÅÖÃ£¨ÓÃÓÚÔ¤ÀÀºì/ÂÌ£©
-    CollisionBox entity_placement_box(float mx, float my) const;   // ÊµÌå·ÅÖÃºĞ£¨ÒÔÊó±êËùÔÚ¸ñÎªÖĞĞÄ£¬¹©Ô¤ÀÀ/Ğ£Ñé/·ÅÖÃ¹²ÓÃ£©
+    void erase_at(float mx, float my);          // æ©¡çš®æ“¦ï¼šåˆ é™¤é¼ æ ‡ä¸‹çš„å®ä½“
+    bool cell_occupied(int cx, int cy) const;         // è¯¥æ ¼æ˜¯å¦è¢«å®ä½“ï¼ˆèµ„æº/å»ºç­‘/å•ä½ï¼‰å æ®
+    bool placement_valid(float mx, float my) const;   // å½“å‰å·¥å…·åœ¨é¼ æ ‡å¤„èƒ½å¦æ”¾ç½®ï¼ˆç”¨äºé¢„è§ˆçº¢/ç»¿ï¼‰
+    CollisionBox entity_placement_box(float mx, float my) const;   // å®ä½“æ”¾ç½®ç›’ï¼ˆä»¥é¼ æ ‡æ‰€åœ¨æ ¼ä¸ºä¸­å¿ƒï¼Œä¾›é¢„è§ˆ/æ ¡éªŒ/æ”¾ç½®å…±ç”¨ï¼‰
     void select_at(float mx, float my);
     void delete_selected();
     void apply_health_input();
@@ -146,9 +149,9 @@ private:
     void do_back();
 
     void apply_size(MapSize s);
-    void apply_player_count(int n);   // ÉèÖÃÍæ¼ÒÊıÁ¿£¨2/4/8£©£¬ÖØ½¨¹éÊô°´Å¥
+    void apply_player_count(int n);   // è®¾ç½®ç©å®¶æ•°é‡ï¼ˆ2/4/8ï¼‰ï¼Œé‡å»ºå½’å±æŒ‰é’®
     void refresh_map_files();
-    std::string next_default_name() const;   // Î´Ê¹ÓÃµÄ×î´ó±àºÅ£¨mapNN£©
+    std::string next_default_name() const;   // æœªä½¿ç”¨çš„æœ€å¤§ç¼–å·ï¼ˆmapNNï¼‰
 
     void zoom_at(float mx, float my, float wheel);
     bool inside_viewport(float x, float y) const;
@@ -173,7 +176,7 @@ private:
     void append_hp_text(const char* txt);
     void set_status(const std::string& msg);
 
-    // ---- ¹¤¾ß¸¨Öú ----
+    // ---- å·¥å…·è¾…åŠ© ----
     bool is_terrain_tool(Tool t) const;
     bool is_resource_tool(Tool t) const;
     bool is_unit_tool(Tool t) const;

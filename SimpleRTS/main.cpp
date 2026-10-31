@@ -1,4 +1,4 @@
-#include "cursor_mgr.h"
+Ôªø#include "cursor_mgr.h"
 #include "scene_mgr.h"
 #include "render_mgr.h"
 #include "selection_mgr.h"
@@ -8,6 +8,8 @@
 #include "menu_scene.h"
 #include "selector_scene.h"
 #include "map_editor_scene.h"
+#include "def_editor_scene.h"
+#include "entity_defs.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -44,7 +46,7 @@ int main(int argc, char* argv[])
     using namespace std::chrono;
     init();
 
-    SDL_Window* window = SDL_CreateWindow(u8"MySTR",
+    SDL_Window* window = SDL_CreateWindow(u8"MySTR v1.1",
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     TTF_Font* font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
@@ -52,8 +54,11 @@ int main(int argc, char* argv[])
         SDL_Log("FATAL: TTF_OpenFont failed: %s", SDL_GetError());
     }
     UIMgr::instance()->init();
-    // Ã·«∞≥ı ºªØŒ∆¿Ì/◊÷ÃÂª∫¥Ê£¨π©≤Àµ•”Î—°‘Ò≥°æ∞‰÷»æŒƒ◊÷
+    // ÊèêÂâçÂàùÂßãÂåñÁ∫πÁêÜ/Â≠ó‰ΩìÁºìÂ≠òÔºå‰æõËèúÂçï‰∏éÈÄâÊã©Âú∫ÊôØÊ∏≤ÊüìÊñáÂ≠ó
     TextureCache::instance()->init(renderer, font);
+
+    // ËΩΩÂÖ•ÁºñËæëÂô®ÂØºÂá∫ÁöÑÂÖµÁßç/Âª∫Á≠ëÂÆö‰πâÔºàdefs/custom_defs.srdefÔºå‰∏çÂ≠òÂú®Âàô‰ΩøÁî®ÂÜÖÁΩÆÂÜÖÂÆπÔºâ
+    EntityCatalog::instance()->load_default_if_exists();
 
     auto game_scene = new GameScene();
     game_scene->set_font(font);
@@ -67,23 +72,27 @@ int main(int argc, char* argv[])
     auto map_editor_scene = new MapEditorScene();
     map_editor_scene->set_font(font);
     map_editor_scene->set_renderer(renderer);
+    auto def_editor_scene = new DefEditorScene();
+    def_editor_scene->set_font(font);
+    def_editor_scene->set_renderer(renderer);
 
-    // ◊¢≤·µΩ SceneMgr
+    // Ê≥®ÂÜåÂà∞ SceneMgr
     SceneMgr::instance()->set_menu_scene(menu_scene);
     SceneMgr::instance()->set_game_scene(game_scene);
     SceneMgr::instance()->set_selector_scene(selector_scene);
     SceneMgr::instance()->set_map_editor_scene(map_editor_scene);
+    SceneMgr::instance()->set_def_editor_scene(def_editor_scene);
 
-    // ¥”÷˜≤Àµ•∆Ù∂Ø
+    // ‰ªé‰∏ªËèúÂçïÂêØÂä®
     SceneMgr::instance()->set_current_scene(menu_scene);
 
     bool is_fullscreen = false;
 
-    // …Ë÷√¬ﬂº≠∑÷±Ê¬ 
+    // ËÆæÁΩÆÈÄªËæëÂàÜËæ®Áéá
     SDL_SetRenderLogicalPresentation(
         renderer,
         1280, 720,
-        SDL_LOGICAL_PRESENTATION_LETTERBOX // µ»±»¿˝¡Ù∫⁄±ﬂ
+        SDL_LOGICAL_PRESENTATION_LETTERBOX // Á≠âÊØî‰æãÁïôÈªëËæπ
     );
 
     SDL_Event event;
@@ -93,7 +102,7 @@ int main(int argc, char* argv[])
     steady_clock::time_point last_tick = steady_clock::now();
 
     while (!is_quit) {
-        //  ‰»Î
+        // ËæìÂÖ•
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT)
@@ -101,13 +110,13 @@ int main(int argc, char* argv[])
 
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
-                // º‡Ã˝F11∞¥º¸∞¥œ¬
+                // ÁõëÂê¨F11ÊåâÈîÆÊåâ‰∏ã
                 if (event.key.key == SDLK_F11)
                 {
                     is_fullscreen = !is_fullscreen;
                     SDL_SetWindowFullscreen(window, is_fullscreen);
                 }
-                // ESC º¸
+                // ESC ÈîÆ
                 if (event.key.key == SDLK_ESCAPE)
                 {
                     is_fullscreen = false;
@@ -120,11 +129,11 @@ int main(int argc, char* argv[])
             SceneMgr::instance()->on_input(event);
         }
 
-        // ÕÀ≥ˆ«Î«Û£®≤Àµ•°∞ÕÀ≥ˆ”Œœ∑°±∞¥≈•¥•∑¢£©
+        // ÈÄÄÂá∫ËØ∑Ê±ÇÔºàËèúÂçï‚ÄúÈÄÄÂá∫Ê∏∏Êàè‚ÄùÊåâÈíÆËß¶ÂèëÔºâ
         if (SceneMgr::instance()->should_quit())
             is_quit = true;
 
-        // ¬ﬂº≠
+        // ÈÄªËæë
 
         RenderMgr::instance()->begin_frame();
 
@@ -133,7 +142,7 @@ int main(int argc, char* argv[])
 
         SceneMgr::instance()->on_update(delta.count());
 
-        // ‰÷»æ
+        // Ê∏≤Êüì
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);

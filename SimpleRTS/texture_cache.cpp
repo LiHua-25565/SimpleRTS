@@ -1,8 +1,10 @@
-#include "texture_cache.h"
+ï»¿#include "texture_cache.h"
 #include "color.h"
+#include "entity_defs.h"
 #include <algorithm>
+#include <unordered_set>
 
-// ¸¨Öú£ºUTF-8 ×Ö·û¼ÆÊı
+// è¾…åŠ©ï¼šUTF-8 å­—ç¬¦è®¡æ•°
 static int utf8_char_count(const std::string& str)
 {
     int count = 0;
@@ -17,7 +19,25 @@ static int utf8_char_count(const std::string& str)
     return count;
 }
 
-// ×ÊÔ´±³¾°É«£¨¾²Ì¬£©
+// åªå–å‰ max_chars ä¸ª UTF-8 å­—ç¬¦ã€‚ç¼–è¾‘å™¨é»˜è®¤çº¹ç†è§„åˆ™ï¼š
+// â€œåå­—æœ€å¤šå–å…¶ä¸­å››ä¸ªå­—å¤„ç†ä¸ºçº¹ç†â€ã€‚
+static std::string utf8_truncate(const std::string& str, int max_chars)
+{
+    int count = 0;
+    size_t i = 0;
+    while (i < str.size() && count < max_chars) {
+        unsigned char c = str[i];
+        if (c < 0x80) i += 1;
+        else if (c < 0xE0) i += 2;
+        else if (c < 0xF0) i += 3;
+        else i += 4;
+        ++count;
+    }
+    if (i > str.size()) i = str.size();
+    return str.substr(0, i);
+}
+
+// èµ„æºèƒŒæ™¯è‰²ï¼ˆé™æ€ï¼‰
 static SDL_Color get_resource_bg_color(ResourceEntityType type)
 {
     switch (type) {
@@ -30,7 +50,7 @@ static SDL_Color get_resource_bg_color(ResourceEntityType type)
     }
 }
 
-// ×ÊÔ´ÎÄ×ÖÉ«£¨¾²Ì¬£©
+// èµ„æºæ–‡å­—è‰²ï¼ˆé™æ€ï¼‰
 static SDL_Color get_resource_text_color(ResourceEntityType type)
 {
     switch (type) {
@@ -43,7 +63,7 @@ static SDL_Color get_resource_text_color(ResourceEntityType type)
     }
 }
 
-// Ğ¯´ø×ÊÔ´±ê¼ÇÉ«£¨¾²Ì¬£©
+// æºå¸¦èµ„æºæ ‡è®°è‰²ï¼ˆé™æ€ï¼‰
 static SDL_Color get_resource_carry_color(ResourceType res_type)
 {
     switch (res_type) {
@@ -69,20 +89,20 @@ void TextureCache::init(SDL_Renderer* r, TTF_Font* f)
 
 void TextureCache::shutdown()
 {
-    // Ïú»ÙËùÓĞÎÆÀí
+    // é”€æ¯æ‰€æœ‰çº¹ç†
     for (auto& [id, tex] : texture_map) {
         if (tex) SDL_DestroyTexture(tex);
     }
     texture_map.clear();
 
-    // Çå¿ÕËùÓĞ»º´æ£¨Ö»´æ ID£¬²»ĞèÒª¶îÍâÏú»Ù£©
+    // æ¸…ç©ºæ‰€æœ‰ç¼“å­˜ï¼ˆåªå­˜ IDï¼Œä¸éœ€è¦é¢å¤–é”€æ¯ï¼‰
     resource_cache.clear();
     unit_cache.clear();
     carry_cache.clear();
     building_cache.clear();
     text_cache.clear();
 
-    // ÊÍ·ÅËùÓĞ×ÖÌå»º´æ£¨±ÜÃâ¹Ø±Õ base_font Á½´Î£©
+    // é‡Šæ”¾æ‰€æœ‰å­—ä½“ç¼“å­˜ï¼ˆé¿å…å…³é—­ base_font ä¸¤æ¬¡ï¼‰
     for (auto& [size, f] : font_cache) {
         if (f && f != base_font) TTF_CloseFont(f);
     }
@@ -94,7 +114,7 @@ void TextureCache::shutdown()
     renderer = nullptr;
 }
 
-// ---- ÎÆÀí ID ¹ÜÀí ----
+// ---- çº¹ç† ID ç®¡ç† ----
 uint32_t TextureCache::register_texture(SDL_Texture* tex)
 {
     if (!tex) return 0;
@@ -116,7 +136,7 @@ void TextureCache::release_texture(uint32_t id)
         if (it->second) SDL_DestroyTexture(it->second);
         texture_map.erase(it);
     }
-    // ´ÓËùÓĞ»º´æÖĞÉ¾³ı¶ÔÓ¦µÄ ID
+    // ä»æ‰€æœ‰ç¼“å­˜ä¸­åˆ é™¤å¯¹åº”çš„ ID
     auto erase_id = [id](auto& cache) {
         for (auto iter = cache.begin(); iter != cache.end(); ++iter) {
             if (iter->second == id) {
@@ -132,7 +152,22 @@ void TextureCache::release_texture(uint32_t id)
     erase_id(text_cache);
 }
 
-// ---- ×ÖÌå¹ÜÀí ----
+// ç¼–è¾‘å™¨å¯¼å…¥/åˆ æ”¹å®šä¹‰åï¼Œå®ä½“çº¹ç†éœ€è¦é‡æ–°ç”Ÿæˆã€‚
+void TextureCache::clear_entity_caches()
+{
+    std::unordered_set<uint32_t> ids;
+    for (const auto& [k, id] : unit_cache) ids.insert(id);
+    for (const auto& [k, id] : carry_cache) ids.insert(id);
+    for (const auto& [k, id] : building_cache) ids.insert(id);
+
+    for (uint32_t id : ids) release_texture(id);
+
+    unit_cache.clear();
+    carry_cache.clear();
+    building_cache.clear();
+}
+
+// ---- å­—ä½“ç®¡ç† ----
 TTF_Font* TextureCache::get_font(int size)
 {
     if (size <= 0) return base_font;
@@ -148,7 +183,7 @@ TTF_Font* TextureCache::get_font(int size)
     return base_font;
 }
 
-// ---- ¶àĞĞÎÄ×ÖäÖÈ¾£¨ÄÚ²¿Ê¹ÓÃ£© ----
+// ---- å¤šè¡Œæ–‡å­—æ¸²æŸ“ï¼ˆå†…éƒ¨ä½¿ç”¨ï¼‰ ----
 SDL_Surface* TextureCache::render_text_multiline(const std::string& text, SDL_Color color, int width, int height)
 {
     if (!base_font || width <= 0 || height <= 0) return nullptr;
@@ -234,7 +269,7 @@ SDL_Surface* TextureCache::render_text_multiline(const std::string& text, SDL_Co
     return nullptr;
 }
 
-// ---- ×ÊÔ´ÎÆÀí ----
+// ---- èµ„æºçº¹ç† ----
 uint32_t TextureCache::get_resource_texture(ResourceEntityType type, int width, int height)
 {
     ResourceKey key{ type, width, height };
@@ -294,24 +329,30 @@ SDL_Texture* TextureCache::create_resource_texture(ResourceEntityType type, int 
 std::string TextureCache::get_resource_name(ResourceEntityType type) const
 {
     switch (type) {
-    case ResourceEntityType::Wood:    return u8"Ä¾";
-    case ResourceEntityType::SGold:   return u8"½ğ¿ó";
-    case ResourceEntityType::LGold:   return u8"½ğ¿ó";
-    case ResourceEntityType::Stone:   return u8"Ê¯Í·";
-    case ResourceEntityType::Berries: return u8"½¬¹û";
+    case ResourceEntityType::Wood:    return u8"æœ¨";
+    case ResourceEntityType::SGold:   return u8"é‡‘çŸ¿";
+    case ResourceEntityType::LGold:   return u8"é‡‘çŸ¿";
+    case ResourceEntityType::Stone:   return u8"çŸ³å¤´";
+    case ResourceEntityType::Berries: return u8"æµ†æœ";
     default: return "?";
     }
 }
 
-// ---- µ¥Î»ÎÆÀí ----
+// ---- å•ä½çº¹ç† ----
 uint32_t TextureCache::get_unit_texture(UnitEntityType type, SDL_Color color, int width, int height)
 {
-    UnitKey key{ type, color.r | (color.g << 8) | (color.b << 16) | (color.a << 24), width, height };
+    const uint32_t revision = static_cast<uint32_t>(EntityCatalog::instance()->version());
+    const Uint32 packed_color = static_cast<Uint32>(color.r) |
+        (static_cast<Uint32>(color.g) << 8) |
+        (static_cast<Uint32>(color.b) << 16) |
+        (static_cast<Uint32>(color.a) << 24);
+    UnitKey key{ type, packed_color, width, height, revision };
     auto it = unit_cache.find(key);
     if (it != unit_cache.end()) {
         if (get_texture_by_id(it->second)) return it->second;
         unit_cache.erase(it);
     }
+
     SDL_Texture* tex = create_unit_texture(type, color, width, height);
     uint32_t id = register_texture(tex);
     if (id) unit_cache[key] = id;
@@ -324,6 +365,9 @@ SDL_Texture* TextureCache::create_unit_texture(UnitEntityType type, SDL_Color co
     if (width <= 0 || height <= 0) return nullptr;
 
     std::string text = get_unit_name(type);
+    if (const UnitDef* def = EntityCatalog::instance()->find_unit(type))
+        text = def->texture_text.empty() ? def->name : def->texture_text;
+    text = utf8_truncate(text, 4);
     SDL_Surface* surf = render_text_multiline(text, color, width, height);
     if (!surf) return nullptr;
 
@@ -334,20 +378,23 @@ SDL_Texture* TextureCache::create_unit_texture(UnitEntityType type, SDL_Color co
 
 std::string TextureCache::get_unit_name(UnitEntityType type) const
 {
+    if (const UnitDef* def = EntityCatalog::instance()->find_unit(type))
+        return def->name;
     switch (type) {
-    case UnitEntityType::Villager:     return u8"Ãñ";
-    case UnitEntityType::Cavalry:      return u8"Æï";
-    case UnitEntityType::Spearman:     return u8"Ã¬";
-    case UnitEntityType::Archer:       return u8"¹­";
-    case UnitEntityType::Crossbowman:  return u8"åó";
+    case UnitEntityType::Villager:     return u8"æ°‘";
+    case UnitEntityType::Cavalry:      return u8"éª‘";
+    case UnitEntityType::Spearman:     return u8"çŸ›";
+    case UnitEntityType::Archer:       return u8"å¼“";
+    case UnitEntityType::Crossbowman:  return u8"å¼©";
     default: return "?";
     }
 }
 
-// ---- Ğ¯´ø×ÊÔ´µ¥Î»ÎÆÀí ----
+// ---- æºå¸¦èµ„æºå•ä½çº¹ç† ----
 uint32_t TextureCache::get_carrying_unit_texture(UnitEntityType type, SDL_Color color, int width, int height, ResourceType res_type)
 {
-    CarryKey key{ type, color, width, height, res_type };
+    const uint32_t revision = static_cast<uint32_t>(EntityCatalog::instance()->version());
+    CarryKey key{ type, color, width, height, res_type, revision };
     auto it = carry_cache.find(key);
     if (it != carry_cache.end()) {
         if (get_texture_by_id(it->second)) return it->second;
@@ -364,7 +411,10 @@ SDL_Texture* TextureCache::create_carrying_unit_texture(UnitEntityType type, SDL
     if (!renderer || !base_font) return nullptr;
     if (width <= 0 || height <= 0) return nullptr;
 
-    SDL_Surface* surf = render_text_multiline(get_unit_name(type), color, width, height);
+    std::string texture_text = get_unit_name(type);
+    if (const UnitDef* def = EntityCatalog::instance()->find_unit(type))
+        texture_text = def->texture_text.empty() ? def->name : def->texture_text;
+    SDL_Surface* surf = render_text_multiline(utf8_truncate(texture_text, 4), color, width, height);
     if (!surf) return nullptr;
 
     if (res_type != ResourceType::None) {
@@ -384,15 +434,17 @@ SDL_Texture* TextureCache::create_carrying_unit_texture(UnitEntityType type, SDL
     return tex;
 }
 
-// ---- ½¨ÖşÎÆÀí ----
+// ---- å»ºç­‘çº¹ç† ----
 uint32_t TextureCache::get_building_texture(BuildingEntityType type, SDL_Color color, int width, int height)
 {
-    BuildingKey key{ type, color, width, height };
+    const uint32_t revision = static_cast<uint32_t>(EntityCatalog::instance()->version());
+    BuildingKey key{ type, color, width, height, revision };
     auto it = building_cache.find(key);
     if (it != building_cache.end()) {
         if (get_texture_by_id(it->second)) return it->second;
         building_cache.erase(it);
     }
+
     SDL_Texture* tex = create_building_texture(type, color, width, height);
     uint32_t id = register_texture(tex);
     if (id) building_cache[key] = id;
@@ -415,7 +467,10 @@ SDL_Texture* TextureCache::create_building_texture(BuildingEntityType type, SDL_
     SDL_Rect full = { 0, 0, width, height };
     SDL_FillSurfaceRects(bg, &full, 1, bg_pixel);
 
-    std::string text = get_building_name(type);
+    std::string texture_text = get_building_name(type);
+    if (const BuildingDef* def = EntityCatalog::instance()->find_building(type))
+        texture_text = def->texture_text.empty() ? def->name : def->texture_text;
+    std::string text = utf8_truncate(texture_text, 4);
     SDL_Surface* text_surf = render_text_multiline(text, color, width, height);
     if (text_surf) {
         SDL_Rect dst = { 0, 0, width, height };
@@ -430,14 +485,16 @@ SDL_Texture* TextureCache::create_building_texture(BuildingEntityType type, SDL_
 
 std::string TextureCache::get_building_name(BuildingEntityType type) const
 {
+    if (const BuildingDef* def = EntityCatalog::instance()->find_building(type))
+        return def->name;
     switch (type) {
-    case BuildingEntityType::TownCenter: return u8"³ÇÕò´óÌü";
-    case BuildingEntityType::ArcheryRange: return u8"°Ğ³¡";
+    case BuildingEntityType::TownCenter: return u8"åŸé•‡å¤§å…";
+    case BuildingEntityType::ArcheryRange: return u8"é¶åœº";
     default: return "?";
     }
 }
 
-// ---- ÎÄ×ÖÎÆÀí ----
+// ---- æ–‡å­—çº¹ç† ----
 uint32_t TextureCache::get_text_texture(const std::string& text, SDL_Color color, int font_size, int width, int height) {
     TextKey key{ text, color, font_size, width, height };
     auto it = text_cache.find(key);
@@ -448,7 +505,7 @@ uint32_t TextureCache::get_text_texture(const std::string& text, SDL_Color color
 
     SDL_Texture* tex = nullptr;
     if (width > 0 && height > 0) {
-        // ¶àĞĞÎÆÀí
+        // å¤šè¡Œçº¹ç†
         SDL_Surface* surf = render_text_multiline(text, color, width, height);
         if (!surf) return 0;
         tex = SDL_CreateTextureFromSurface(renderer, surf);
@@ -494,9 +551,9 @@ SDL_Color TextureCache::get_player_color(int playerId) const
     }
 }
 
-// ¿Æ¼¼ÎÆÀí
+// ç§‘æŠ€çº¹ç†
 uint32_t TextureCache::get_research_texture(const std::string& name, int width, int height) {
-    // Îª¼òµ¥£¬Ö±½Ó·µ»ØÒ»¸ö¹Ì¶¨ID£¨ÈçÓÃÎÄ×ÖÎÆÀí¡°ÑĞ¡±£©
+    // ä¸ºç®€å•ï¼Œç›´æ¥è¿”å›ä¸€ä¸ªå›ºå®šIDï¼ˆå¦‚ç”¨æ–‡å­—çº¹ç†â€œç ”â€ï¼‰
     SDL_Color white = { 255,255,255,255 };
-    return get_text_texture(u8"ÑĞ", white, 18);  // ÁÙÊ±
+    return get_text_texture(u8"ç ”", white, 18);  // ä¸´æ—¶
 }

@@ -137,6 +137,9 @@
     <ClCompile Include="camera_controller.cpp" />
     <ClCompile Include="cursor_mgr.cpp" />
     <ClCompile Include="damege_pipeline.cpp" />
+    <ClCompile Include="def_editor_scene.cpp" />
+    <ClCompile Include="entity_defs.cpp" />
+    <ClCompile Include="tech_effects.cpp" />
     <ClCompile Include="game_map.cpp" />
     <ClCompile Include="game_scene.cpp" />
     <ClCompile Include="harvest_system.cpp" />
@@ -178,6 +181,10 @@
     <ClInclude Include="components.h" />
     <ClInclude Include="cursor_mgr.h" />
     <ClInclude Include="damage_pipeline.h" />
+    <ClInclude Include="damage_type.h" />
+    <ClInclude Include="def_editor_scene.h" />
+    <ClInclude Include="entity_defs.h" />
+    <ClInclude Include="tech_effects.h" />
     <ClInclude Include="factories.h" />
     <ClInclude Include="game_map.h" />
     <ClInclude Include="game_object.h" />

@@ -1,17 +1,29 @@
-#include "ui_mgr.h"
+ï»¿#include "ui_mgr.h"
 #include "render_mgr.h"
 #include "selection_mgr.h"
 #include "world_entity_mgr.h"
 #include "texture_cache.h"
 #include "factories.h"
+#include "entity_defs.h"
 #include "util.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <unordered_map>
 #include <sstream>
 #include <map>
 
-// ¼ÆËãÇøÓòÄÚÎÆÀíµÄÊµ¼Ê»æÖÆÎ»ÖÃ£¨×óÉÏ½Ç£©¡£on_render Óë²¼¾ÖÆÚµÄ½Ç±êÎü¸½
-// ¶¼×ßÕâÀï£¬±£Ö¤"Ìù×¡ºº×ÖÓÒÏÂ½Ç"µÄÅĞ¶ÏÓëÊµ¼Ê»æÖÆÍêÈ«Ò»ÖÂ
+static std::string format_float_short(float value) {
+    char buf[32];
+    if (std::fabs(value - std::round(value)) < 0.01f)
+        std::snprintf(buf, sizeof(buf), "%.0f", value);
+    else
+        std::snprintf(buf, sizeof(buf), "%.1f", value);
+    return std::string(buf);
+}
+
+// è®¡ç®—åŒºåŸŸå†…çº¹ç†çš„å®é™…ç»˜åˆ¶ä½ç½®ï¼ˆå·¦ä¸Šè§’ï¼‰ã€‚on_render ä¸å¸ƒå±€æœŸçš„è§’æ ‡å¸é™„
+// éƒ½èµ°è¿™é‡Œï¼Œä¿è¯"è´´ä½æ±‰å­—å³ä¸‹è§’"çš„åˆ¤æ–­ä¸å®é™…ç»˜åˆ¶å®Œå…¨ä¸€è‡´
 static void resolve_region_tex_pos(const ui_region& region, float& out_x, float& out_y) {
     if (region.tex_align == TexAlign::BottomRight) {
         out_x = region.abs_rect.x + region.abs_rect.w - region.tex_w;
@@ -28,13 +40,13 @@ static void resolve_region_tex_pos(const ui_region& region, float& out_x, float&
     out_y += region.nudge_y;
 }
 
-// ========== µ¥Àı ==========
+// ========== å•ä¾‹ ==========
 UIMgr* UIMgr::instance() {
     static UIMgr mgr;
     return &mgr;
 }
 
-// ========== ³õÊ¼»¯ / ¹Ø±Õ ==========
+// ========== åˆå§‹åŒ– / å…³é—­ ==========
 void UIMgr::init() {
     init_attribute_rows();
 }
@@ -43,7 +55,7 @@ void UIMgr::shutdown() {
     panels.clear();
 }
 
-// ========== Ãæ°å¹ÜÀí ==========
+// ========== é¢æ¿ç®¡ç† ==========
 ui_panel& UIMgr::add_panel(const std::string& name, PanelAnchor anchor,
     float x_percent, float y_percent,
     float w_percent, float h_percent) {
@@ -68,9 +80,11 @@ void UIMgr::remove_panel(const std::string& name) {
         [&](const ui_panel& p) { return p.name == name; }), panels.end());
 }
 
-// ========== ²¼¾Ö¸üĞÂ ==========
+// ========== å¸ƒå±€æ›´æ–° ==========
 void UIMgr::update_layout(int screen_w, int screen_h) {
     if (screen_w <= 0 || screen_h <= 0) return;
+    screen_w_ = screen_w;
+    screen_h_ = screen_h;
 
     int new_font_size = static_cast<int>(screen_h * font_size_percent);
     if (new_font_size != font_size) {
@@ -112,8 +126,8 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
             region.abs_rect.h = panel.abs_rect.h * region.h_percent;
         }
 
-        // ÒÀ¸½ĞÍÇøÓò£¨×ÊÔ´½Ç±ê£©£ºÓÒÏÂ½Ç¶ÔÆë²ÎÕÕÇøÓòÄÚÎÆÀíµÄÓÒÏÂ½Ç¡£
-        // ±ØĞëµÈÉÏÃæËùÓĞ abs_rect ËãÍêÔÙ´¦Àí
+        // ä¾é™„å‹åŒºåŸŸï¼ˆèµ„æºè§’æ ‡ï¼‰ï¼šå³ä¸‹è§’å¯¹é½å‚ç…§åŒºåŸŸå†…çº¹ç†çš„å³ä¸‹è§’ã€‚
+        // å¿…é¡»ç­‰ä¸Šé¢æ‰€æœ‰ abs_rect ç®—å®Œå†å¤„ç†
         for (auto& region : panel.regions) {
             int ref_idx = region.attach_to_region;
             if (ref_idx < 0 || ref_idx >= (int)panel.regions.size()) continue;
@@ -130,8 +144,10 @@ void UIMgr::update_layout(int screen_w, int screen_h) {
     }
 }
 
-// ========== äÖÈ¾ ==========
+// ========== æ¸²æŸ“ ==========
 void UIMgr::on_render() {
+    refresh_hover_target();
+
     for (const auto& panel : panels) {
         for (const auto& region : panel.regions) {
             if (region.bg_color.a > 0) {
@@ -163,7 +179,7 @@ void UIMgr::on_render() {
         }
     }
 
-    // ·ÅÖÃÔ¤ÀÀ
+    // æ”¾ç½®é¢„è§ˆ
     if (placement_active && preview_active) {
         auto* item = get_build_item(placement_building);
         if (item) {
@@ -182,7 +198,7 @@ void UIMgr::on_render() {
 
             RenderCmd cmd;
             cmd.is_preview = true;
-            cmd.layer = RenderLayer::SelectBox; // µØÍ¼Ö®ÉÏ£¬UI Ö®ÏÂ
+            cmd.layer = RenderLayer::SelectBox; // åœ°å›¾ä¹‹ä¸Šï¼ŒUI ä¹‹ä¸‹
             cmd.position = screen_pos;
             cmd.w = world_w * scale;
             cmd.h = world_h * scale;
@@ -192,9 +208,12 @@ void UIMgr::on_render() {
             RenderMgr::instance()->push_cmd(cmd);
         }
     }
+
+    draw_resource_warning();
+    draw_hover_tooltip();
 }
 
-// ========== µã»÷ÊÂ¼ş ==========
+// ========== ç‚¹å‡»äº‹ä»¶ ==========
 bool UIMgr::handle_mouse_down(float x, float y) {
     pressed_panel_name.clear();
     pressed_region_index = -1;
@@ -220,7 +239,7 @@ bool UIMgr::handle_mouse_down(float x, float y) {
                 }
                 ++idx;
             }
-            // ÃüÖĞÃæ°åµ«ÎŞ°´Å¥£¬À¹½ØÊÂ¼ş
+            // å‘½ä¸­é¢æ¿ä½†æ— æŒ‰é’®ï¼Œæ‹¦æˆªäº‹ä»¶
             return true;
         }
     }
@@ -253,7 +272,329 @@ bool UIMgr::handle_mouse_up(float x, float y) {
     return triggered;
 }
 
-// ========== ×ÊÔ´Ãæ°å ==========
+void UIMgr::handle_mouse_move(float x, float y) {
+    mouse_x_ = x;
+    mouse_y_ = y;
+}
+
+// æ‰¾å‡ºé¼ æ ‡ä¸‹æœ€ä¸Šå±‚ã€å¸¦è¯´æ˜æ–‡å­—çš„æŒ‰é’®ï¼›ç›®æ ‡å˜åŒ–æ—¶é‡æ–°å¼€å§‹è®¡æ—¶ã€‚
+void UIMgr::refresh_hover_target() {
+    std::string panel_name;
+    int region_index = -1;
+
+    for (auto panel_it = panels.rbegin(); panel_it != panels.rend() && region_index < 0; ++panel_it) {
+        const auto& panel = *panel_it;
+        if (mouse_x_ < panel.abs_rect.x || mouse_x_ > panel.abs_rect.x + panel.abs_rect.w ||
+            mouse_y_ < panel.abs_rect.y || mouse_y_ > panel.abs_rect.y + panel.abs_rect.h)
+            continue;
+
+        for (int i = (int)panel.regions.size() - 1; i >= 0; --i) {
+            const auto& region = panel.regions[i];
+            if (region.tooltip.empty()) continue;
+            if (mouse_x_ >= region.abs_rect.x && mouse_x_ <= region.abs_rect.x + region.abs_rect.w &&
+                mouse_y_ >= region.abs_rect.y && mouse_y_ <= region.abs_rect.y + region.abs_rect.h) {
+                panel_name = panel.name;
+                region_index = i;
+                break;
+            }
+        }
+    }
+
+    if (panel_name != hover_panel_ || region_index != hover_region_) {
+        hover_panel_ = panel_name;
+        hover_region_ = region_index;
+        hover_start_ms_ = region_index >= 0 ? SDL_GetTicks() : 0;
+    }
+}
+
+void UIMgr::draw_hover_tooltip() {
+    if (hover_region_ < 0 || hover_start_ms_ == 0) return;
+    if (SDL_GetTicks() - hover_start_ms_ < 450) return;
+
+    ui_panel* panel = find_panel(hover_panel_);
+    if (!panel || hover_region_ >= (int)panel->regions.size()) return;
+    const std::string& text = panel->regions[hover_region_].tooltip;
+    if (text.empty()) return;
+
+    std::vector<std::string> lines;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t pos = text.find('\n', start);
+        if (pos == std::string::npos) {
+            lines.push_back(text.substr(start));
+            break;
+        }
+        lines.push_back(text.substr(start, pos - start));
+        start = pos + 1;
+    }
+    if (lines.empty()) return;
+
+    const int tip_font = std::max(13, font_size - 3);
+    const int line_h = tip_font + 6;
+    const int pad = 10;
+    SDL_Color title_color{ 255, 215, 0, 255 };
+    SDL_Color body_color{ 232, 238, 250, 255 };
+
+    std::vector<uint32_t> tex_ids;
+    std::vector<float> tex_w;
+    std::vector<float> tex_h;
+    float max_w = 0.0f;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        SDL_Color color = (i == 0) ? title_color : body_color;
+        uint32_t id = TextureCache::instance()->get_text_texture(lines[i], color, tip_font);
+        float w = 0.0f, h = 0.0f;
+        TextureCache::instance()->get_texture_size(id, w, h);
+        tex_ids.push_back(id);
+        tex_w.push_back(w);
+        tex_h.push_back(h);
+        if (w > max_w) max_w = w;
+    }
+
+    float box_w = std::max(200.0f, max_w + pad * 2.0f);
+    float max_box_w = std::max(220.0f, (float)screen_w_ - 20.0f);
+    box_w = std::min(box_w, max_box_w);
+    float box_h = pad * 2.0f + line_h * (float)lines.size();
+
+    float bx = mouse_x_ + 18.0f;
+    float by = mouse_y_ + 18.0f;
+    if (bx + box_w > screen_w_ - 8.0f) bx = mouse_x_ - box_w - 12.0f;
+    if (by + box_h > screen_h_ - 8.0f) by = mouse_y_ - box_h - 12.0f;
+    if (bx < 8.0f) bx = 8.0f;
+    if (by < 8.0f) by = 8.0f;
+
+    RenderCmd bg;
+    bg.layer = RenderLayer::UI;
+    bg.position = { bx, by };
+    bg.w = box_w;
+    bg.h = box_h;
+    bg.color = { 16, 21, 34, 245 };
+    bg.border_color = { 255, 215, 0, 255 };
+    bg.border_width = 1;
+    RenderMgr::instance()->push_main_cmd(bg);
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (!tex_ids[i]) continue;
+        RenderCmd cmd;
+        cmd.layer = RenderLayer::UI;
+        cmd.texture_id = tex_ids[i];
+        cmd.color = { 255, 255, 255, 255 };
+        cmd.position = { bx + pad, by + pad + line_h * (float)i + (line_h - tex_h[i]) * 0.5f };
+        cmd.w = tex_w[i];
+        cmd.h = tex_h[i];
+        RenderMgr::instance()->push_main_cmd(cmd);
+    }
+}
+
+void UIMgr::draw_resource_warning() {
+    if (warning_until_ms_ == 0 || SDL_GetTicks() >= warning_until_ms_) return;
+    if (warning_title_.empty()) return;
+
+    const int warn_font = std::max(14, font_size - 2);
+    const int line_h = warn_font + 6;
+    const int pad = 12;
+    SDL_Color title_color{ 255, 95, 95, 255 };
+    SDL_Color body_color{ 255, 180, 180, 255 };
+
+    std::vector<std::string> lines;
+    lines.push_back(warning_title_);
+    for (const auto& line : warning_lines_) lines.push_back(line);
+
+    std::vector<uint32_t> tex_ids;
+    std::vector<float> tex_w;
+    std::vector<float> tex_h;
+    float max_w = 0.0f;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        SDL_Color color = (i == 0) ? title_color : body_color;
+        uint32_t id = TextureCache::instance()->get_text_texture(lines[i], color, warn_font);
+        float w = 0.0f, h = 0.0f;
+        TextureCache::instance()->get_texture_size(id, w, h);
+        tex_ids.push_back(id);
+        tex_w.push_back(w);
+        tex_h.push_back(h);
+        if (w > max_w) max_w = w;
+    }
+
+    float box_w = std::max(300.0f, max_w + pad * 2.0f);
+    box_w = std::min(box_w, std::max(320.0f, (float)screen_w_ * 0.42f));
+    float box_h = pad * 2.0f + line_h * (float)lines.size();
+    float bx = 18.0f;
+    float by = screen_h_ * 0.36f;
+    if (by + box_h > screen_h_ * 0.72f) by = screen_h_ * 0.72f - box_h;
+
+    RenderCmd bg;
+    bg.layer = RenderLayer::UI;
+    bg.position = { bx, by };
+    bg.w = box_w;
+    bg.h = box_h;
+    bg.color = { 58, 8, 8, 245 };
+    bg.border_color = { 235, 55, 55, 255 };
+    bg.border_width = 2;
+    RenderMgr::instance()->push_main_cmd(bg);
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (!tex_ids[i]) continue;
+        RenderCmd cmd;
+        cmd.layer = RenderLayer::UI;
+        cmd.texture_id = tex_ids[i];
+        cmd.color = { 255, 255, 255, 255 };
+        cmd.position = { bx + pad, by + pad + line_h * (float)i + (line_h - tex_h[i]) * 0.5f };
+        cmd.w = tex_w[i];
+        cmd.h = tex_h[i];
+        RenderMgr::instance()->push_main_cmd(cmd);
+    }
+}
+
+// ========== èµ„æºé¢æ¿ ==========
+std::string UIMgr::format_cost_values(const int costs[]) const {
+    std::string text;
+    for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+        if (costs[r] <= 0) continue;
+        if (!text.empty()) text += u8"  ";
+        text += resource_names[r];
+        text += std::to_string(costs[r]);
+    }
+    return text.empty() ? u8"æ— " : text;
+}
+
+std::string UIMgr::production_tooltip(const ProductionItem& item, bool can_interact,
+    bool is_unlocked, bool is_completed, bool is_in_queue, bool is_building) const {
+    std::vector<std::string> lines;
+    std::string name;
+
+    if (item.type == ProductionType::Unit) {
+        name = TextureCache::instance()->get_unit_name(item.unit_type);
+        lines.push_back(u8"å…µç§ï¼š" + name);
+        lines.push_back(u8"æˆæœ¬ï¼š" + format_cost_values(item.cost_amounts));
+        lines.push_back(u8"ç”Ÿäº§æ—¶é—´ï¼š" + format_float_short(item.produce_time) + u8" ç§’");
+
+        const UnitDef* def = EntityCatalog::instance()->find_unit(item.unit_type);
+        if (def) {
+            lines.push_back(u8"ç”Ÿå‘½ " + std::to_string(def->hp) +
+                u8"  æ”»å‡» " + std::to_string(def->attack_damage) + " " +
+                damage_type_name(def->damage_type));
+            lines.push_back(u8"é˜²å¾¡ æ™®" + std::to_string(def->defense[0]) +
+                u8" / ç©¿" + std::to_string(def->defense[1]) +
+                u8" / æ”»" + std::to_string(def->defense[2]));
+            lines.push_back(def->attack_ranged
+                ? u8"å°„ç¨‹ " + format_float_short(def->attack_range) + u8"  é€Ÿåº¦ " + format_float_short(def->speed)
+                : u8"è¿‘æˆ˜  é€Ÿåº¦ " + format_float_short(def->speed));
+        }
+    }
+    else if (item.type == ProductionType::Building) {
+        name = TextureCache::instance()->get_building_name(item.building_type);
+        lines.push_back(u8"å»ºç­‘ï¼š" + name);
+        lines.push_back(u8"æˆæœ¬ï¼š" + format_cost_values(item.cost_amounts));
+        lines.push_back(u8"å»ºé€ æ—¶é—´ï¼š" + format_float_short(item.produce_time) +
+            u8" ç§’  å åœ° " + std::to_string(item.size_cells) + "x" + std::to_string(item.size_cells));
+
+        const BuildingDef* def = EntityCatalog::instance()->find_building(item.building_type);
+        if (def) {
+            if (!def->produces.empty()) {
+                std::string produce_text;
+                for (int id : def->produces) {
+                    std::string n = TextureCache::instance()->get_unit_name(static_cast<UnitEntityType>(id));
+                    if (!produce_text.empty()) produce_text += u8"ã€";
+                    produce_text += n;
+                }
+                lines.push_back(u8"å¯ç”Ÿäº§ï¼š" + produce_text);
+            }
+            if (!def->research.empty()) {
+                std::string research_text;
+                for (const auto& t : def->research) {
+                    if (!research_text.empty()) research_text += u8"ã€";
+                    research_text += t;
+                }
+                lines.push_back(u8"å¯ç ”ç©¶ï¼š" + research_text);
+            }
+        }
+    }
+    else {
+        name = item.research ? item.research->name : u8"ç§‘æŠ€";
+        lines.push_back(u8"ç§‘æŠ€ï¼š" + name);
+        lines.push_back(u8"æˆæœ¬ï¼š" + format_cost_values(item.cost_amounts));
+        lines.push_back(u8"ç ”ç©¶æ—¶é—´ï¼š" + format_float_short(item.produce_time) + u8" ç§’");
+
+        const TechDef* def = EntityCatalog::instance()->find_tech(name);
+        if (def && !def->effects.empty()) {
+            for (const auto& effect : def->effects) {
+                std::string target = u8"å…¨éƒ¨å…µç§";
+                if (effect.target_type >= 0) {
+                    if (const UnitDef* unit = EntityCatalog::instance()->find_unit(effect.target_type))
+                        target = unit->name;
+                }
+                std::string value = effect.value >= 0.0f ? "+" : "";
+                value += format_float_short(effect.value);
+                lines.push_back(u8"æ•ˆæœï¼š" + target + u8" " +
+                    tech_effect_type_name(effect.type) + " " + value);
+            }
+        }
+        else {
+            lines.push_back(u8"æ•ˆæœï¼šæ— é¢å¤–å±æ€§");
+        }
+    }
+
+    if (!item.unlock_techs.empty())
+        lines.push_back(u8"å‰ç½®ç§‘æŠ€ï¼š" + item.unlock_techs);
+
+    bool affordable = true;
+    int player = ResourcesMgr::instance()->get_local_player_id();
+    for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+        if (item.cost_amounts[r] > 0 &&
+            ResourcesMgr::instance()->get_resource(player, static_cast<ResourceType>(r)) < item.cost_amounts[r]) {
+            affordable = false;
+            break;
+        }
+    }
+
+    if (is_building)
+        lines.push_back(u8"çŠ¶æ€ï¼šå»ºç­‘å»ºé€ ä¸­");
+    else if (!is_unlocked)
+        lines.push_back(u8"çŠ¶æ€ï¼šæœªè§£é”");
+    else if (is_completed)
+        lines.push_back(u8"çŠ¶æ€ï¼šå·²ç ”ç©¶");
+    else if (is_in_queue)
+        lines.push_back(u8"çŠ¶æ€ï¼šå·²åœ¨æœ¬å»ºç­‘é˜Ÿåˆ—");
+    else if (can_interact)
+        lines.push_back(affordable ? u8"çŠ¶æ€ï¼šç‚¹å‡»å¯ç”¨" : u8"çŠ¶æ€ï¼šèµ„æºä¸è¶³");
+
+    std::string text;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (i) text += "\n";
+        text += lines[i];
+    }
+    return text;
+}
+
+void UIMgr::show_resource_warning(const int costs[], const std::string& item_name,
+    const std::string& action) {
+    int player = ResourcesMgr::instance()->get_local_player_id();
+    std::string required, owned, missing;
+    bool first_required = true, first_missing = true;
+    for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+        if (costs[r] <= 0) continue;
+        int have = ResourcesMgr::instance()->get_resource(player, static_cast<ResourceType>(r));
+        int lack = std::max(0, costs[r] - have);
+        if (!first_required) { required += u8"  "; owned += u8"  "; }
+        required += resource_names[r] + std::to_string(costs[r]);
+        owned += resource_names[r] + std::to_string(have);
+        first_required = false;
+        if (lack > 0) {
+            if (!first_missing) missing += u8"  ";
+            missing += resource_names[r] + std::to_string(lack);
+            first_missing = false;
+        }
+    }
+
+    warning_title_ = u8"èµ„æºä¸è¶³ï¼šæ— æ³•" + action + u8"ã€Œ" + item_name + u8"ã€";
+    warning_lines_.clear();
+    warning_lines_.push_back(u8"éœ€è¦ï¼š" + (required.empty() ? u8"æ— " : required));
+    warning_lines_.push_back(u8"æ‹¥æœ‰ï¼š" + (owned.empty() ? u8"æ— " : owned));
+    warning_lines_.push_back(u8"ç¼ºå°‘ï¼š" + (missing.empty() ? u8"æ— " : missing));
+    warning_lines_.push_back(u8"è¯·å…ˆé‡‡é›†æ›´å¤šèµ„æºã€‚");
+    warning_until_ms_ = SDL_GetTicks() + 5000;
+}
+
+// ========== èµ„æºé¢æ¿ ==========
 void UIMgr::build_resource_panel() {
     auto* res = ResourcesMgr::instance();
     int player = res->get_local_player_id();
@@ -286,7 +627,7 @@ void UIMgr::build_resource_panel() {
         ui_region bg;
         bg.x_percent = 0.0f; bg.y_percent = i * bar_h;
         bg.w_percent = 1.0f; bg.h_percent = bar_h;
-        bg.bg_color = { 30, 30, 30, 255 };   // ×ÊÔ´Ìõ±³¾°±£³Ö¶ÀÁ¢
+        bg.bg_color = { 30, 30, 30, 255 };   // èµ„æºæ¡èƒŒæ™¯ä¿æŒç‹¬ç«‹
         panel.regions.push_back(bg);
 
         ui_region name_region;
@@ -311,14 +652,14 @@ void UIMgr::build_resource_panel() {
         value_region.bg_color = { 0, 0, 0, 0 };
         panel.regions.push_back(value_region);
 
-        // ²É¼¯Å©ÃñÊı½Ç±ê£ºÓÒÏÂ½ÇÌùÔÚºº×ÖÎÆÀíµÄÓÒÏÂ½Ç£¬ÄÚÈİÔÚ update_content Ë¢ĞÂ
+        // é‡‡é›†å†œæ°‘æ•°è§’æ ‡ï¼šå³ä¸‹è§’è´´åœ¨æ±‰å­—çº¹ç†çš„å³ä¸‹è§’ï¼Œå†…å®¹åœ¨ update_content åˆ·æ–°
         ui_region gather_badge;
         gather_badge.x_percent = 0.0f; gather_badge.y_percent = i * bar_h;
         gather_badge.w_percent = 0.0f; gather_badge.h_percent = bar_h;
         gather_badge.bg_color = { 0, 0, 0, 0 };
         gather_badge.tex_align = TexAlign::BottomRight;
         gather_badge.attach_to_region = name_region_index;
-        // ÍùÍâÅ²Ò»µãµã£¬±ÜÃâĞ¡Êı×ÖÑ¹ÔÚºº×Ö±Ê»­ÉÏ£¨ÏëÈÃËüÕıºÃÑ¹ÔÚ½ÇÉÏ¾Í°ÑÕâÁ½ĞĞ¸Ä 0£©
+        // å¾€å¤–æŒªä¸€ç‚¹ç‚¹ï¼Œé¿å…å°æ•°å­—å‹åœ¨æ±‰å­—ç¬”ç”»ä¸Šï¼ˆæƒ³è®©å®ƒæ­£å¥½å‹åœ¨è§’ä¸Šå°±æŠŠè¿™ä¸¤è¡Œæ”¹ 0ï¼‰
         gather_badge.nudge_x = 4.0f;
         gather_badge.nudge_y = 1.0f;
         panel.regions.push_back(gather_badge);
@@ -337,7 +678,7 @@ void UIMgr::update_content() {
     if (last_gather_count_cache.size() != types.size())
         last_gather_count_cache.resize(types.size(), -1);
 
-    // ±¾Íæ¼Òµ±Ç°¸÷×ÊÔ´ÀàĞÍÉÏ"ÕıÔÚ²É¼¯"µÄÅ©ÃñÊıÁ¿
+    // æœ¬ç©å®¶å½“å‰å„èµ„æºç±»å‹ä¸Š"æ­£åœ¨é‡‡é›†"çš„å†œæ°‘æ•°é‡
     int gather_counts[static_cast<int>(ResourceType::Count)] = { 0 };
     count_gatherers_by_resource(player, gather_counts);
 
@@ -346,9 +687,9 @@ void UIMgr::update_content() {
 
     for (size_t i = 0; i < types.size(); ++i) {
         const int base = (int)i * resource_regions_per_bar;
-        if (base + 3 >= (int)panel->regions.size()) break;   // µ×/Ãû/ÊıÖµ/½Ç±ê ¹² 4 ¸ö
+        if (base + 3 >= (int)panel->regions.size()) break;   // åº•/å/æ•°å€¼/è§’æ ‡ å…± 4 ä¸ª
 
-        // ×ÊÔ´ÊıÖµ£¨ÓÒ²à£©
+        // èµ„æºæ•°å€¼ï¼ˆå³ä¾§ï¼‰
         int val = res->get_resource(player, types[i]);
         if (val != last_resource_value_cache[i]) {
             last_resource_value_cache[i] = val;
@@ -367,7 +708,7 @@ void UIMgr::update_content() {
             }
         }
 
-        // ²É¼¯Å©ÃñÊı½Ç±ê£¨ºº×ÖÓÒÏÂ½Ç£©£º0 ÓÃ°µ»Ò£¬ÓĞÈË²É¼¯ÓÃÁÁÉ«
+        // é‡‡é›†å†œæ°‘æ•°è§’æ ‡ï¼ˆæ±‰å­—å³ä¸‹è§’ï¼‰ï¼š0 ç”¨æš—ç°ï¼Œæœ‰äººé‡‡é›†ç”¨äº®è‰²
         int gatherers = gather_counts[static_cast<int>(types[i])];
         if (gatherers != last_gather_count_cache[i]) {
             last_gather_count_cache[i] = gatherers;
@@ -390,21 +731,21 @@ void UIMgr::update_content() {
     }
 }
 
-// ½øÈë·ÅÖÃÄ£Ê½
+// è¿›å…¥æ”¾ç½®æ¨¡å¼
 void UIMgr::enter_placement(BuildingEntityType type) {
     auto* item = get_build_item(type);
     if (!item) return;
     placement_active = true;
     placement_building = type;
-    preview_active = false;   // µÈ´ıÊ×´ÎÊó±êÒÆ¶¯
+    preview_active = false;   // ç­‰å¾…é¦–æ¬¡é¼ æ ‡ç§»åŠ¨
 }
 
-// È¡Ïû·ÅÖÃ
+// å–æ¶ˆæ”¾ç½®
 void UIMgr::cancel_placement() {
     if (!placement_active) return;
     placement_active = false;
     preview_active = false;
-    // ·µ»¹×ÊÔ´
+    // è¿”è¿˜èµ„æº
     auto* item = get_build_item(placement_building);
     if (item) {
         int player = ResourcesMgr::instance()->get_local_player_id();
@@ -413,11 +754,11 @@ void UIMgr::cancel_placement() {
                 ResourcesMgr::instance()->add_resource(player, static_cast<ResourceType>(r), item->cost_amounts[r]);
         }
     }
-    // Çå³ıÔ¤ÀÀ£¨ÖØÖÃ×´Ì¬£©
+    // æ¸…é™¤é¢„è§ˆï¼ˆé‡ç½®çŠ¶æ€ï¼‰
     clear_placement_preview();
 }
 
-// È·ÈÏ·ÅÖÃ
+// ç¡®è®¤æ”¾ç½®
 void UIMgr::confirm_placement(int grid_x, int grid_y) {
     if (!placement_active) return;
     if (on_placement_confirm) {
@@ -428,7 +769,7 @@ void UIMgr::confirm_placement(int grid_x, int grid_y) {
     clear_placement_preview();
 }
 
-// ¸üĞÂÔ¤ÀÀ£¨Ö»¼ÇÂ¼×´Ì¬£¬²»äÖÈ¾£©
+// æ›´æ–°é¢„è§ˆï¼ˆåªè®°å½•çŠ¶æ€ï¼Œä¸æ¸²æŸ“ï¼‰
 void UIMgr::update_placement_preview(int grid_x, int grid_y, bool blocked) {
     preview_active = true;
     preview_grid_x = grid_x;
@@ -436,12 +777,12 @@ void UIMgr::update_placement_preview(int grid_x, int grid_y, bool blocked) {
     preview_blocked = blocked;
 }
 
-// Çå³ıÔ¤ÀÀ×´Ì¬
+// æ¸…é™¤é¢„è§ˆçŠ¶æ€
 void UIMgr::clear_placement_preview() {
     preview_active = false;
 }
 
-// ========== ÊôĞÔĞĞ³õÊ¼»¯ ==========
+// ========== å±æ€§è¡Œåˆå§‹åŒ– ==========
 void UIMgr::init_attribute_rows() {
     attribute_rows.clear();
     // HP
@@ -453,56 +794,45 @@ void UIMgr::init_attribute_rows() {
             return std::to_string(h->current_health) + "/" + std::to_string(h->max_health);
         }
         });
-    // ¹¥»÷
+    // æ”»å‡»
     attribute_rows.push_back({
-        u8"¹¥»÷",
+        u8"æ”»å‡»",
         [](GameObject* obj) { return obj->get_component<Attack>() != nullptr; },
         [](GameObject* obj) {
             auto* a = obj->get_component<Attack>();
-            std::string str = std::to_string(a->damage);
-            int sum = 0;
-            for (int i = 0; i < 4; ++i) sum += a->armor_penetration[i];
-            if (sum > 0) {
-                str += "(";
-                for (int i = 0; i < 4; ++i) {
-                    str += std::to_string(a->armor_penetration[i]);
-                    if (i < 3) str += "/";
-                }
-                str += ")";
-            }
+            std::string str = std::to_string(a->damage) + " " + damage_type_name(a->damage_type);
+            if (a->is_ranged) str += u8" å°„ç¨‹" + std::to_string((int)a->range);
+            else str += u8" è¿‘æˆ˜";
             return str;
         }
         });
-    // »¤¼×
+    // é˜²å¾¡ï¼ˆæŒ‰ä¼¤å®³ç±»å‹ï¼‰
     attribute_rows.push_back({
-        u8"»¤¼×",
+        u8"é˜²å¾¡",
         [](GameObject* obj) { return obj->get_component<Armor>() != nullptr; },
         [](GameObject* obj) {
             auto* armor = obj->get_component<Armor>();
             if (!armor) return std::string("");
-            std::string type_str;
-            switch (armor->type) {
-                case ArmorType::None:     type_str = u8"ÎŞ¼×"; break;
-                case ArmorType::Light:    type_str = u8"Çá¼×"; break;
-                case ArmorType::Heavy:    type_str = u8"ÖØ¼×"; break;
-                case ArmorType::Building: type_str = u8"½¨Öş"; break;
-                default:                  type_str = u8"Î´Öª"; break;
+            std::string str;
+            for (int i = 0; i < static_cast<int>(DamageType::Count); ++i) {
+                if (i) str += "/";
+                str += std::to_string(armor->reduction[i]);
             }
-            return type_str + " " + std::to_string(armor->armor_value);
+            return u8"æ™®/ç©¿/æ”» " + str;
         }
         });
-    // ²É¼¯
+    // é‡‡é›†
     attribute_rows.push_back({
-        u8"²É¼¯",
+        u8"é‡‡é›†",
         [](GameObject* obj) { return obj->get_component<Gatherer>() != nullptr; },
         [](GameObject* obj) {
             auto* g = obj->get_component<Gatherer>();
             return std::to_string(g->gather_amount);
         }
         });
-    // Ğ¯´ø
+    // æºå¸¦
     attribute_rows.push_back({
-        u8"Ğ¯´ø",
+        u8"æºå¸¦",
         [](GameObject* obj) {
             auto* g = obj->get_component<Gatherer>();
             return g && g->carried_amount > 0;
@@ -516,7 +846,7 @@ void UIMgr::init_attribute_rows() {
         });
 }
 
-// ========== Ñ¡ÖĞĞÅÏ¢Ãæ°å ==========
+// ========== é€‰ä¸­ä¿¡æ¯é¢æ¿ ==========
 void UIMgr::update_selection_panel() {
     auto selected_ids = SelectionMgr::instance()->get_selected_object_id_set();
 
@@ -539,7 +869,7 @@ void UIMgr::update_selection_panel() {
 
     if (selected_ids.size() > 1) {
         last_selected_id = 0;
-        // Ê¹ÓÃ (µ¥Î»ÀàĞÍ, ÕóÓªID) ×÷Îª·Ö×é¼ü£¬±ÜÃâ²»Í¬ÕóÓªºÏ²¢
+        // ä½¿ç”¨ (å•ä½ç±»å‹, é˜µè¥ID) ä½œä¸ºåˆ†ç»„é”®ï¼Œé¿å…ä¸åŒé˜µè¥åˆå¹¶
         std::map<std::pair<UnitEntityType, int>, std::vector<GameObject*>> unit_map;
         for (uint64_t id : selected_ids) {
             GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
@@ -568,17 +898,17 @@ void UIMgr::update_selection_panel() {
             return;
         }
 
-        // ×ª»»Îª vector ²¢ÅÅĞò£º¼º·½ÓÅÏÈ£¬Í¬ÕóÓª°´ HP ½µĞò
+        // è½¬æ¢ä¸º vector å¹¶æ’åºï¼šå·±æ–¹ä¼˜å…ˆï¼ŒåŒé˜µè¥æŒ‰ HP é™åº
         std::vector<std::pair<std::pair<UnitEntityType, int>, std::vector<GameObject*>>> sorted_units(
             unit_map.begin(), unit_map.end());
         int local_player_id = ResourcesMgr::instance()->get_local_player_id();
         std::sort(sorted_units.begin(), sorted_units.end(),
             [local_player_id](const auto& a, const auto& b) {
-                // ¼º·½ÕóÓªÓÅÏÈ
+                // å·±æ–¹é˜µè¥ä¼˜å…ˆ
                 bool a_local = (a.first.second == local_player_id);
                 bool b_local = (b.first.second == local_player_id);
                 if (a_local != b_local) return a_local > b_local;
-                // ÏàÍ¬ÕóÓª°´×î´ó HP ÅÅĞò
+                // ç›¸åŒé˜µè¥æŒ‰æœ€å¤§ HP æ’åº
                 int hp_a = a.second.front()->get_component<Health>()->max_health;
                 int hp_b = b.second.front()->get_component<Health>()->max_health;
                 return hp_a > hp_b;
@@ -624,7 +954,7 @@ void UIMgr::update_selection_panel() {
             icon_region.h_percent = icon_size * (info_w / info_h);
             icon_region.bg_color = { 0, 0, 0, 0 };
 
-            // Í¼±êÎÆÀíÑÕÉ«È¡ÊµÌåÊµ¼ÊäÖÈ¾ÑÕÉ«£¨Óë³¡ÉÏµ¥Î»ÑÕÉ«Ò»ÖÂ£¬º¬Ñ¡É«¸²¸Ç£©
+            // å›¾æ ‡çº¹ç†é¢œè‰²å–å®ä½“å®é™…æ¸²æŸ“é¢œè‰²ï¼ˆä¸åœºä¸Šå•ä½é¢œè‰²ä¸€è‡´ï¼Œå«é€‰è‰²è¦†ç›–ï¼‰
             Color player_color = Color::White;
             if (!units.empty()) {
                 auto* rr = units[0]->get_component<Renderable>();
@@ -636,7 +966,7 @@ void UIMgr::update_selection_panel() {
             icon_region.tex_w = (float)tex_w;
             icon_region.tex_h = (float)tex_h;
 
-            // ±ß¿òÑÕÉ«Çø·ÖÕóÓª
+            // è¾¹æ¡†é¢œè‰²åŒºåˆ†é˜µè¥
             Color border_color;
             if (player_id == local_player_id) {
                 border_color = Color::SoftBlue;
@@ -678,7 +1008,7 @@ void UIMgr::update_selection_panel() {
         return;
     }
 
-    // µ¥Ñ¡£¨²»±ä£©
+    // å•é€‰ï¼ˆä¸å˜ï¼‰
     uint64_t id = *selected_ids.begin();
     last_selected_id = id;
 
@@ -746,7 +1076,7 @@ void UIMgr::update_selection_panel() {
     icon_region.tex_h = (float)tex_h;
     panel.regions.push_back(icon_region);
 
-    // ÊôĞÔÁĞ±í
+    // å±æ€§åˆ—è¡¨
     std::vector<ui_attribute_row*> visible_attrs;
     for (auto& attr : attribute_rows)
         if (attr.visible(obj))
@@ -810,7 +1140,7 @@ void UIMgr::update_selection_panel() {
     update_production_queue_display();
 }
 
-// ========== Éú²ú UI ¿ò¼Ü ==========
+// ========== ç”Ÿäº§ UI æ¡†æ¶ ==========
 void UIMgr::build_production_ui() {
     remove_panel("production_queue");
     auto& queue_panel = add_panel("production_queue", PanelAnchor::BottomLeft,
@@ -831,7 +1161,7 @@ void UIMgr::build_production_ui() {
     prod_panel.regions.push_back(pbg);
 }
 
-// ========== Éú²ú°´Å¥Ãæ°åÄÚÈİ¸üĞÂ ==========
+// ========== ç”Ÿäº§æŒ‰é’®é¢æ¿å†…å®¹æ›´æ–° ==========
 void UIMgr::update_production_panel_content() {
     auto* prod_panel = find_panel("production");
     if (!prod_panel) return;
@@ -858,9 +1188,10 @@ void UIMgr::update_production_panel_content() {
         prod_panel->regions.pop_back();
     }
 
+    std::vector<ProductionItem> list_storage;
     const std::vector<ProductionItem>* list = nullptr;
     GameObject* current_building = nullptr;
-    bool is_building = false;   // ½¨ÖşÊÇ·ñÕıÔÚ½¨ÔìÖĞ
+    bool is_building = false;   // å»ºç­‘æ˜¯å¦æ­£åœ¨å»ºé€ ä¸­
 
     auto sel_ids = SelectionMgr::instance()->get_selected_object_id_set();
     if (sel_ids.size() == 1) {
@@ -871,9 +1202,10 @@ void UIMgr::update_production_panel_content() {
             if (ownership && ownership->player_id == ResourcesMgr::instance()->get_local_player_id()) {
                 auto* btype = obj->get_component<BuildingType>();
                 if (btype) {
-                    list = get_production_list(btype->type);
+                    list_storage = get_production_list(btype->type);
+                    list = &list_storage;
                     current_building = obj;
-                    // ¼ì²é½¨Ôì½ø¶È
+                    // æ£€æŸ¥å»ºé€ è¿›åº¦
                     auto* build_prog = obj->get_component<BuildProgressComponent>();
                     if (build_prog && build_prog->active) {
                         is_building = true;
@@ -883,14 +1215,13 @@ void UIMgr::update_production_panel_content() {
         }
     }
 
-    // Ã»ÓĞ¼º·½Éú²ú½¨Öş ¡ú Ê¹ÓÃÈ«¾Ö½¨ÖşÁĞ±í
-    const bool is_build_list = (list == nullptr);
-    if (is_build_list) {
+    // æ²¡æœ‰å·±æ–¹ç”Ÿäº§å»ºç­‘ â†’ ä½¿ç”¨å…¨å±€å»ºç­‘åˆ—è¡¨
+    if (!list) {
         list = &get_global_build_list();
         current_building = nullptr;
     }
 
-    // ·ÖÀàÊÕ¼¯
+    // åˆ†ç±»æ”¶é›†
     std::vector<ProductionItem> all_units;
     std::vector<ProductionItem> all_techs;
     std::vector<ProductionItem> all_buildings;
@@ -902,7 +1233,7 @@ void UIMgr::update_production_panel_content() {
         }
     }
 
-    // Ìî³äÓĞĞò°´Å¥£¨µ¥Î»¡¢½¨Öş¡¢¿Æ¼¼£©
+    // å¡«å……æœ‰åºæŒ‰é’®ï¼ˆå•ä½ã€å»ºç­‘ã€ç§‘æŠ€ï¼‰
     std::vector<ProductionItem> ordered_items(prod_max_buttons);
     int idx = 0;
     for (const auto& u : all_units) {
@@ -920,7 +1251,7 @@ void UIMgr::update_production_panel_content() {
         ordered_items[idx++] = t;
     }
 
-    // ²¼¾Ö²ÎÊı£¨±£³ÖÔ­ÓĞ£©
+    // å¸ƒå±€å‚æ•°ï¼ˆä¿æŒåŸæœ‰ï¼‰
     const int total_buttons = prod_max_buttons;
     const int cols = prod_grid_cols;
     const float btn_w = prod_button_size_percent;
@@ -958,47 +1289,35 @@ void UIMgr::update_production_panel_content() {
 
         if (has_item) {
             const auto& item = ordered_items[i];
+            const int local_player = ResourcesMgr::instance()->get_local_player_id();
 
-            // µ¥Î»½âËø¼ì²é
-            if (item.type == ProductionType::Unit && !item.unlock_techs.empty()) {
-                is_unlocked = true;
-                std::stringstream ss(item.unlock_techs);
-                std::string tech;
-                while (std::getline(ss, tech, ',')) {
-                    size_t start = tech.find_first_not_of(" ");
-                    size_t end = tech.find_last_not_of(" ");
-                    if (start != std::string::npos)
-                        tech = tech.substr(start, end - start + 1);
-                    bool found = false;
-                    if (current_building) {
-                        auto* q = current_building->get_component<ProductionQueue>();
-                        if (q && q->completed_research.count(tech) > 0)
-                            found = true;
-                    }
-                    if (!found) {
-                        is_unlocked = false;
-                        break;
-                    }
-                }
+            // å‰ç½®ç§‘æŠ€æ£€æŸ¥ï¼šå•ä½ä¸å»ºç­‘éƒ½èµ°ç©å®¶å…¨å±€ç§‘æŠ€è¡¨ï¼ˆè·¨å»ºç­‘ç ”ç©¶å…±äº«ï¼‰
+            if ((item.type == ProductionType::Unit || item.type == ProductionType::Building) &&
+                !item.unlock_techs.empty()) {
+                is_unlocked = ResourcesMgr::instance()->has_all_techs(local_player, item.unlock_techs);
             }
 
-            // ¿Æ¼¼×´Ì¬¼ì²é
-            if (item.type == ProductionType::Research && item.research && current_building) {
-                auto* q = current_building->get_component<ProductionQueue>();
-                if (q) {
-                    is_completed = q->completed_research.count(item.research->name) > 0;
-                    if (!is_completed) {
-                        for (const auto& e : q->queue) {
-                            if (e.type == ProductionType::Research && e.tech_name == item.research->name) {
-                                is_in_queue = true;
-                                break;
+            // ç§‘æŠ€çŠ¶æ€æ£€æŸ¥ï¼ˆå…¨å±€ç§‘æŠ€ + æœ¬å»ºç­‘é˜Ÿåˆ—ï¼Œå…¼å®¹æ—§è¡Œä¸ºï¼‰
+            if (item.type == ProductionType::Research && item.research) {
+                is_completed = ResourcesMgr::instance()->has_tech(local_player, item.research->name);
+                if (current_building) {
+                    auto* q = current_building->get_component<ProductionQueue>();
+                    if (q) {
+                        if (q->completed_research.count(item.research->name) > 0)
+                            is_completed = true;
+                        if (!is_completed) {
+                            for (const auto& e : q->queue) {
+                                if (e.type == ProductionType::Research && e.tech_name == item.research->name) {
+                                    is_in_queue = true;
+                                    break;
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // ½¨ÔìÖĞÊ±ËùÓĞ°´Å¥¾ù²»¿ÉÓÃ
+            // å»ºé€ ä¸­æ—¶æ‰€æœ‰æŒ‰é’®å‡ä¸å¯ç”¨
             if (is_building) {
                 can_interact = false;
             }
@@ -1010,62 +1329,64 @@ void UIMgr::update_production_panel_content() {
                     can_interact = (!is_completed && !is_in_queue);
                 }
                 else if (item.type == ProductionType::Building) {
-                    can_interact = true;
+                    can_interact = is_unlocked;
                 }
             }
 
             btn_bg.bg_color = can_interact ? button_bg_color : disabled_button_bg_color;
+            btn_bg.tooltip = production_tooltip(item, can_interact, is_unlocked,
+                is_completed, is_in_queue, is_building);
 
-            // ¸ßÁÁ±£³Ö
+            // é«˜äº®ä¿æŒ
             if (pressed_panel_name == "production" && pressed_region_index == (int)prod_panel->regions.size()) {
                 btn_bg.bg_color = to_sdl_color(Color::White);
             }
 
-            // »Øµ÷½öÔÚ¿É½»»¥Ê±°ó¶¨
+            // å›è°ƒä»…åœ¨å¯äº¤äº’æ—¶ç»‘å®š
             if (can_interact) {
                 if (item.type == ProductionType::Building) {
                     BuildingEntityType btype = item.building_type;
+                    std::string techs = item.unlock_techs;
+                    std::string item_name = TextureCache::instance()->get_building_name(btype);
                     int costs_copy[static_cast<int>(ResourceType::Count)];
                     for (int r = 0; r < static_cast<int>(ResourceType::Count); ++r)
                         costs_copy[r] = item.cost_amounts[r];
 
-                    btn_bg.on_click = [this, costs_copy, btype]() {
+                    btn_bg.on_click = [this, costs_copy, btype, techs, item_name]() {
                         int player = ResourcesMgr::instance()->get_local_player_id();
-                        bool can_afford = true;
+                        if (!ResourcesMgr::instance()->has_all_techs(player, techs)) return;
                         for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
-                            if (costs_copy[r] > 0) {
-                                if (!ResourcesMgr::instance()->spend_resource(player, static_cast<ResourceType>(r), costs_copy[r])) {
-                                    can_afford = false;
-                                    break;
-                                }
+                            if (costs_copy[r] > 0 &&
+                                ResourcesMgr::instance()->get_resource(player, static_cast<ResourceType>(r)) < costs_copy[r]) {
+                                show_resource_warning(costs_copy, item_name, u8"å»ºé€ ");
+                                return;
                             }
                         }
-                        if (can_afford) {
-                            UIMgr::instance()->enter_placement(btype);
+                        for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                            if (costs_copy[r] > 0)
+                                ResourcesMgr::instance()->spend_resource(player, static_cast<ResourceType>(r), costs_copy[r]);
                         }
+                        UIMgr::instance()->enter_placement(btype);
                         };
                 }
                 else if (item.type == ProductionType::Unit || item.type == ProductionType::Research) {
                     uint64_t build_id = current_building ? current_building->get_id() : 0;
+                    std::string techs = item.unlock_techs;
                     int costs[static_cast<int>(ResourceType::Count)];
                     for (int r = 0; r < static_cast<int>(ResourceType::Count); ++r) costs[r] = item.cost_amounts[r];
                     auto item_type = item.type;
                     auto item_unit = item.unit_type;
                     auto item_time = item.produce_time;
-                    ResearchItem* item_research = item.research;
+                    std::shared_ptr<ResearchItem> item_research = item.research;
+                    std::string item_name = (item.type == ProductionType::Unit)
+                        ? TextureCache::instance()->get_unit_name(item.unit_type)
+                        : (item.research ? item.research->name : u8"ç§‘æŠ€");
+                    std::string action = (item.type == ProductionType::Unit) ? u8"ç”Ÿäº§" : u8"ç ”ç©¶";
 
-                    btn_bg.on_click = [this, build_id, costs, item_type, item_unit, item_time, item_research]() {
+                    btn_bg.on_click = [this, build_id, costs, item_type, item_unit, item_time,
+                        item_research, techs, item_name, action]() {
                         int player = ResourcesMgr::instance()->get_local_player_id();
-                        bool can_afford = true;
-                        for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
-                            if (costs[r] > 0) {
-                                if (!ResourcesMgr::instance()->spend_resource(player, static_cast<ResourceType>(r), costs[r])) {
-                                    can_afford = false;
-                                    break;
-                                }
-                            }
-                        }
-                        if (!can_afford) return;
+                        if (!ResourcesMgr::instance()->has_all_techs(player, techs)) return;
 
                         GameObject* building = WorldEntityMgr::instance()->get_object_by_id(build_id);
                         if (!building) return;
@@ -1074,11 +1395,25 @@ void UIMgr::update_production_panel_content() {
                         if (queue->queue.size() >= max_production_queue_size) return;
 
                         if (item_type == ProductionType::Research && item_research) {
+                            if (ResourcesMgr::instance()->has_tech(player, item_research->name)) return;
                             if (queue->completed_research.count(item_research->name) > 0) return;
                             for (const auto& e : queue->queue) {
                                 if (e.type == ProductionType::Research && e.tech_name == item_research->name)
                                     return;
                             }
+                        }
+
+                        // å…ˆæ£€æŸ¥ä½™é¢ï¼Œå†ä¸€æ¬¡æ€§æ‰£é™¤ï¼Œé¿å…éƒ¨åˆ†æ‰£é™¤åå¤±è´¥
+                        for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                            if (costs[r] > 0 &&
+                                ResourcesMgr::instance()->get_resource(player, static_cast<ResourceType>(r)) < costs[r]) {
+                                show_resource_warning(costs, item_name, action);
+                                return;
+                            }
+                        }
+                        for (int r = 1; r < static_cast<int>(ResourceType::Count); ++r) {
+                            if (costs[r] > 0)
+                                ResourcesMgr::instance()->spend_resource(player, static_cast<ResourceType>(r), costs[r]);
                         }
 
                         ProductionQueue::QueueEntry entry;
@@ -1089,7 +1424,6 @@ void UIMgr::update_production_panel_content() {
                             entry.unit_type = item_unit;
                         }
                         else if (item_type == ProductionType::Research && item_research) {
-                            entry.research_callback = item_research->apply_effect;
                             entry.tech_name = item_research->name;
                         }
                         queue->queue.push_back(entry);
@@ -1099,7 +1433,7 @@ void UIMgr::update_production_panel_content() {
 
             prod_panel->regions.push_back(btn_bg);
 
-            // ÎÄ×ÖÎÆÀíÉú³É£¨±£³Ö²»±ä£©
+            // æ–‡å­—çº¹ç†ç”Ÿæˆï¼ˆä¿æŒä¸å˜ï¼‰
             std::string label_text;
             if (item.type == ProductionType::Unit) {
                 label_text = TextureCache::instance()->get_unit_name(item.unit_type);
@@ -1193,7 +1527,7 @@ void UIMgr::update_production_panel_content() {
     }
 }
 
-// ========== Éú²ú¶ÓÁĞÃæ°å¸üĞÂ ==========
+// ========== ç”Ÿäº§é˜Ÿåˆ—é¢æ¿æ›´æ–° ==========
 void UIMgr::update_production_queue_display() {
     auto* panel = find_panel("production_queue");
 
@@ -1285,7 +1619,7 @@ void UIMgr::update_production_queue_display() {
 
         panel->regions.push_back(slot_bg);
 
-        // ¸ßÁÁ±£³Ö
+        // é«˜äº®ä¿æŒ
         if (pressed_panel_name == "production_queue" && pressed_region_index == (int)(panel->regions.size() - 1)) {
             panel->regions.back().bg_color = to_sdl_color(Color::White);
         }

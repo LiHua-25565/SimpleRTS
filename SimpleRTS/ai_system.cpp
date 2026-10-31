@@ -308,6 +308,20 @@ void AISystem::enqueue_unit(GameObject* building, UnitEntityType type, float tim
 void AISystem::manage_buildings(PlayerState& st)
 {
     if (st.has_archery_range || !factory_) return;
+    // 如果已经有靶场（例如 2v2 地图开局赠送），直接标记，避免重复建造。
+    {
+        auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid()) continue;
+            auto* bt = obj->get_component<BuildingType>();
+            if (!bt || bt->type != BuildingEntityType::ArcheryRange) continue;
+            auto* own = obj->get_component<Ownership>();
+            if (!own || own->player_id != st.player_id) continue;
+            st.has_archery_range = true;
+            return;
+        }
+    }
+
     auto& rm = *ResourcesMgr::instance();
     if (rm.get_resource(st.player_id, ResourceType::Wood) < 150 ||
         rm.get_resource(st.player_id, ResourceType::Gold) < 50) return;
@@ -328,7 +342,7 @@ bool AISystem::try_place_building(PlayerState& st, BuildingEntityType type)
     const int w = map->get_width(), h = map->get_height();
 
     factory_->set_player_id(st.player_id);
-    for (int r = 2; r <= 16; ++r)
+    for (int r = 2; r <= 40; ++r)
     {
         for (int gx = cx - r; gx <= cx + r; ++gx)
         {

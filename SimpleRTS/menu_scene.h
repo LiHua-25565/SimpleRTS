@@ -31,6 +31,7 @@ private:
     void layout_buttons();
     void do_start();
     void do_editor();
+    void do_def_editor();
     void do_quit();
     bool point_in(const SDL_FRect& r, float x, float y) const;
 };
