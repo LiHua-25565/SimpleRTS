@@ -14,6 +14,7 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](#-从源码构建)
 [![SDL3](https://img.shields.io/badge/SDL3-3.x-1E5180?style=for-the-badge)](https://www.libsdl.org/)
 [![Stars](https://img.shields.io/github/stars/LiHua-25565/SimpleRTS?style=for-the-badge&color=FFD700)](https://github.com/LiHua-25565/SimpleRTS/stargazers)
+[![License](https://img.shields.io/github/license/LiHua-25565/SimpleRTS?style=for-the-badge&color=3DA639)](LICENSE)
 
 [**下载 v1.1**](https://github.com/LiHua-25565/SimpleRTS/releases/latest) · [**更新日志**](CHANGELOG.md) · [**开发文档**](READ.txt) · [**提交问题**](https://github.com/LiHua-25565/SimpleRTS/issues)
 
@@ -323,6 +324,12 @@ SimpleRTS/
 - 基础对局、资源采集、建造、生产、科技、AI、流场寻路与 RVO 避让。
 
 ---
+
+## License
+
+本项目代码使用 **MIT License**，详见 [LICENSE](LICENSE)。
+
+SDL3、SDL3_ttf、SDL3_image、SDL3_mixer、RVO2 和思源黑体分别遵循各自的许可证；Release 压缩包的 `licenses/` 目录内附有完整文本。
 
 ## 致谢
 
