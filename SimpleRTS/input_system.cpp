@@ -10,7 +10,7 @@
 #include <algorithm>
 
 void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* sel_box,
-    MoveFeedbackSystem* feedback, int player_id, SDL_Window* win)
+    MoveFeedbackSystem* feedback, int player_id, SDL_Window* win, SDL_Renderer* rend)
 {
     camera = cam;
     this->map = map;
@@ -18,6 +18,7 @@ void InputSystem::init(Camera* cam, GameMap* map, SelectionBox* sel_box,
     feedback_system = feedback;
     local_player_id = player_id;
     window = win; 
+    renderer = rend;
     local_team_id = ResourcesMgr::instance()->get_team_id(local_player_id);
     camera_controller.set_camera(camera);
 }
@@ -395,9 +396,6 @@ void InputSystem::handle_mouse_motion(const SDL_Event& event) {
 // ========== ¼üÅÌ°´ÏÂ ==========
 void InputSystem::handle_key_down(const SDL_Event& event) {
     switch (event.key.key) {
-    case SDLK_F11: toggle_fullscreen(); break;
-    case SDLK_ESCAPE: exit_fullscreen(); break;
-    case SDLK_RETURN: if (is_key_alt_down) toggle_fullscreen(); break;
     case SDLK_S: {
         const auto& id_set = SelectionMgr::instance()->get_selected_object_id_set();
         for (uint64_t id : id_set) {
@@ -483,6 +481,8 @@ void InputSystem::on_update(float delta)
     if (UIMgr::instance()->is_placement_mode()) {
         float mx = 0.0f, my = 0.0f;
         SDL_GetMouseState(&mx, &my);
+        if (renderer)
+            SDL_RenderCoordinatesFromWindow(renderer, mx, my, &mx, &my);
         sync_placement_preview(mx, my);
     }
 }

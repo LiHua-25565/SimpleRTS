@@ -29,6 +29,9 @@ void SceneMgr::on_switch(SceneType type)
 	case SceneType::Game:
 		set_current_scene(game_scene);
 		break;
+	case SceneType::Tutorial:
+		set_current_scene(tutorial_scene);
+		break;
 	case SceneType::Selector:
 		set_current_scene(selector_scene);
 		break;

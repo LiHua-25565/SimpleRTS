@@ -14,6 +14,26 @@
 
 void GameScene::on_input(const SDL_Event& event)
 {
+    if (tutorial_mode_ && !tutorial_external_ui_) {
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+            float tx = event.button.x;
+            float ty = event.button.y;
+            if (handle_tutorial_click(tx, ty)) return;
+            if (tutorial_finished_) return;
+            if (tx >= tutorial_panel_rect_.x && tx <= tutorial_panel_rect_.x + tutorial_panel_rect_.w &&
+                ty >= tutorial_panel_rect_.y && ty <= tutorial_panel_rect_.y + tutorial_panel_rect_.h)
+                return;
+        }
+        if (tutorial_finished_) {
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+                tutorial_mode_ = false;
+                tutorial_finished_ = false;
+                SceneMgr::instance()->on_switch(SceneMgr::SceneType::Menu);
+            }
+            return;
+        }
+    }
+
     // Esc：游戏未结束时开关暂停菜单；游戏结束后忽略（只能点结算按钮）
     if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
         if (!game_over_)
@@ -55,6 +75,7 @@ void GameScene::on_update(float delta)
     auto t2 = std::chrono::high_resolution_clock::now();
 
     WorldEntityMgr::instance()->on_update();
+    update_tutorial(delta);
     auto t3 = std::chrono::high_resolution_clock::now();
     // === 计时代码结束 ===
 
@@ -139,7 +160,7 @@ void GameScene::on_enter()
     // 获取窗口并初始化输入系统
     SDL_Window* win = SDL_GetRenderWindow(renderer);  // SDL3 通过渲染器获取窗口
     input_system.init(&camera, &game_map, &selection_box, &move_feedback_system,
-        local_player_id, win);           // 传入窗口
+        local_player_id, win, renderer);  // 传入窗口与渲染器
 
     update_ui_layout();
 
@@ -147,6 +168,9 @@ void GameScene::on_enter()
     spawn_map_entities();
     // 按阵容配置布场 + 注册 AI 玩家
     setup_match();
+
+    if (tutorial_mode_)
+        init_tutorial();
 
     // 相机对准人类基地
     center_camera_on_human();
@@ -273,8 +297,8 @@ void GameScene::setup_match()
 
         factory.set_player_id(pid);
         factory.set_player_color(pid, player_color_enum(slot.color_id));
-        int start_wood = (match_config.map_name == "map2v2") ? 300 : 150;
-        int start_food = (match_config.map_name == "map2v2") ? 200 : 100;
+        int start_wood = tutorial_mode_ ? 600 : ((match_config.map_name == "map2v2") ? 300 : 150);
+        int start_food = tutorial_mode_ ? 400 : ((match_config.map_name == "map2v2") ? 200 : 100);
         give(pid, start_wood, start_food);
 
         // 放置城镇中心；若因重叠/落水失败，螺旋向外偏移重试，保证每个玩家一定有基地
@@ -335,7 +359,7 @@ void GameScene::setup_match()
         }
 
         // 非人类槽位注册为 AI 玩家
-        if (slot.kind == SlotKind::AI) {
+        if (slot.kind == SlotKind::AI && !tutorial_mode_) {
             Vector2 rally{ (tc_gx + 10) * (float)cs, (tc_gy + 10) * (float)cs };
             ai_system.add_ai_player(pid, rally);
         }
@@ -365,9 +389,303 @@ void GameScene::on_exit()
 
 }
 
+// ==================== 新手教程 ====================
+
+void GameScene::start_tutorial()
+{
+    tutorial_mode_ = true;
+    tutorial_external_ui_ = false;
+    tutorial_step_ = 0;
+    tutorial_step_wait_ = 0.0f;
+    tutorial_finished_ = false;
+
+    match_config = MatchConfig{};
+    match_config.map_name = "tutorial";
+    match_config.map_player_count = 2;
+    match_config.ai_difficulty = 0;
+    match_config.spawn_points.clear();
+    match_config.slots.clear();
+
+    PlayerSlot human;
+    human.kind = SlotKind::Human;
+    human.color_id = 0;
+    human.team = 0;
+    human.position = 0;
+    match_config.slots.push_back(human);
+
+    // 敌方基地不注册 AI，只作为教程攻击目标。
+    PlayerSlot enemy;
+    enemy.kind = SlotKind::AI;
+    enemy.color_id = 1;
+    enemy.team = 1;
+    enemy.position = 1;
+    match_config.slots.push_back(enemy);
+}
+
+void GameScene::init_tutorial()
+{
+    tutorial_step_ = 0;
+    tutorial_step_wait_ = 0.0f;
+    tutorial_finished_ = false;
+    tutorial_panel_rect_ = { 18.0f, 18.0f, 510.0f, 202.0f };
+
+    // 教程基地的靶场会盖住默认农民出生点，额外在基地左侧放 3 个可见农民。
+    if (!match_config.spawn_points.empty() && !match_config.slots.empty()) {
+        const SpawnPoint& sp = match_config.spawn_points[0];
+        int cs = game_map.get_cell_size();
+        float us = (float)(cs * UNIT_SIZE_CELLS);
+        factory.set_player_id(local_player_id);
+        factory.set_player_color(local_player_id,
+            player_color_enum(match_config.slots[0].color_id));
+        Vector2 base{ (sp.gx - 16) * (float)cs, (sp.gy + 8) * (float)cs };
+        for (int k = 0; k < 3; ++k)
+            factory.create_unit_by_type(UnitEntityType::Villager,
+                { { base.x + k * 50.0f, base.y }, us, us });
+    }
+}
+
+bool GameScene::tutorial_is_enemy(GameObject* obj) const
+{
+    if (!obj) return false;
+    auto* own = obj->get_component<Ownership>();
+    if (!own || own->player_id <= 0) return false;
+    return own->team_id != ResourcesMgr::instance()->get_team_id(local_player_id);
+}
+
+bool GameScene::tutorial_step_complete() const
+{
+    auto is_own = [&](GameObject* obj) {
+        auto* own = obj ? obj->get_component<Ownership>() : nullptr;
+        return own && own->player_id == local_player_id;
+    };
+
+    if (tutorial_step_ == 0) {
+        const auto& ids = SelectionMgr::instance()->get_selected_object_id_set();
+        for (uint64_t id : ids) {
+            GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+            if (!is_own(obj)) continue;
+            auto* ut = obj->get_component<UnitType>();
+            if (ut && ut->type == UnitEntityType::Villager) return true;
+        }
+        return false;
+    }
+
+    if (tutorial_step_ == 1) {
+        const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid() || !is_own(obj)) continue;
+            auto* ut = obj->get_component<UnitType>();
+            auto* gatherer = obj->get_component<Gatherer>();
+            if (!ut || ut->type != UnitEntityType::Villager || !gatherer) continue;
+            if (gatherer->target_resource_id == 0) continue;
+            GameObject* res = WorldEntityMgr::instance()->get_object_by_id(gatherer->target_resource_id);
+            if (!res) continue;
+            auto* harvestable = res->get_component<Harvestable>();
+            if (harvestable && harvestable->output_type == ResourceType::Wood) return true;
+        }
+        return false;
+    }
+
+    if (tutorial_step_ == 2) {
+        int count = 0;
+        const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid() || !is_own(obj)) continue;
+            auto* bt = obj->get_component<BuildingType>();
+            if (bt && bt->type == BuildingEntityType::ArcheryRange) ++count;
+        }
+        return count >= 2;
+    }
+
+    if (tutorial_step_ == 3) {
+        int count = 0;
+        const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid() || !is_own(obj)) continue;
+            auto* ut = obj->get_component<UnitType>();
+            if (ut && ut->type == UnitEntityType::Archer) ++count;
+        }
+        return count >= 3;
+    }
+
+    if (tutorial_step_ == 4) {
+        return ResourcesMgr::instance()->has_tech(local_player_id, u8"强弓");
+    }
+
+    if (tutorial_step_ == 5) {
+        const auto& pool = WorldEntityMgr::instance()->get_object_pool();
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid()) continue;
+            auto* bt = obj->get_component<BuildingType>();
+            if (bt && bt->type == BuildingEntityType::TownCenter && tutorial_is_enemy(obj)) {
+                auto* hp = obj->get_component<Health>();
+                if (hp && hp->current_health < hp->max_health) return true;
+            }
+        }
+        for (auto& [id, obj] : pool) {
+            if (!obj || !obj->check_valid() || !is_own(obj)) continue;
+            auto* attack = obj->get_component<Attack>();
+            if (!attack || attack->target_id == 0) continue;
+            GameObject* target = WorldEntityMgr::instance()->get_object_by_id(attack->target_id);
+            if (target && target->get_component<Structure>() && tutorial_is_enemy(target)) return true;
+        }
+        return false;
+    }
+
+    return false;
+}
+
+void GameScene::update_tutorial(float delta)
+{
+    if (!tutorial_mode_ || tutorial_finished_) return;
+    tutorial_step_wait_ += delta;
+    if (tutorial_step_wait_ < 0.35f) return;
+    if (!tutorial_step_complete()) return;
+
+    ++tutorial_step_;
+    tutorial_step_wait_ = 0.0f;
+    if (tutorial_step_ >= 6)
+        tutorial_finished_ = true;
+}
+
+const char* GameScene::tutorial_title() const
+{
+    switch (tutorial_step_) {
+    case 0: return u8"选择农民";
+    case 1: return u8"采集木材";
+    case 2: return u8"建造第二座靶场";
+    case 3: return u8"训练弓兵";
+    case 4: return u8"研究强弓";
+    case 5: return u8"攻击敌方城镇大厅";
+    default: return u8"教程完成";
+    }
+}
+
+const char* GameScene::tutorial_detail1() const
+{
+    switch (tutorial_step_) {
+    case 0: return u8"左键单击或框选一个农民。";
+    case 1: return u8"右键点击基地旁的树木，让农民开始采木。";
+    case 2: return u8"点击下方「靶场」，在基地旁放置一座新的靶场。";
+    case 3: return u8"选中靶场，点击「弓」训练一个弓兵。";
+    case 4: return u8"选中靶场，点击「强弓」研究，完成后弓兵射程 +50。";
+    case 5: return u8"选中部队，右键点击右侧红色敌方城镇大厅。";
+    default: return u8"你已经学会采集、建造、训练、研究和战斗。";
+    }
+}
+
+const char* GameScene::tutorial_detail2() const
+{
+    switch (tutorial_step_) {
+    case 0: return u8"农民是采集和建造的核心单位。";
+    case 1: return u8"木材是建造建筑和训练单位的基础资源。";
+    case 2: return u8"需要 150 木 / 50 金；开局已送一座靶场。";
+    case 3: return u8"训练到 3 个弓兵即可进入下一步。";
+    case 4: return u8"科技研究完成后，已有和新建弓兵都会生效。";
+    case 5: return u8"下达攻击命令即可完成教程。";
+    default: return u8"按「继续自由练习」或「返回主菜单」。";
+    }
+}
+
+void GameScene::render_tutorial()
+{
+    if (!tutorial_mode_) return;
+
+    if (tutorial_finished_) {
+        const float cw = (float)screen_w_;
+        const float ch = (float)screen_h_;
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+        SDL_FRect full{ 0, 0, cw, ch };
+        SDL_RenderFillRect(renderer, &full);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        const float pw = 600.0f, ph = 320.0f;
+        SDL_FRect panel{ (cw - pw) * 0.5f, (ch - ph) * 0.5f, pw, ph };
+        ui_fill_rect(renderer, panel, { 24, 30, 48, 255 }, { 255, 215, 0, 255 }, 2);
+        ui_draw_text(renderer, u8"教程完成！", 40, { 255, 215, 0, 255 },
+            panel.x + pw * 0.5f, panel.y + 44.0f, true);
+        ui_draw_text(renderer, u8"你已经学会：选择、采集、建造、训练、研究、攻击。",
+            20, { 220, 230, 248, 255 }, panel.x + pw * 0.5f, panel.y + 100.0f, true);
+        ui_draw_text(renderer, u8"现在去 map2v2 打一场真正的 2v2 吧。",
+            18, { 160, 180, 215, 255 }, panel.x + pw * 0.5f, panel.y + 132.0f, true);
+
+        const float bw = 220.0f, bh = 52.0f;
+        tutorial_continue_btn_ = { panel.x + 40.0f, panel.y + 220.0f, bw, bh };
+        tutorial_menu_btn_ = { panel.x + pw - 40.0f - bw, panel.y + 220.0f, bw, bh };
+        ui_fill_rect(renderer, tutorial_continue_btn_, { 36, 48, 84, 255 }, { 90, 110, 160, 255 }, 2);
+        ui_draw_text(renderer, u8"继续自由练习", 22, { 255, 255, 255, 255 },
+            tutorial_continue_btn_.x + bw * 0.5f, tutorial_continue_btn_.y + bh * 0.5f, true);
+        ui_fill_rect(renderer, tutorial_menu_btn_, { 36, 48, 84, 255 }, { 255, 215, 0, 255 }, 2);
+        ui_draw_text(renderer, u8"返回主菜单", 22, { 255, 255, 255, 255 },
+            tutorial_menu_btn_.x + bw * 0.5f, tutorial_menu_btn_.y + bh * 0.5f, true);
+        return;
+    }
+
+    tutorial_panel_rect_ = { 18.0f, 18.0f, 510.0f, 202.0f };
+    ui_fill_rect(renderer, tutorial_panel_rect_, { 24, 30, 48, 245 }, { 255, 215, 0, 255 }, 2);
+
+    const std::string step_text = u8"新手教程  " + std::to_string(tutorial_step_ + 1) + " / 6";
+    ui_draw_text(renderer, step_text, 16, { 150, 170, 205, 255 },
+        tutorial_panel_rect_.x + 18.0f, tutorial_panel_rect_.y + 14.0f);
+    ui_draw_text(renderer, tutorial_title(), 26, { 255, 215, 0, 255 },
+        tutorial_panel_rect_.x + 18.0f, tutorial_panel_rect_.y + 42.0f);
+    ui_draw_text(renderer, tutorial_detail1(), 17, { 232, 240, 252, 255 },
+        tutorial_panel_rect_.x + 18.0f, tutorial_panel_rect_.y + 88.0f);
+    ui_draw_text(renderer, tutorial_detail2(), 15, { 150, 170, 200, 255 },
+        tutorial_panel_rect_.x + 18.0f, tutorial_panel_rect_.y + 116.0f);
+
+    for (int i = 0; i < 6; ++i) {
+        SDL_FRect dot{ tutorial_panel_rect_.x + 18.0f + i * 22.0f,
+                       tutorial_panel_rect_.y + 154.0f, 12.0f, 8.0f };
+        SDL_Color c = (i < tutorial_step_) ? SDL_Color{ 80, 210, 130, 255 }
+            : (i == tutorial_step_ ? SDL_Color{ 255, 215, 0, 255 }
+                                   : SDL_Color{ 70, 85, 115, 255 });
+        ui_fill_rect(renderer, dot, c);
+    }
+
+    tutorial_skip_btn_ = { tutorial_panel_rect_.x + tutorial_panel_rect_.w - 120.0f,
+                           tutorial_panel_rect_.y + tutorial_panel_rect_.h - 40.0f, 102.0f, 26.0f };
+    ui_fill_rect(renderer, tutorial_skip_btn_, { 36, 48, 84, 255 }, { 90, 110, 160, 255 }, 1);
+    ui_draw_text(renderer, u8"跳过教程", 15, { 210, 220, 240, 255 },
+        tutorial_skip_btn_.x + tutorial_skip_btn_.w * 0.5f,
+        tutorial_skip_btn_.y + tutorial_skip_btn_.h * 0.5f, true);
+    ui_draw_text(renderer, u8"完成目标后自动进入下一步", 13, { 120, 136, 165, 255 },
+        tutorial_panel_rect_.x + 92.0f, tutorial_panel_rect_.y + 160.0f);
+}
+
+bool GameScene::handle_tutorial_click(float x, float y)
+{
+    auto hit = [&](const SDL_FRect& r) {
+        return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    };
+
+    if (tutorial_finished_) {
+        if (hit(tutorial_continue_btn_)) {
+            tutorial_mode_ = false;
+            tutorial_finished_ = false;
+            return true;
+        }
+        if (hit(tutorial_menu_btn_)) {
+            tutorial_mode_ = false;
+            tutorial_finished_ = false;
+            SceneMgr::instance()->on_switch(SceneMgr::SceneType::Menu);
+            return true;
+        }
+        return true;
+    }
+
+    if (hit(tutorial_skip_btn_)) {
+        tutorial_mode_ = false;
+        tutorial_finished_ = false;
+        return true;
+    }
+    return false;
+}
+
 void GameScene::check_win_lose()
 {
-    if (game_over_)
+    if (game_over_ || tutorial_mode_)
         return;
 
     // 收集参与对局的阵营集合（非中立玩家所属阵营）
@@ -498,7 +816,9 @@ void GameScene::on_render()
 void GameScene::on_render_overlay()
 {
     // 覆盖层（暂停菜单 / 胜负结算）绘制在最上层
-    if (paused_ || game_over_)
+    if (tutorial_mode_ && !tutorial_external_ui_ && !paused_ && !game_over_)
+        render_tutorial();
+    else if (paused_ || game_over_)
         render_overlay();
 }
 

@@ -1,24 +1,121 @@
 <div align="center">
 
-<img src="docs/images/hero.png" alt="MySTR v1.1" width="100%" />
+<img src="docs/images/hero.png" alt="MySTR v1.2" width="100%" />
 
 # MySTR · SimpleRTS
 
 **用 C++17 + SDL3 从零实现的 2D 即时战略游戏**
 
-采集 · 建造 · 研究 · 编队 · 推进 · 2v2
+采集 · 建造 · 研究 · 编队 · 1v1 / 2v2 / 3v3 / 4v4
 
 [![Release](https://img.shields.io/github/v/release/LiHua-25565/SimpleRTS?style=for-the-badge&label=release&color=FFD700)](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
-[![Download](https://img.shields.io/badge/download-v1.1%20Windows-2ea043?style=for-the-badge&logo=github)](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#-快速开始)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#-下载与运行)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](#-从源码构建)
 [![SDL3](https://img.shields.io/badge/SDL3-3.x-1E5180?style=for-the-badge)](https://www.libsdl.org/)
 [![Stars](https://img.shields.io/github/stars/LiHua-25565/SimpleRTS?style=for-the-badge&color=FFD700)](https://github.com/LiHua-25565/SimpleRTS/stargazers)
 [![License](https://img.shields.io/github/license/LiHua-25565/SimpleRTS?style=for-the-badge&color=3DA639)](LICENSE)
 
-[**下载 v1.1**](https://github.com/LiHua-25565/SimpleRTS/releases/latest) · [**更新日志**](CHANGELOG.md) · [**开发文档**](READ.txt) · [**提交问题**](https://github.com/LiHua-25565/SimpleRTS/issues)
+<br />
+
+<a href="https://github.com/LiHua-25565/SimpleRTS/releases/latest">
+  <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20%E4%B8%8B%E8%BD%BD%20MySTR%20v1.2%20Windows%20x64-2ea043?style=for-the-badge&logo=windows&logoColor=white&labelColor=0b1020" alt="下载 MySTR v1.2" height="56" />
+</a>
+
+**Windows 10 / 11 · 免安装 · 解压即玩 · 已带运行库与字体**
 
 </div>
+
+---
+
+## 🚀 下载与运行（先看这里）
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 1. 下载
+
+点击上方绿色按钮，或直接打开：
+
+[**Releases → v1.2 → SimpleRTS-v1.2-win64.zip**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
+
+</td>
+<td width="33%" valign="top">
+
+### 2. 解压
+
+把 **整个文件夹** 解压到任意目录。
+
+不要只把 `SimpleRTS.exe` 拖出来，`font/`、`maps/`、`defs/` 需要和 exe 放在一起。
+
+</td>
+<td width="33%" valign="top">
+
+### 3. 开玩
+
+双击 `SimpleRTS.exe`。
+
+第一次建议先点 **「新手教程」**，6 步学会采集、建造、训练、研究和战斗。
+
+</td>
+</tr>
+</table>
+
+> **系统要求**：Windows 10 / 11 64 位。无需安装，无需额外下载 SDL3、VC++ 运行库或字体。
+>
+> SmartScreen 提示“未知发布者”时，选择 **更多信息 → 仍要运行**。
+
+## 🎮 操作（第二眼要看）
+
+| 操作 | 作用 |
+|---|---|
+| **左键单击 / 拖拽** | 选择单位、框选；点击空地移动编队 |
+| **右键** | 移动、攻击、采集、向城镇中心/仓库提交资源 |
+| **中键拖拽** | 平移摄像机 |
+| **小地图点击** | 跳转视角 |
+| **S** | 停止选中单位 |
+| **Ctrl + A** | 全选己方单位 |
+| **F2** | 打开兵种 / 建筑 / 科技编辑器 |
+| **F11 / Alt + Enter** | 全屏切换 |
+| **Esc** | 退出全屏 / 暂停 |
+
+> 生产、建造、研究按钮：鼠标停留 0.45 秒查看成本与属性；资源不足时点击，屏幕左侧会显示红色提示。
+
+---
+
+## 🎓 新手教程（独立关卡）
+
+主菜单 → **新手教程**（或按 `T`）进入独立的 `tutorial` 训练关卡，不影响普通对局。
+
+教程共 6 步，完成目标后自动进入下一步：
+
+1. **选择农民** — 左键单击或框选一个农民。
+2. **采集木材** — 右键点击基地旁的树木。
+3. **建造第二座靶场** — 点击下方「靶场」并放置。
+4. **训练弓兵** — 选中靶场，点击「弓」。
+5. **研究强弓** — 研究完成后弓兵射程 +50。
+6. **攻击敌方大厅** — 右键点击右侧红色城镇大厅。
+
+> 教程关卡有独立场景和教程面板；随时可以点「跳过教程」回到自由练习。
+
+---
+
+## 🗺️ 地图模式：1v1 / 2v2 / 3v3 / 4v4
+
+选择地图后会自动配置好队伍和 AI，不需要手动加满 7 个 AI：
+
+| 模式 | 地图 | 说明 |
+|---|---|---|
+| **1v1** | `map1v1_duel` | 中央树林，单挑对决 |
+| **1v1** | `map1v1_river` | 中央河流与两座桥 |
+| **2v2** | `map2v2` | 四角基地、中央湖、上下两路 |
+| **2v2** | `map2v2_lake`、`map2v2_forest` | 湖心 / 林间两种 2v2 |
+| **3v3** | `map3v3_river`、`map3v3_ring` | 三人一排，河桥 / 环形湖 |
+| **4v4** | `map4v4_forest`、`map4v4_lake` | 八人战场，树林 / 湖区 |
+
+- 队伍 0：人类 + AI 队友；队伍 1：对面 AI。
+- 想单刷或改阵营，可在选择界面手动改颜色、队伍和出生位置。
+- 地图都在 `SimpleRTS/maps/`，使用 `gen_versus_maps.py` 可重新生成。
 
 ---
 
@@ -28,8 +125,8 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 
 它没有使用现成引擎：ECS、地图流场寻路、RVO 局部避让、选择框、生产队列、AI、UI、数据定义与编辑器，全部用 C++17 和 SDL3 手写。你可以在游戏里采集资源、造建筑、研究科技、训练军队，也可以按 `F2` 打开编辑器，把兵种、建筑和科技改成自己想要的样子。
 
-> **v1.1 主题：2v2 与数据驱动编辑器。**
-> 新增 4 个兵种、4 个建筑、3 个科技、三种伤害类型、2v2 地图 `map2v2`，以及按钮悬停说明和资源不足红色提示。
+> **v1.2 主题：新手教程与多模式地图。**
+> 新增独立新手教程关卡，以及 1v1 / 2v2 / 3v3 / 4v4 共 8 张新地图；修复全屏后建筑放置预览与鼠标错位的问题。
 
 ---
 
@@ -60,6 +157,18 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 <b>科技编辑器</b> · 目标兵种 + 效果类型 + 数值，做出“强弓”式强化
 </td>
 </tr>
+<tr>
+<td width="50%">
+<img src="docs/images/tutorial.png" alt="新手教程关卡" />
+<br />
+<b>独立新手教程</b> · 6 步目标，完成自动推进
+</td>
+<td width="50%">
+<img src="docs/images/modes.png" alt="1v1 到 4v4" />
+<br />
+<b>多模式对战</b> · 1v1 / 2v2 / 3v3 / 4v4 自动配队
+</td>
+</tr>
 </table>
 
 <p align="center">
@@ -71,7 +180,7 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 
 ---
 
-## v1.1 新内容
+## v1.1 内容回顾
 
 ### 数据驱动的兵种 / 建筑 / 科技
 
@@ -122,7 +231,7 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 ### 方式一：下载 Release（推荐）
 
 1. 打开 [**Releases**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)。
-2. 下载 `SimpleRTS-v1.1-win64.zip`。
+2. 下载 `SimpleRTS-v1.2-win64.zip`。
 3. 解压到任意目录（不要只把 exe 拖出来，`font/`、`maps/`、`defs/` 需要和 exe 放在一起）。
 4. 双击 `SimpleRTS.exe`。
 
@@ -307,6 +416,14 @@ SimpleRTS/
 ## 更新日志
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+### v1.2
+
+- 新增独立 `TutorialScene` 新手教程关卡（6 步目标），不再塞进普通对局。
+- 新增 1v1 / 2v2 / 3v3 / 4v4 共 8 张地图，选图自动配置队伍。
+- 地图列表按模式优先排序，并自动滚动到选中行。
+- 修复全屏后建筑放置预览与鼠标位置错位。
+- 修复教程基地靶场覆盖农民出生点、新地图资源卡掉开局靶场的问题。
 
 ### v1.1
 

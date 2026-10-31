@@ -16,7 +16,7 @@ public:
 
     // 在 GameScene::on_enter 中调用，设置依赖
     void init(Camera* cam, GameMap* map, SelectionBox* sel_box, MoveFeedbackSystem* feedback,
-        int player_id, SDL_Window* window);
+        int player_id, SDL_Window* window, SDL_Renderer* renderer = nullptr);
 
     // 处理所有输入事件
     void handle_event(const SDL_Event& event);
@@ -37,6 +37,7 @@ private:
 
 private:
     SDL_Window* window = nullptr;
+    SDL_Renderer* renderer = nullptr;
     bool is_fullscreen = false;
 
 private:

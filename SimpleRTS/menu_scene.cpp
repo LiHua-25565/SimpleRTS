@@ -27,31 +27,37 @@ void MenuScene::layout_buttons()
     hovered_ = -1;
 
     const float btn_w = 300.0f;
-    const float btn_h = 60.0f;
-    const float gap = 24.0f;
+    const float btn_h = 56.0f;
+    const float gap = 18.0f;
     const float cx = LOGICAL_W * 0.5f;
-    const float start_y = 330.0f;
+    const float start_y = 300.0f;
+
+    Button tutorial;
+    tutorial.rect = { cx - btn_w * 0.5f, start_y, btn_w, btn_h };
+    tutorial.label = u8"新手教程";
+    tutorial.on_click = [this]() { do_tutorial(); };
+    buttons_.push_back(tutorial);
 
     Button start;
-    start.rect = { cx - btn_w * 0.5f, start_y, btn_w, btn_h };
+    start.rect = { cx - btn_w * 0.5f, start_y + btn_h + gap, btn_w, btn_h };
     start.label = u8"开始游戏";
     start.on_click = [this]() { do_start(); };
     buttons_.push_back(start);
 
     Button def_editor;
-    def_editor.rect = { cx - btn_w * 0.5f, start_y + btn_h + gap, btn_w, btn_h };
+    def_editor.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 2, btn_w, btn_h };
     def_editor.label = u8"兵种建筑编辑";
     def_editor.on_click = [this]() { do_def_editor(); };
     buttons_.push_back(def_editor);
 
     Button editor;
-    editor.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 2, btn_w, btn_h };
+    editor.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 3, btn_w, btn_h };
     editor.label = u8"地图编辑";
     editor.on_click = [this]() { do_editor(); };
     buttons_.push_back(editor);
 
     Button quit;
-    quit.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 3, btn_w, btn_h };
+    quit.rect = { cx - btn_w * 0.5f, start_y + (btn_h + gap) * 4, btn_w, btn_h };
     quit.label = u8"退出游戏";
     quit.on_click = [this]() { do_quit(); };
     buttons_.push_back(quit);
@@ -60,6 +66,11 @@ void MenuScene::layout_buttons()
 void MenuScene::do_start()
 {
     SceneMgr::instance()->on_switch(SceneMgr::SceneType::Selector);
+}
+
+void MenuScene::do_tutorial()
+{
+    SceneMgr::instance()->on_switch(SceneMgr::SceneType::Tutorial);
 }
 
 void MenuScene::do_editor()
@@ -99,6 +110,8 @@ void MenuScene::on_input(const SDL_Event& event)
             do_start();
         else if (event.key.key == SDLK_F2)
             do_def_editor();
+        else if (event.key.key == SDLK_T)
+            do_tutorial();
         else if (event.key.key == SDLK_ESCAPE)
             do_quit();
     }
@@ -116,7 +129,7 @@ void MenuScene::on_render()
     // 标题
     ui_draw_text(renderer, u8"MySTR", 88, { 255, 215, 0, 255 }, LOGICAL_W * 0.5f, 190.0f, true);
     ui_draw_text(renderer, u8"2D 即时战略", 36, { 200, 210, 230, 255 }, LOGICAL_W * 0.5f, 290.0f, true);
-    ui_draw_text(renderer, u8"v1.1  ·  2v2 更新", 16, { 120, 132, 155, 255 },
+    ui_draw_text(renderer, u8"v1.2  ·  新手教程与多模式地图", 16, { 120, 132, 155, 255 },
         LOGICAL_W * 0.5f, LOGICAL_H - 20.0f, true);
 
     // 按钮

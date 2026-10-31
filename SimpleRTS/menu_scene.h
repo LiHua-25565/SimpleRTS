@@ -30,6 +30,7 @@ private:
 
     void layout_buttons();
     void do_start();
+    void do_tutorial();
     void do_editor();
     void do_def_editor();
     void do_quit();

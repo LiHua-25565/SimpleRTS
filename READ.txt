@@ -1,4 +1,4 @@
-SimpleRTS 项目架构与协作指南（v1.1）
+SimpleRTS 项目架构与协作指南（v1.2）
 1. 项目简介
 本游戏是一个 2D 即时战略游戏（类红警/帝国时代），使用 C++ 和 SDL3 构建。目前实现了地图渲染、单位选择、基于流场的群体移动、编队排列和简单的障碍避让。
 
@@ -237,4 +237,19 @@ S 键：停止选中单位。
   成本、时间、生命/攻击/防御、前置科技、可生产/可研究内容、科技效果等。
 - 点击按钮但资源不足时，屏幕左侧显示红色提示框，列出：
   需要资源、拥有资源、缺少资源，并在 5 秒后自动消失。
+
+10. 新手教程与多模式地图（v1.2）
+- 新手教程是独立的 TutorialScene，占位在 scene_mgr 的 Tutorial 场景；
+  game_scene 使用独立的 tutorial.srmap 和专用教程面板，不进入普通对局。
+- TutorialScene 持有自己的 GameScene 实例；GameScene 的 tutorial UI 通过
+  tutorial_external_ui 关闭，由 TutorialScene 绘制教程面板。
+- tutorial.srmap：160×120，两个城镇大厅（人类 + 被动敌人），6 步教程目标。
+- 多模式地图：
+  * 1v1：map1v1_duel / map1v1_river
+  * 2v2：map2v2 / map2v2_lake / map2v2_forest
+  * 3v3：map3v3_river / map3v3_ring
+  * 4v4：map4v4_forest / map4v4_lake
+- 地图文件名以 map1v1 / map2v2 / map3v3 / map4v4 开头时，选择界面自动配置
+  人类 + AI 队友 vs 对面 AI；旧地图仍然保持手动加 AI 的方式。
+- 生成脚本：gen_versus_maps.py；可重新生成并验证 1v1~4v4 对称地图。
 

@@ -140,6 +140,7 @@
     <ClCompile Include="def_editor_scene.cpp" />
     <ClCompile Include="entity_defs.cpp" />
     <ClCompile Include="tech_effects.cpp" />
+    <ClCompile Include="tutorial_scene.cpp" />
     <ClCompile Include="game_map.cpp" />
     <ClCompile Include="game_scene.cpp" />
     <ClCompile Include="harvest_system.cpp" />
@@ -185,6 +186,7 @@
     <ClInclude Include="def_editor_scene.h" />
     <ClInclude Include="entity_defs.h" />
     <ClInclude Include="tech_effects.h" />
+    <ClInclude Include="tutorial_scene.h" />
     <ClInclude Include="factories.h" />
     <ClInclude Include="game_map.h" />
     <ClInclude Include="game_object.h" />

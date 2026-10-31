@@ -13,6 +13,7 @@ public:
     {
         Menu,
         Game,
+        Tutorial,
         Selector,
         MapEditor,
         DefEditor
@@ -33,6 +34,7 @@ public:
     // 场景注册函数
     void set_menu_scene(Scene* scene) { menu_scene = scene; }
     void set_game_scene(Scene* scene) { game_scene = scene; }
+    void set_tutorial_scene(Scene* scene) { tutorial_scene = scene; }
     void set_selector_scene(Scene* scene) { selector_scene = scene; }
     void set_map_editor_scene(Scene* scene) { map_editor_scene = scene; }
     void set_def_editor_scene(Scene* scene) { def_editor_scene = scene; }
@@ -53,6 +55,7 @@ private:
 
     Scene* menu_scene = nullptr;
     Scene* game_scene = nullptr;
+    Scene* tutorial_scene = nullptr;
     Scene* selector_scene = nullptr;
     Scene* map_editor_scene = nullptr;
     Scene* def_editor_scene = nullptr;

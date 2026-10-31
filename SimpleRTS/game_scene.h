@@ -23,6 +23,8 @@
 
 #include <vector>
 
+class GameObject;
+
 class GameScene : public Scene
 {
 public:
@@ -40,8 +42,20 @@ public:
 	int get_local_player_id() const { return local_player_id; }
 
 	// 阵容配置（由 SelectorScene 在进入对局前设置）
-	void set_match_config(const MatchConfig& cfg) { match_config = cfg; }
+	void set_match_config(const MatchConfig& cfg) { tutorial_mode_ = false; match_config = cfg; }
 	const MatchConfig& get_match_config() const { return match_config; }
+
+	// 新手教程：使用 tutorial.srmap，人类 vs 被动敌人，按步骤引导操作
+	void start_tutorial();
+	bool is_tutorial_mode() const { return tutorial_mode_; }
+	void set_tutorial_external_ui(bool external) { tutorial_external_ui_ = external; }
+	int get_tutorial_step() const { return tutorial_step_; }
+	bool is_tutorial_finished() const { return tutorial_finished_; }
+	const char* get_tutorial_title() const { return tutorial_title(); }
+	const char* get_tutorial_detail1() const { return tutorial_detail1(); }
+	const char* get_tutorial_detail2() const { return tutorial_detail2(); }
+	void skip_tutorial() { tutorial_mode_ = false; tutorial_finished_ = false; }
+
 
 private:
 	int screen_w_ = 1280, screen_h_ = 720;   // 当前逻辑分辨率
@@ -74,6 +88,28 @@ private:
 	bool map_baked = false;      // 是否已经烘焙过
 
 private:
+	// ---- 新手教程 ----
+	bool tutorial_mode_ = false;
+	bool tutorial_external_ui_ = false;
+	int tutorial_step_ = 0;
+	float tutorial_step_wait_ = 0.0f;
+	bool tutorial_finished_ = false;
+	SDL_FRect tutorial_panel_rect_{};
+	SDL_FRect tutorial_skip_btn_{};
+	SDL_FRect tutorial_continue_btn_{};
+	SDL_FRect tutorial_menu_btn_{};
+
+	void init_tutorial();
+	void update_tutorial(float delta);
+	bool tutorial_step_complete() const;
+	void render_tutorial();
+	bool handle_tutorial_click(float x, float y);
+	const char* tutorial_title() const;
+	const char* tutorial_detail1() const;
+	const char* tutorial_detail2() const;
+	bool tutorial_is_enemy(GameObject* obj) const;
+
+
 	void update_ui_layout();
 
 	void camera_input(const bool* keyState);

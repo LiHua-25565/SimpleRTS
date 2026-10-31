@@ -86,9 +86,23 @@ void SelectorScene::refresh_map_files()
         if (ec) break;
         if (!entry.is_regular_file(ec)) continue;
         if (entry.path().extension() != ".srmap") continue;
-        map_files_.push_back(entry.path().stem().string());
+        std::string stem = entry.path().stem().string();
+        if (stem == "tutorial") continue;   // 教程从主菜单进入，不在普通选图列表
+        map_files_.push_back(stem);
     }
-    std::sort(map_files_.begin(), map_files_.end());
+    auto map_rank = [](const std::string& name) {
+        if (name.rfind("map1v1", 0) == 0) return 0;
+        if (name.rfind("map2v2", 0) == 0) return 1;
+        if (name.rfind("map3v3", 0) == 0) return 2;
+        if (name.rfind("map4v4", 0) == 0) return 3;
+        return 4;
+    };
+    std::sort(map_files_.begin(), map_files_.end(),
+        [&](const std::string& a, const std::string& b) {
+            int ra = map_rank(a), rb = map_rank(b);
+            if (ra != rb) return ra < rb;
+            return a < b;
+        });
     if (!map_files_.empty())
         apply_map_selection(0);
 }
@@ -97,6 +111,12 @@ void SelectorScene::apply_map_selection(int idx)
 {
     if (idx < 0 || idx >= (int)map_files_.size()) return;
     map_sel_ = idx;
+    // 让被选中的地图行自动滚入左侧列表的可视范围
+    const float visible_h = map_list_bottom_ - map_list_top_;
+    const float row_top = idx * 30.0f;
+    float lo = row_top + 30.0f - visible_h;
+    if (lo < 0.0f) lo = 0.0f;
+    map_scroll_ = std::clamp(map_scroll_, lo, row_top);
     load_map_preview(map_files_[idx]);
 }
 
@@ -111,28 +131,20 @@ void SelectorScene::reset_slots_default()
         config_.slots[0].position = 0;
     }
 
-    // map2v2 默认直接给出 2v2：人类 + AI 队友 vs 两个 AI。
-    // 其余地图保持“人类 + 空槽位”，由玩家自行添加 AI。
-    if (n >= 4 && config_.map_name == "map2v2") {
-        config_.slots[1].kind = SlotKind::AI;
-        config_.slots[1].color_id = 1;
-        config_.slots[1].team = 0;
-        config_.slots[1].position = 1;
+    // 新地图按文件名自动配置为 1v1 / 2v2 / 3v3 / 4v4：
+    // 人类 + AI 队友在 team 0，对面 AI 在 team 1。
+    // 旧地图保持“人类 + 空槽位”，由玩家自行添加 AI。
+    int team_size = 0;
+    if (config_.map_name.rfind("map1v1", 0) == 0) team_size = 1;
+    else if (config_.map_name.rfind("map2v2", 0) == 0) team_size = 2;
+    else if (config_.map_name.rfind("map3v3", 0) == 0) team_size = 3;
+    else if (config_.map_name.rfind("map4v4", 0) == 0) team_size = 4;
 
-        config_.slots[2].kind = SlotKind::AI;
-        config_.slots[2].color_id = 2;
-        config_.slots[2].team = 1;
-        config_.slots[2].position = 2;
-
-        config_.slots[3].kind = SlotKind::AI;
-        config_.slots[3].color_id = 3;
-        config_.slots[3].team = 1;
-        config_.slots[3].position = 3;
-
-        for (int i = 4; i < n; ++i) {
-            config_.slots[i].kind = SlotKind::Neutral;
+    if (team_size > 0 && n == team_size * 2) {
+        for (int i = 0; i < n; ++i) {
+            config_.slots[i].kind = (i == 0) ? SlotKind::Human : SlotKind::AI;
             config_.slots[i].color_id = i % PLAYER_COLOR_COUNT;
-            config_.slots[i].team = 0;
+            config_.slots[i].team = (i < team_size) ? 0 : 1;
             config_.slots[i].position = i;
         }
         return;

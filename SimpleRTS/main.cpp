@@ -5,6 +5,7 @@
 #include "texture_cache.h"
 #include "UI_mgr.h"
 #include "game_scene.h"
+#include "tutorial_scene.h"
 #include "menu_scene.h"
 #include "selector_scene.h"
 #include "map_editor_scene.h"
@@ -46,7 +47,7 @@ int main(int argc, char* argv[])
     using namespace std::chrono;
     init();
 
-    SDL_Window* window = SDL_CreateWindow(u8"MySTR v1.1",
+    SDL_Window* window = SDL_CreateWindow(u8"MySTR v1.2",
         1280, 720, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     TTF_Font* font = TTF_OpenFont("font/SourceHanSansSC-Bold.otf", 18);
@@ -63,6 +64,9 @@ int main(int argc, char* argv[])
     auto game_scene = new GameScene();
     game_scene->set_font(font);
     game_scene->set_renderer(renderer);
+    auto tutorial_scene = new TutorialScene();
+    tutorial_scene->set_font(font);
+    tutorial_scene->set_renderer(renderer);
     auto menu_scene = new MenuScene();
     menu_scene->set_font(font);
     menu_scene->set_renderer(renderer);
@@ -79,6 +83,7 @@ int main(int argc, char* argv[])
     // 注册到 SceneMgr
     SceneMgr::instance()->set_menu_scene(menu_scene);
     SceneMgr::instance()->set_game_scene(game_scene);
+    SceneMgr::instance()->set_tutorial_scene(tutorial_scene);
     SceneMgr::instance()->set_selector_scene(selector_scene);
     SceneMgr::instance()->set_map_editor_scene(map_editor_scene);
     SceneMgr::instance()->set_def_editor_scene(def_editor_scene);
@@ -110,8 +115,9 @@ int main(int argc, char* argv[])
 
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
-                // 监听F11按键按下
-                if (event.key.key == SDLK_F11)
+                // F11 / Alt+Enter 切换全屏
+                if (event.key.key == SDLK_F11 ||
+                    (event.key.key == SDLK_RETURN && (event.key.mod & SDL_KMOD_ALT)))
                 {
                     is_fullscreen = !is_fullscreen;
                     SDL_SetWindowFullscreen(window, is_fullscreen);
