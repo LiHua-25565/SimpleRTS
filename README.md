@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/hero.png" alt="MySTR v1.3" width="100%" />
+<img src="docs/images/hero.png" alt="MySTR v1.4" width="100%" />
 
 # MySTR · SimpleRTS
 
@@ -18,7 +18,7 @@
 <br />
 
 <a href="https://github.com/LiHua-25565/SimpleRTS/releases/latest">
-  <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20%E4%B8%8B%E8%BD%BD%20MySTR%20v1.3%20Windows%20x64-2ea043?style=for-the-badge&logo=windows&logoColor=white&labelColor=0b1020" alt="下载 MySTR v1.3" height="56" />
+  <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20%E4%B8%8B%E8%BD%BD%20MySTR%20v1.4%20Windows%20x64-2ea043?style=for-the-badge&logo=windows&logoColor=white&labelColor=0b1020" alt="下载 MySTR v1.4" height="56" />
 </a>
 
 **Windows 10 / 11 · 免安装 · 解压即玩 · 已带运行库与字体**
@@ -37,7 +37,7 @@
 
 点击上方绿色按钮，或直接打开：
 
-[**Releases → v1.3 → SimpleRTS-v1.3-win64.zip**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
+[**Releases → v1.4 → SimpleRTS-v1.4-win64.zip**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)
 
 </td>
 <td width="33%" valign="top">
@@ -87,15 +87,20 @@
 
 主菜单 → **新手教程**（或按 `T`）进入独立的 `tutorial` 训练关卡，不影响普通对局。
 
-教程共 6 步，完成目标后自动进入下一步：
+教程共 7 步，完成目标后自动进入下一步：
 
-1. **选择农民** — 左键单击或框选一个农民。
+1. **选择农民** — 左键单击或框选一个农民；用 `WASD` / 方向键移动视角。
 2. **采集木材** — 右键点击基地旁的树木。
 3. **建造第二座靶场** — 点击下方「靶场」并放置。
 4. **训练弓兵** — 选中靶场，点击「弓」。
 5. **研究强弓** — 研究完成后弓兵射程 +50。
-6. **攻击敌方大厅** — 右键点击右侧红色城镇大厅。
+6. **击退敌军突袭** — 3 名敌军弓兵进攻基地，同时你会获得 3 名弓兵增援。
+7. **摧毁敌方城镇大厅** — 右键攻击右侧红色大厅，直到摧毁。
 
+> **胜利目标始终显示在右上角**：`摧毁敌方城镇大厅`，并实时显示敌方大厅 HP。
+>
+> 教程完成面板会再次说明普通对局胜利条件：**摧毁敌方阵营所有建筑**。
+>
 > 教程关卡有独立场景和教程面板；随时可以点「跳过教程」回到自由练习。
 
 ---
@@ -125,8 +130,8 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 
 它没有使用现成引擎：ECS、地图流场寻路、RVO 局部避让、选择框、生产队列、AI、UI、数据定义与编辑器，全部用 C++17 和 SDL3 手写。你可以在游戏里采集资源、造建筑、研究科技、训练军队，也可以按 `F2` 打开编辑器，把兵种、建筑和科技改成自己想要的样子。
 
-> **v1.3 主题：地图编辑与初始资源。**
-> 地图编辑器现在可以载入任意尺寸的新地图，并能为每个玩家设置初始木/肉/金/石；保存时写入地图 S 行，缺省各 2000。
+> **v1.4 主题：胜利目标与实战教程。**
+> 教程现在有明确的「摧毁敌方城镇大厅」胜利目标、敌军突袭与增援，以及最终胜利结算；同时保留地图编辑器与每玩家初始资源。
 
 ---
 
@@ -243,7 +248,7 @@ MySTR 是一个**可以直接玩、也可以直接改**的 2D 即时战略游戏
 ### 方式一：下载 Release（推荐）
 
 1. 打开 [**Releases**](https://github.com/LiHua-25565/SimpleRTS/releases/latest)。
-2. 下载 `SimpleRTS-v1.3-win64.zip`。
+2. 下载 `SimpleRTS-v1.4-win64.zip`。
 3. 解压到任意目录（不要只把 exe 拖出来，`font/`、`maps/`、`defs/` 需要和 exe 放在一起）。
 4. 双击 `SimpleRTS.exe`。
 
@@ -440,6 +445,15 @@ SimpleRTS/
 ## 更新日志
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+### v1.4
+
+- 教程扩展为 7 步，加入视野操作提示、敌军突袭与增援。
+- 右上角常驻 **胜利目标：摧毁敌方城镇大厅**，并显示敌方大厅 HP。
+- 教程敌方大厅调整为 300 HP，最终目标改为真正摧毁大厅。
+- 新增第 6 步「击退敌军突袭」：3 名敌军弓兵进攻，玩家获得 3 名弓兵增援。
+- 教程完成面板明确普通对局胜利条件：摧毁敌方阵营所有建筑。
+- 保留 v1.3 的地图编辑器初始资源与任意尺寸载入。
 
 ### v1.3
 

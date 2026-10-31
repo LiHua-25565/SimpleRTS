@@ -104,10 +104,12 @@ void TutorialScene::render_tutorial()
         ui_fill_rect(renderer, box, { 24, 30, 48, 255 }, { 255, 215, 0, 255 }, 2);
         ui_draw_text(renderer, u8"教程完成！", 40, { 255, 215, 0, 255 },
             box.x + pw * 0.5f, box.y + 44.0f, true);
-        ui_draw_text(renderer, u8"你已经学会：选择、采集、建造、训练、研究、攻击。",
-            20, { 220, 230, 248, 255 }, box.x + pw * 0.5f, box.y + 100.0f, true);
-        ui_draw_text(renderer, u8"现在去 map2v2 打一场真正的 2v2 吧。",
-            18, { 160, 180, 215, 255 }, box.x + pw * 0.5f, box.y + 132.0f, true);
+        ui_draw_text(renderer, u8"你击退了敌军，并摧毁了敌方城镇大厅。",
+            20, { 220, 230, 248, 255 }, box.x + pw * 0.5f, box.y + 96.0f, true);
+        ui_draw_text(renderer, u8"普通对局胜利目标：摧毁敌方阵营所有建筑。",
+            18, { 255, 180, 120, 255 }, box.x + pw * 0.5f, box.y + 128.0f, true);
+        ui_draw_text(renderer, u8"现在去 map2v2 或 1v1 地图打一场真正的对局吧。",
+            17, { 160, 180, 215, 255 }, box.x + pw * 0.5f, box.y + 160.0f, true);
 
         const float bw = 220.0f, bh = 52.0f;
         continue_btn_ = { box.x + 40.0f, box.y + 220.0f, bw, bh };
@@ -124,8 +126,20 @@ void TutorialScene::render_tutorial()
     panel_ = { 18.0f, 18.0f, 510.0f, 202.0f };
     ui_fill_rect(renderer, panel_, { 24, 30, 48, 245 }, { 255, 215, 0, 255 }, 2);
 
+    // 始终可见的胜利目标
+    SDL_FRect objective{ 545.0f, 18.0f, 430.0f, 62.0f };
+    ui_fill_rect(renderer, objective, { 58, 10, 10, 245 }, { 235, 70, 60, 255 }, 2);
+    ui_draw_text(renderer, u8"胜利目标：摧毁敌方城镇大厅", 18, { 255, 160, 130, 255 },
+        objective.x + 14.0f, objective.y + 10.0f);
+    int cur_hp = 0, max_hp = 0;
+    std::string hp_text = game_->get_tutorial_enemy_tc_hp(cur_hp, max_hp)
+        ? u8"敌方大厅 HP " + std::to_string(cur_hp) + " / " + std::to_string(max_hp)
+        : u8"目标已达成";
+    ui_draw_text(renderer, hp_text, 15, { 235, 210, 200, 255 },
+        objective.x + 14.0f, objective.y + 36.0f);
+
     const int step = game_->get_tutorial_step();
-    const std::string step_text = u8"新手教程  " + std::to_string(step + 1) + " / 6";
+    const std::string step_text = u8"新手教程  " + std::to_string(step + 1) + " / 7";
     ui_draw_text(renderer, step_text, 16, { 150, 170, 205, 255 },
         panel_.x + 18.0f, panel_.y + 14.0f);
     ui_draw_text(renderer, game_->get_tutorial_title(), 26, { 255, 215, 0, 255 },
@@ -135,7 +149,7 @@ void TutorialScene::render_tutorial()
     ui_draw_text(renderer, game_->get_tutorial_detail2(), 15, { 150, 170, 200, 255 },
         panel_.x + 18.0f, panel_.y + 116.0f);
 
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 7; ++i) {
         SDL_FRect dot{ panel_.x + 18.0f + i * 22.0f, panel_.y + 154.0f, 12.0f, 8.0f };
         SDL_Color c = (i < step) ? SDL_Color{ 80, 210, 130, 255 }
             : (i == step ? SDL_Color{ 255, 215, 0, 255 }

@@ -404,6 +404,8 @@ void GameScene::start_tutorial()
     tutorial_step_ = 0;
     tutorial_step_wait_ = 0.0f;
     tutorial_finished_ = false;
+    tutorial_wave_spawned_ = false;
+    tutorial_wave_ids_.clear();
 
     match_config = MatchConfig{};
     match_config.map_name = "tutorial";
@@ -448,6 +450,85 @@ void GameScene::init_tutorial()
             factory.create_unit_by_type(UnitEntityType::Villager,
                 { { base.x + k * 50.0f, base.y }, us, us });
     }
+
+    // 教程胜利目标：敌方城镇大厅只有 300 HP，方便新手完成最后一击。
+    for (auto& [id, obj] : WorldEntityMgr::instance()->get_object_pool()) {
+        if (!obj || !obj->check_valid()) continue;
+        auto* bt = obj->get_component<BuildingType>();
+        if (!bt || bt->type != BuildingEntityType::TownCenter || !tutorial_is_enemy(obj)) continue;
+        auto* hp = obj->get_component<Health>();
+        if (hp) { hp->max_health = 300; hp->current_health = 300; }
+    }
+}
+
+void GameScene::start_tutorial_wave()
+{
+    if (!tutorial_mode_ || tutorial_wave_spawned_) return;
+    if (match_config.spawn_points.size() < 2 || match_config.slots.size() < 2) return;
+    tutorial_wave_spawned_ = true;
+
+    const SpawnPoint& sp = match_config.spawn_points[0];
+    int cs = game_map.get_cell_size();
+    float us = (float)(cs * UNIT_SIZE_CELLS);
+
+    // 增援：3 名弓兵从基地左侧加入。
+    factory.set_player_id(local_player_id);
+    factory.set_player_color(local_player_id, player_color_enum(match_config.slots[0].color_id));
+    Vector2 rb{ (sp.gx - 12) * (float)cs, (sp.gy + 16) * (float)cs };
+    for (int k = 0; k < 3; ++k)
+        factory.create_unit_by_type(UnitEntityType::Archer,
+            { { rb.x + k * 50.0f, rb.y }, us, us });
+
+    // 敌军：3 名弓兵从战场中间冲向玩家基地。
+    GameObject* player_tc = nullptr;
+    for (auto& [id, obj] : WorldEntityMgr::instance()->get_object_pool()) {
+        if (!obj || !obj->check_valid()) continue;
+        auto* bt = obj->get_component<BuildingType>();
+        auto* own = obj->get_component<Ownership>();
+        if (bt && bt->type == BuildingEntityType::TownCenter && own && own->player_id == local_player_id) {
+            player_tc = obj;
+            break;
+        }
+    }
+
+    factory.set_player_id(2);
+    factory.set_player_color(2, player_color_enum(match_config.slots[1].color_id));
+    Vector2 eb{ (sp.gx + 24) * (float)cs, (sp.gy + 8) * (float)cs };
+    for (int k = 0; k < 3; ++k) {
+        GameObject* e = factory.create_unit_by_type(UnitEntityType::Archer,
+            { { eb.x, eb.y + k * 50.0f }, us, us });
+        if (!e) continue;
+        auto* hp = e->get_component<Health>();
+        if (hp) { hp->max_health = 40; hp->current_health = 40; }
+        auto* atk = e->get_component<Attack>();
+        if (atk) atk->damage = 6;
+        if (player_tc) {
+            auto* mv = e->get_component<Movable>();
+            if (mv) {
+                Vector2 dst = player_tc->get_collision_box().position;
+                dst.x += player_tc->get_collision_box().width * 0.5f;
+                dst.y += player_tc->get_collision_box().height * 0.5f;
+                mv->target = dst;
+                mv->flow_target = dst;
+            }
+        }
+        tutorial_wave_ids_.push_back(e->get_id());
+    }
+}
+
+bool GameScene::get_tutorial_enemy_tc_hp(int& current_hp, int& max_hp) const
+{
+    for (auto& [id, obj] : WorldEntityMgr::instance()->get_object_pool()) {
+        if (!obj || !obj->check_valid()) continue;
+        auto* bt = obj->get_component<BuildingType>();
+        if (!bt || bt->type != BuildingEntityType::TownCenter || !tutorial_is_enemy(obj)) continue;
+        auto* hp = obj->get_component<Health>();
+        if (!hp) return false;
+        current_hp = hp->current_health;
+        max_hp = hp->max_health;
+        return true;
+    }
+    return false;
 }
 
 bool GameScene::tutorial_is_enemy(GameObject* obj) const
@@ -519,25 +600,26 @@ bool GameScene::tutorial_step_complete() const
     }
 
     if (tutorial_step_ == 5) {
+        // 敌军突袭：击退这一小波敌人即可进入最终目标
+        if (!tutorial_wave_spawned_) return false;
+        for (uint64_t id : tutorial_wave_ids_) {
+            GameObject* obj = WorldEntityMgr::instance()->get_object_by_id(id);
+            if (obj && obj->check_valid() && obj->get_component<UnitType>()) return false;
+        }
+        return true;
+    }
+
+    if (tutorial_step_ == 6) {
+        // 胜利目标：摧毁敌方城镇大厅
         const auto& pool = WorldEntityMgr::instance()->get_object_pool();
         for (auto& [id, obj] : pool) {
             if (!obj || !obj->check_valid()) continue;
             auto* bt = obj->get_component<BuildingType>();
-            if (bt && bt->type == BuildingEntityType::TownCenter && tutorial_is_enemy(obj)) {
-                auto* hp = obj->get_component<Health>();
-                if (hp && hp->current_health < hp->max_health) return true;
-            }
+            if (bt && bt->type == BuildingEntityType::TownCenter && tutorial_is_enemy(obj))
+                return false;
         }
-        for (auto& [id, obj] : pool) {
-            if (!obj || !obj->check_valid() || !is_own(obj)) continue;
-            auto* attack = obj->get_component<Attack>();
-            if (!attack || attack->target_id == 0) continue;
-            GameObject* target = WorldEntityMgr::instance()->get_object_by_id(attack->target_id);
-            if (target && target->get_component<Structure>() && tutorial_is_enemy(target)) return true;
-        }
-        return false;
+        return true;
     }
-
     return false;
 }
 
@@ -562,7 +644,8 @@ const char* GameScene::tutorial_title() const
     case 2: return u8"建造第二座靶场";
     case 3: return u8"训练弓兵";
     case 4: return u8"研究强弓";
-    case 5: return u8"攻击敌方城镇大厅";
+    case 5: return u8"击退敌军突袭";
+    case 6: return u8"摧毁敌方城镇大厅（胜利目标）";
     default: return u8"教程完成";
     }
 }
@@ -575,7 +658,8 @@ const char* GameScene::tutorial_detail1() const
     case 2: return u8"点击下方「靶场」，在基地旁放置一座新的靶场。";
     case 3: return u8"选中靶场，点击「弓」训练一个弓兵。";
     case 4: return u8"选中靶场，点击「强弓」研究，完成后弓兵射程 +50。";
-    case 5: return u8"选中部队，右键点击右侧红色敌方城镇大厅。";
+    case 5: return u8"敌军 3 名弓兵正在进攻基地，选中部队击退他们。";
+    case 6: return u8"右键攻击右侧红色敌方城镇大厅，直到摧毁。";
     default: return u8"你已经学会采集、建造、训练、研究和战斗。";
     }
 }
@@ -583,12 +667,13 @@ const char* GameScene::tutorial_detail1() const
 const char* GameScene::tutorial_detail2() const
 {
     switch (tutorial_step_) {
-    case 0: return u8"农民是采集和建造的核心单位。";
+    case 0: return u8"农民是采集/建造核心；WASD 或方向键移动视角。";
     case 1: return u8"木材是建造建筑和训练单位的基础资源。";
     case 2: return u8"需要 150 木 / 50 金；开局已送一座靶场。";
     case 3: return u8"训练到 3 个弓兵即可进入下一步。";
     case 4: return u8"科技研究完成后，已有和新建弓兵都会生效。";
-    case 5: return u8"下达攻击命令即可完成教程。";
+    case 5: return u8"增援已到达：3 名弓兵。击退突袭后进入最终目标。";
+    case 6: return u8"摧毁大厅即可完成教程；普通对局中摧毁敌方全部建筑即胜利。";
     default: return u8"按「继续自由练习」或「返回主菜单」。";
     }
 }

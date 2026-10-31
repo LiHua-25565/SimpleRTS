@@ -54,6 +54,7 @@ public:
 	const char* get_tutorial_title() const { return tutorial_title(); }
 	const char* get_tutorial_detail1() const { return tutorial_detail1(); }
 	const char* get_tutorial_detail2() const { return tutorial_detail2(); }
+	bool get_tutorial_enemy_tc_hp(int& current_hp, int& max_hp) const;
 	void skip_tutorial() { tutorial_mode_ = false; tutorial_finished_ = false; }
 
 
@@ -98,6 +99,8 @@ private:
 	SDL_FRect tutorial_skip_btn_{};
 	SDL_FRect tutorial_continue_btn_{};
 	SDL_FRect tutorial_menu_btn_{};
+	std::vector<uint64_t> tutorial_wave_ids_;
+	bool tutorial_wave_spawned_ = false;
 
 	void init_tutorial();
 	void update_tutorial(float delta);
@@ -108,6 +111,7 @@ private:
 	const char* tutorial_detail1() const;
 	const char* tutorial_detail2() const;
 	bool tutorial_is_enemy(GameObject* obj) const;
+	void start_tutorial_wave();
 
 
 	void update_ui_layout();

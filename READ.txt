@@ -1,4 +1,4 @@
-SimpleRTS 项目架构与协作指南（v1.3）
+SimpleRTS 项目架构与协作指南（v1.4）
 1. 项目简介
 本游戏是一个 2D 即时战略游戏（类红警/帝国时代），使用 C++ 和 SDL3 构建。目前实现了地图渲染、单位选择、基于流场的群体移动、编队排列和简单的障碍避让。
 
@@ -238,12 +238,14 @@ S 键：停止选中单位。
 - 点击按钮但资源不足时，屏幕左侧显示红色提示框，列出：
   需要资源、拥有资源、缺少资源，并在 5 秒后自动消失。
 
-10. 新手教程与多模式地图（v1.2）
+10. 新手教程与多模式地图（v1.2，v1.4 扩展）
 - 新手教程是独立的 TutorialScene，占位在 scene_mgr 的 Tutorial 场景；
   game_scene 使用独立的 tutorial.srmap 和专用教程面板，不进入普通对局。
 - TutorialScene 持有自己的 GameScene 实例；GameScene 的 tutorial UI 通过
   tutorial_external_ui 关闭，由 TutorialScene 绘制教程面板。
-- tutorial.srmap：160×120，两个城镇大厅（人类 + 被动敌人），6 步教程目标。
+- tutorial.srmap：160×120，两个城镇大厅（人类 + 敌方），7 步教程目标。
+- v1.4：右上角常驻胜利目标「摧毁敌方城镇大厅」并显示大厅 HP；
+  第 6 步生成 3 名敌军弓兵突袭和 3 名玩家弓兵增援；第 7 步要求真正摧毁敌方大厅。
 - 多模式地图：
   * 1v1：map1v1_duel / map1v1_river
   * 2v2：map2v2 / map2v2_lake / map2v2_forest
@@ -262,3 +264,11 @@ S 键：停止选中单位。
   木/肉/金/石，不再使用写死的 150/300。
 - 地图编辑器使用 load_map_resize 载入任意尺寸地图，并支持 2/4/6/8 玩家。
 
+
+12. 教程胜利目标（v1.4）
+- TutorialScene 右上角绘制胜利目标横幅，调用 GameScene::get_tutorial_enemy_tc_hp
+  实时显示敌方城镇大厅 HP；敌方大厅在教程中只有 300 HP。
+- 第 6 步（索引 5）触发 start_tutorial_wave：敌军弓兵向玩家大厅移动，玩家获得增援；
+  清除全部 wave 单位后进入第 7 步。
+- 第 7 步（索引 6）检测敌方城镇大厅是否还存在；摧毁后 tutorial_step_ 变为 7，
+  教程完成，并明确普通对局胜利条件为「摧毁敌方阵营所有建筑」。

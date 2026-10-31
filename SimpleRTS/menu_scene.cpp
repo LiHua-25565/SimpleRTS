@@ -129,7 +129,7 @@ void MenuScene::on_render()
     // 标题
     ui_draw_text(renderer, u8"MySTR", 88, { 255, 215, 0, 255 }, LOGICAL_W * 0.5f, 190.0f, true);
     ui_draw_text(renderer, u8"2D 即时战略", 36, { 200, 210, 230, 255 }, LOGICAL_W * 0.5f, 290.0f, true);
-    ui_draw_text(renderer, u8"v1.3  ·  地图编辑与初始资源", 16, { 120, 132, 155, 255 },
+    ui_draw_text(renderer, u8"v1.4  ·  胜利目标：摧毁敌方全部建筑", 16, { 120, 132, 155, 255 },
         LOGICAL_W * 0.5f, LOGICAL_H - 20.0f, true);
 
     // 按钮
